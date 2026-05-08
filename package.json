@@ -1,0 +1,15 @@
+{
+  "name": "aurummine",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "migrate": "cd backend && npm run migrate",
+    "build:frontend": "cd frontend && npm run build"
+  }
+}
