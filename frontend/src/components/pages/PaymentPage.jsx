@@ -100,7 +100,7 @@ export default function PaymentPage({ order, pkg, wallet, expiresAt, onCancel, o
   );
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', padding: '20px 16px 40px' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', padding: '20px 16px 120px' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
         <button onClick={handleCancel} style={{
