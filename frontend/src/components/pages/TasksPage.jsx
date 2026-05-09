@@ -5,6 +5,7 @@ import { fmtK } from '../../utils/format.js';
 import { useTranslation } from 'react-i18next';
 
 const ADSGRAM_BLOCK_ID = import.meta.env.VITE_ADSGRAM_BLOCK_ID || '29776';
+const ADSGRAM_TASK_ID = import.meta.env.VITE_ADSGRAM_TASK_ID || '';
 
 const typeIcons = {
   subscribe_channel: '📢',
@@ -191,11 +192,33 @@ export default function TasksPage() {
         </div>
       )}
 
-      {tasks.length === 0 && !adAvailable && (
+      {tasks.length === 0 && !adAvailable && !ADSGRAM_TASK_ID && (
         <div className="card" style={{ textAlign: 'center', padding: 40 }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>🎯</div>
           <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>{t('tasks.coming_soon')}</div>
           <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t('tasks.follow_updates')}</div>
+        </div>
+      )}
+
+      {/* Adsgram Publisher Tasks */}
+      {ADSGRAM_TASK_ID && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', letterSpacing: 1, marginBottom: 10, fontWeight: 600 }}>
+            📋 SPONSORED TASKS
+          </div>
+          <adsgram-task
+            data-block-id={ADSGRAM_TASK_ID}
+            data-debug="false"
+            style={{
+              '--adsgram-task-bg': 'rgba(18, 18, 26, 0.95)',
+              '--adsgram-task-color': '#e8e8e8',
+              '--adsgram-task-btn-bg': 'linear-gradient(135deg, #b8860b, #d4af37)',
+              '--adsgram-task-btn-color': '#000',
+              '--adsgram-task-border-radius': '14px',
+              width: '100%',
+              display: 'block',
+            }}
+          ></adsgram-task>
         </div>
       )}
 
