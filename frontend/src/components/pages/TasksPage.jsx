@@ -4,7 +4,7 @@ import { useStore } from '../../store/index.js';
 import { fmtK } from '../../utils/format.js';
 import { useTranslation } from 'react-i18next';
 
-const ADSGRAM_BLOCK_ID = import.meta.env.VITE_ADSGRAM_BLOCK_ID || '';
+const ADSGRAM_BLOCK_ID = import.meta.env.VITE_ADSGRAM_BLOCK_ID || '29774';
 
 const typeIcons = {
   subscribe_channel: '📢',
