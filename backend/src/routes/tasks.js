@@ -77,21 +77,59 @@ router.post('/ad-reward', authMiddleware, async (req, res) => {
 
   // Get reward amount from settings
   const { rows: settingsRows } = await pool.query(
-    `SELECT value FROM app_settings WHERE key = 'ad_reward_power'`
+    `SELECT key, value FROM app_settings WHERE key IN ('ad_reward_power', 'ref_power_premium', 'ref_power_normal')`
   );
-  const rewardPower = settingsRows.length ? parseFloat(settingsRows[0].value) : 500;
+  const settings = {};
+  for (const r of settingsRows) settings[r.key] = parseFloat(r.value);
+  const rewardPower = settings.ad_reward_power || 500;
 
-  // Give reward
+  // Give ad reward to user
   await pool.query(
     `UPDATE users SET power = power + $1 WHERE id = $2`,
     [rewardPower, userId]
   );
 
+  // ── Activate referral on first ad watch ──
+  const { rows: pendingRef } = await pool.query(
+    `SELECT r.id, r.referrer_id FROM referrals r WHERE r.referee_id = $1 AND r.is_confirmed = FALSE`,
+    [userId]
+  );
+
+  let refActivated = false;
+  if (pendingRef.length > 0) {
+    const ref = pendingRef[0];
+    const referrerId = ref.referrer_id;
+
+    // Check if referrer is premium
+    const { rows: referrerRows } = await pool.query(
+      `SELECT is_premium FROM users WHERE id = $1`, [referrerId]
+    );
+    const isPremium = referrerRows[0]?.is_premium;
+    const refReward = isPremium
+      ? (settings.ref_power_premium || 6000)
+      : (settings.ref_power_normal || 3000);
+
+    // Confirm referral
+    await pool.query(`UPDATE referrals SET is_confirmed = TRUE WHERE id = $1`, [ref.id]);
+
+    // Give referrer their reward
+    await pool.query(`UPDATE users SET power = power + $1 WHERE id = $2`, [refReward, referrerId]);
+
+    // Log reward
+    await pool.query(
+      `INSERT INTO referral_rewards (referrer_id, referee_id, reward_type, power_amount) VALUES ($1, $2, 'signup', $3)`,
+      [referrerId, userId, refReward]
+    );
+
+    refActivated = true;
+    console.log(`✅ Referral activated: referrer=${referrerId} +${refReward} POWER (user ${userId} watched first ad)`);
+  }
+
   // Set cooldown
   adCooldowns.set(userId, now);
 
   console.log(`[Ad] User ${userId} watched ad, +${rewardPower} POWER`);
-  res.json({ success: true, reward: rewardPower, cooldown: AD_COOLDOWN_SEC });
+  res.json({ success: true, reward: rewardPower, cooldown: AD_COOLDOWN_SEC, ref_activated: refActivated });
 });
 
 // ── Adsgram: Check ad cooldown ──

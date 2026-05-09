@@ -114,12 +114,15 @@ export const authMiddleware = async (req, res, next) => {
 
 const processReferral = async (referrerId, refereeId) => {
   try {
+    // Create referral as PENDING (is_confirmed = false)
+    // Reward will be given when referee watches first ad (becomes active)
     await pool.query(
-      `INSERT INTO referrals (referrer_id, referee_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+      `INSERT INTO referrals (referrer_id, referee_id, is_confirmed) VALUES ($1, $2, FALSE) ON CONFLICT DO NOTHING`,
       [referrerId, refereeId]
     );
   } catch (e) {
     console.error('Referral error:', e);
   }
 };
+
 
