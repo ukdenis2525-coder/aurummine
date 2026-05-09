@@ -1,7 +1,7 @@
 // Adsgram Interstitial hook — shows a full-screen ad before an action
 import { useRef, useCallback } from 'react';
 
-const INTERSTITIAL_BLOCK_ID = import.meta.env.VITE_ADSGRAM_INTERSTITIAL_ID || '';
+const INTERSTITIAL_BLOCK_ID = import.meta.env.VITE_ADSGRAM_INTERSTITIAL_ID || 'int-29785';
 
 export function useInterstitialAd() {
   const controllerRef = useRef(null);
