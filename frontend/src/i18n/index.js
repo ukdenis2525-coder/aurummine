@@ -8,6 +8,7 @@ import uk from './uk.json';
 import ar from './ar.json';
 
 const tgLang = window.Telegram?.WebApp?.initDataUnsafe?.user?.language_code;
+const savedLang = localStorage.getItem('aurummine_lang');
 
 i18n
   .use(LanguageDetector)
@@ -19,7 +20,7 @@ i18n
       uk: { translation: uk },
       ar: { translation: ar },
     },
-    lng: tgLang || undefined,
+    lng: savedLang || tgLang || undefined,
     fallbackLng: 'en',
     interpolation: { escapeValue: false },
     detection: {
