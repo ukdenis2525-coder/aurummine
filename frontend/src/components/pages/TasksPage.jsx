@@ -20,20 +20,35 @@ export default function TasksPage() {
   const [adWatching, setAdWatching] = useState(false);
   const [adCooldown, setAdCooldown] = useState(0);
   const [adMsg, setAdMsg] = useState(null);
+  const [adAvailable, setAdAvailable] = useState(false);
   const { refreshUser } = useStore();
   const { t } = useTranslation();
   const adControllerRef = useRef(null);
 
   useEffect(() => { api.get('/tasks').then(r => setTasks(r.data)); }, []);
 
-  // Initialize Adsgram
+  // Initialize Adsgram (wait for async script to load)
   useEffect(() => {
-    if (ADSGRAM_BLOCK_ID && window.Adsgram) {
-      try {
-        adControllerRef.current = window.Adsgram.init({ blockId: ADSGRAM_BLOCK_ID });
-      } catch (e) {
-        console.error('[Adsgram] Init error:', e);
+    const tryInit = () => {
+      if (ADSGRAM_BLOCK_ID && window.Adsgram) {
+        try {
+          adControllerRef.current = window.Adsgram.init({ blockId: ADSGRAM_BLOCK_ID });
+          setAdAvailable(true);
+        } catch (e) {
+          console.error('[Adsgram] Init error:', e);
+        }
+        return true;
       }
+      return false;
+    };
+
+    if (!tryInit()) {
+      // Script loading async — retry for up to 5s
+      const interval = setInterval(() => {
+        if (tryInit()) clearInterval(interval);
+      }, 500);
+      const timeout = setTimeout(() => clearInterval(interval), 5000);
+      return () => { clearInterval(interval); clearTimeout(timeout); };
     }
   }, []);
 
@@ -115,8 +130,8 @@ export default function TasksPage() {
         <div className="page-subtitle">{t('tasks.subtitle')}</div>
       </div>
 
-      {/* Adsgram Ad Task */}
-      {ADSGRAM_BLOCK_ID && (
+      {/* Adsgram Ad Task - only shown if ads are available */}
+      {adAvailable && (
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', letterSpacing: 1, marginBottom: 10, fontWeight: 600 }}>
             🎬 WATCH & EARN
@@ -176,7 +191,7 @@ export default function TasksPage() {
         </div>
       )}
 
-      {tasks.length === 0 && !ADSGRAM_BLOCK_ID && (
+      {tasks.length === 0 && !adAvailable && (
         <div className="card" style={{ textAlign: 'center', padding: 40 }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>🎯</div>
           <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>{t('tasks.coming_soon')}</div>
