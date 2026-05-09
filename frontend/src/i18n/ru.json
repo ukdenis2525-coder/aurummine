@@ -59,7 +59,15 @@
     "follow_updates": "Следите за обновлениями",
     "available": "ДОСТУПНО ({{count}})",
     "completed": "ВЫПОЛНЕНО ({{count}})",
-    "start": "Старт"
+    "start": "Старт",
+    "watch_earn": "СМОТРИ И ЗАРАБАТЫВАЙ",
+    "watch_ad": "Смотреть рекламу",
+    "watch_desc": "Посмотри короткое видео и получи POWER",
+    "watch_reward": "+POWER награда",
+    "watch_btn": "Смотреть",
+    "sponsored": "СПОНСОРСКИЕ ЗАДАНИЯ",
+    "ad_reward_msg": "✅ +{{reward}} POWER!",
+    "daily_limit_msg": "Дневной лимит достигнут"
   },
   "team": {
     "title": "👥 Команда",

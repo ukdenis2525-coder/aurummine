@@ -59,7 +59,15 @@
     "follow_updates": "تابع التحديثات",
     "available": "متاح ({{count}})",
     "completed": "مكتمل ({{count}})",
-    "start": "ابدأ"
+    "start": "ابدأ",
+    "watch_earn": "شاهد واكسب",
+    "watch_ad": "شاهد إعلان",
+    "watch_desc": "شاهد فيديو قصير واحصل على POWER",
+    "watch_reward": "+POWER مكافأة",
+    "watch_btn": "شاهد",
+    "sponsored": "مهام برعاية",
+    "ad_reward_msg": "✅ +{{reward}} POWER!",
+    "daily_limit_msg": "تم الوصول للحد اليومي"
   },
   "team": {
     "title": "👥 الفريق",

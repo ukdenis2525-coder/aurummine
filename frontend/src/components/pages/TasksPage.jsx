@@ -135,7 +135,7 @@ export default function TasksPage() {
       {adAvailable && (
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', letterSpacing: 1, marginBottom: 10, fontWeight: 600 }}>
-            🎬 WATCH & EARN
+            🎬 {t('tasks.watch_earn')}
           </div>
           <div className="card" style={{
             padding: '16px 18px',
@@ -150,12 +150,12 @@ export default function TasksPage() {
                 display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24
               }}>🎬</div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 3 }}>Watch Ad</div>
+                <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 3 }}>{t('tasks.watch_ad')}</div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                  Watch a short video and earn POWER
+                  {t('tasks.watch_desc')}
                 </div>
                 <div style={{ fontSize: 13, color: 'var(--gold)', fontWeight: 700, marginTop: 4 }}>
-                  +POWER reward
+                  {t('tasks.watch_reward')}
                 </div>
               </div>
               <button
@@ -173,7 +173,7 @@ export default function TasksPage() {
                   minWidth: 70, textAlign: 'center'
                 }}
               >
-                {adWatching ? '⏳' : adCooldown > 0 ? formatCooldown(adCooldown) : '▶️ Watch'}
+                {adWatching ? '⏳' : adCooldown > 0 ? formatCooldown(adCooldown) : `▶️ ${t('tasks.watch_btn')}`}
               </button>
             </div>
 
@@ -204,7 +204,7 @@ export default function TasksPage() {
       {ADSGRAM_TASK_ID && (
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', letterSpacing: 1, marginBottom: 10, fontWeight: 600 }}>
-            📋 SPONSORED TASKS
+            📋 {t('tasks.sponsored')}
           </div>
           <adsgram-task
             data-block-id={ADSGRAM_TASK_ID}

@@ -59,7 +59,15 @@
     "follow_updates": "Follow updates",
     "available": "AVAILABLE ({{count}})",
     "completed": "COMPLETED ({{count}})",
-    "start": "Start"
+    "start": "Start",
+    "watch_earn": "WATCH & EARN",
+    "watch_ad": "Watch Ad",
+    "watch_desc": "Watch a short video and earn POWER",
+    "watch_reward": "+POWER reward",
+    "watch_btn": "Watch",
+    "sponsored": "SPONSORED TASKS",
+    "ad_reward_msg": "✅ +{{reward}} POWER!",
+    "daily_limit_msg": "Daily limit reached"
   },
   "team": {
     "title": "👥 Team",

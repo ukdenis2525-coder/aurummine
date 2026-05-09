@@ -59,7 +59,15 @@
     "follow_updates": "Слідкуйте за оновленнями",
     "available": "ДОСТУПНО ({{count}})",
     "completed": "ВИКОНАНО ({{count}})",
-    "start": "Старт"
+    "start": "Старт",
+    "watch_earn": "ДИВИСЬ І ЗАРОБЛЯЙ",
+    "watch_ad": "Дивитися рекламу",
+    "watch_desc": "Подивись коротке відео та отримай POWER",
+    "watch_reward": "+POWER нагорода",
+    "watch_btn": "Дивитися",
+    "sponsored": "СПОНСОРСЬКІ ЗАВДАННЯ",
+    "ad_reward_msg": "✅ +{{reward}} POWER!",
+    "daily_limit_msg": "Денний ліміт досягнуто"
   },
   "team": {
     "title": "👥 Команда",
