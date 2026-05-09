@@ -139,7 +139,8 @@ const migrate = async () => {
       INSERT INTO app_settings (key, value, label) VALUES
         ('ref_power_premium', '6000', 'Power за Premium реферала'),
         ('ref_power_normal',  '3000', 'Power за обычного реферала'),
-        ('ref_commission_pct', '15',  'Комиссия с покупок (%)')
+        ('ref_commission_pct', '15',  'Комиссия с покупок (%)'),
+        ('ad_reward_power',   '500',  'Power за просмотр рекламы')
       ON CONFLICT (key) DO NOTHING;
     `);
 
