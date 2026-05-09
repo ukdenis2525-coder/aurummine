@@ -42,17 +42,28 @@ export const authMiddleware = async (req, res, next) => {
     );
 
     if (rows.length === 0) {
-      const refId = req.headers['x-ref-id'] || null;
+      const rawRefId = req.headers['x-ref-id'] || null;
+      const refId = rawRefId ? parseInt(rawRefId, 10) : null;
+
+      // Verify referrer exists before setting ref_id
+      let validRefId = null;
+      if (refId && !isNaN(refId)) {
+        const { rows: refRows } = await pool.query(
+          `SELECT id FROM users WHERE id = $1`, [refId]
+        );
+        if (refRows.length > 0) validRefId = refId;
+      }
+
       const { rows: newRows } = await pool.query(
         `INSERT INTO users (tg_id, username, first_name, is_premium, ref_id)
          VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-        [tgUser.id, tgUser.username, tgUser.first_name, tgUser.is_premium || false, refId]
+        [tgUser.id, tgUser.username, tgUser.first_name, tgUser.is_premium || false, validRefId]
       );
       rows = newRows;
 
       // Process referral
-      if (refId) {
-        await processReferral(refId, newRows[0].id);
+      if (validRefId) {
+        await processReferral(validRefId, newRows[0].id);
       }
     }
 

@@ -1,0 +1,776 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import api from '../../utils/api.js';
+import { useStore } from '../../store/index.js';
+import { fmt, fmtK } from '../../utils/format.js';
+
+const TABS = [
+  { id: 'dashboard', icon: '📊', label: 'Обзор' },
+  { id: 'users', icon: '👥', label: 'Юзеры' },
+  { id: 'withdrawals', icon: '💸', label: 'Выводы' },
+  { id: 'tasks', icon: '📋', label: 'Задания' },
+  { id: 'packages', icon: '📦', label: 'Пакеты' },
+  { id: 'referrals', icon: '🤝', label: 'Рефералы' },
+];
+
+export default function AdminPage() {
+  const { setTab: setAppTab } = useStore();
+  const [tab, setTab] = useState('dashboard');
+
+  return (
+    <div className="page" style={{ paddingBottom: 20 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+        <button onClick={() => setAppTab('power')} style={{
+          background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12,
+          color: '#fff', padding: '10px 14px', fontSize: 16, cursor: 'pointer'
+        }}>←</button>
+        <div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--red)' }}>🛡️ Admin Panel</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Управление приложением</div>
+        </div>
+      </div>
+
+      {/* Tab bar */}
+      <div style={{
+        display: 'flex', gap: 4, marginBottom: 20, overflowX: 'auto',
+        padding: '4px', background: 'var(--bg-card)', borderRadius: 14
+      }}>
+        {TABS.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)} style={{
+            padding: '8px 12px', borderRadius: 10, border: 'none',
+            background: tab === t.id ? 'var(--gold)' : 'transparent',
+            color: tab === t.id ? '#000' : 'var(--text-muted)',
+            fontWeight: 700, fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap',
+            transition: 'var(--transition)', flexShrink: 0
+          }}>
+            {t.icon} {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'dashboard' && <Dashboard />}
+      {tab === 'users' && <UsersPanel />}
+      {tab === 'withdrawals' && <WithdrawalsPanel />}
+      {tab === 'tasks' && <TasksPanel />}
+      {tab === 'packages' && <PackagesPanel />}
+      {tab === 'referrals' && <ReferralsPanel />}
+    </div>
+  );
+}
+
+// ═══════════════════ DASHBOARD ═══════════════════
+function Dashboard() {
+  const [stats, setStats] = useState(null);
+  const [checking, setChecking] = useState(false);
+  const [checkResult, setCheckResult] = useState(null);
+
+  useEffect(() => { api.get('/admin/stats').then(r => setStats(r.data)).catch(() => {}); }, []);
+
+  if (!stats) return <Loading />;
+
+  const cards = [
+    { icon: '👥', label: 'Пользователи', val: stats.total_users, color: 'var(--gold)' },
+    { icon: '🆕', label: 'За 24ч', val: stats.new_users_24h, color: 'var(--green)' },
+    { icon: '⚡', label: 'Power (всего)', val: fmtK(stats.total_power), color: 'var(--gold-light)' },
+    { icon: '💰', label: 'TON баланс', val: fmt(stats.total_ton_balance, 2), color: 'var(--orange)' },
+    { icon: '🛒', label: 'Покупок', val: stats.total_purchases, color: 'var(--green)' },
+    { icon: '💵', label: 'Выручка', val: `${fmt(stats.total_revenue, 2)} TON`, color: 'var(--gold)' },
+    { icon: '⏳', label: 'Выводы (ожид)', val: stats.pending_withdrawals, color: stats.pending_withdrawals > 0 ? 'var(--red)' : 'var(--text-muted)' },
+  ];
+
+  const manualCheck = async () => {
+    setChecking(true);
+    try {
+      const { data } = await api.post('/admin/check-payments');
+      setCheckResult(data);
+    } catch (e) {
+      setCheckResult({ error: e.response?.data?.error || e.message });
+    } finally { setChecking(false); }
+  };
+
+  return (
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
+        {cards.map((c, i) => (
+          <div key={c.label} className="card" style={{
+            padding: 16, animation: `fadeIn 0.3s ease ${i * 0.05}s both`,
+            gridColumn: i === cards.length - 1 && cards.length % 2 !== 0 ? 'span 2' : undefined
+          }}>
+            <div style={{ fontSize: 18, marginBottom: 6 }}>{c.icon}</div>
+            <div style={{ fontSize: 22, fontWeight: 900, color: c.color }}>{c.val}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Manual payment check */}
+      <button className="btn-gold" onClick={manualCheck} disabled={checking}
+        style={{ marginBottom: 12, padding: 12, fontSize: 13 }}>
+        {checking ? '⏳ Проверяю...' : '🔄 Проверить платежи вручную'}
+      </button>
+
+      {checkResult && (
+        <div className="card" style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: checkResult.error ? 'var(--red)' : 'var(--green)' }}>
+            {checkResult.error ? `❌ ${checkResult.error}` : `✅ ${checkResult.message}`}
+          </div>
+          {checkResult.recent_purchases && (
+            <div style={{ fontSize: 11 }}>
+              {checkResult.recent_purchases.map(p => (
+                <div key={p.id} style={{
+                  display: 'flex', justifyContent: 'space-between', padding: '6px 0',
+                  borderBottom: '1px solid var(--border)', color: 'var(--text-secondary)'
+                }}>
+                  <span>#{p.id} memo:{p.memo}</span>
+                  <span style={{
+                    color: p.status === 'completed' ? 'var(--green)' : p.status === 'pending' ? 'var(--orange)' : 'var(--text-muted)'
+                  }}>{p.status} • {p.ton_amount} TON</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════ USERS ═══════════════════
+function UsersPanel() {
+  const [users, setUsers] = useState([]);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [editing, setEditing] = useState(null);
+
+  const load = useCallback(async () => {
+    const { data } = await api.get(`/admin/users?page=${page}&search=${search}`);
+    setUsers(data.users);
+    setTotal(data.total);
+  }, [page, search]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleAdjust = async (userId, power, ton) => {
+    await api.post(`/admin/users/${userId}/adjust`, { power: parseFloat(power), ton_balance: parseFloat(ton) });
+    setEditing(null);
+    load();
+  };
+
+  return (
+    <div>
+      <input type="text" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
+        placeholder="🔍 Поиск по имени, username, tg_id..."
+        style={{ marginBottom: 14, fontSize: 13 }} />
+
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+        Всего: {total} • Стр. {page}
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {users.map(u => (
+          <div key={u.id} className="card" style={{ padding: '12px 14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700 }}>
+                  {u.first_name || u.username || '—'}
+                  {u.is_premium && <span style={{ color: 'var(--gold)', marginLeft: 4 }}>★</span>}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                  ID:{u.id} • TG:{u.tg_id}
+                </div>
+              </div>
+              <button onClick={() => setEditing(editing === u.id ? null : u.id)} style={{
+                background: editing === u.id ? 'var(--red-bg)' : 'var(--bg-card)',
+                border: '1px solid var(--border)', borderRadius: 8,
+                color: editing === u.id ? 'var(--red)' : 'var(--text-muted)',
+                padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer'
+              }}>{editing === u.id ? '✕' : '✏️'}</button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginTop: 8 }}>
+              <MiniStat label="POWER" val={fmtK(Math.floor(u.power))} color="var(--gold)" />
+              <MiniStat label="HASHES" val={parseFloat(u.hashes).toFixed(2)} />
+              <MiniStat label="TON" val={fmt(u.ton_balance, 4)} color="var(--gold-light)" />
+            </div>
+
+            {editing === u.id && <AdjustForm user={u} onSave={handleAdjust} />}
+          </div>
+        ))}
+      </div>
+
+      {/* Pagination */}
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 14 }}>
+        <PagBtn disabled={page <= 1} onClick={() => setPage(p => p - 1)}>← Назад</PagBtn>
+        <PagBtn disabled={users.length < 30} onClick={() => setPage(p => p + 1)}>Далее →</PagBtn>
+      </div>
+    </div>
+  );
+}
+
+function AdjustForm({ user, onSave }) {
+  const [power, setPower] = useState(String(user.power));
+  const [ton, setTon] = useState(String(user.ton_balance));
+  return (
+    <div style={{ marginTop: 10, padding: 12, background: 'rgba(255,255,255,0.03)', borderRadius: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+        <div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>POWER</div>
+          <input type="number" value={power} onChange={e => setPower(e.target.value)}
+            style={{ padding: '8px 10px', fontSize: 13 }} />
+        </div>
+        <div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>TON</div>
+          <input type="number" value={ton} onChange={e => setTon(e.target.value)}
+            style={{ padding: '8px 10px', fontSize: 13 }} />
+        </div>
+      </div>
+      <button className="btn-gold" onClick={() => onSave(user.id, power, ton)}
+        style={{ padding: '10px', fontSize: 13 }}>💾 Сохранить</button>
+    </div>
+  );
+}
+
+// ═══════════════════ WITHDRAWALS ═══════════════════
+function WithdrawalsPanel() {
+  const [filter, setFilter] = useState('pending');
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const load = async () => {
+    const { data } = await api.get(`/admin/withdrawals?status=${filter}`);
+    setItems(data);
+  };
+  useEffect(() => { load(); }, [filter]);
+
+  const approve = async (id) => {
+    setLoading(true);
+    await api.post(`/admin/withdrawals/${id}/approve`, { tx_hash: 'manual_' + Date.now() });
+    load();
+    setLoading(false);
+  };
+
+  const reject = async (id) => {
+    setLoading(true);
+    await api.post(`/admin/withdrawals/${id}/reject`);
+    load();
+    setLoading(false);
+  };
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+        {['pending', 'completed', 'rejected'].map(s => (
+          <button key={s} onClick={() => setFilter(s)} style={{
+            padding: '6px 14px', borderRadius: 8, border: 'none',
+            background: filter === s ? 'var(--gold)' : 'var(--bg-card)',
+            color: filter === s ? '#000' : 'var(--text-muted)',
+            fontWeight: 700, fontSize: 12, cursor: 'pointer'
+          }}>
+            {s === 'pending' ? '⏳' : s === 'completed' ? '✅' : '❌'} {s}
+          </button>
+        ))}
+      </div>
+
+      {items.length === 0 && (
+        <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>Пусто</div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {items.map(w => (
+          <div key={w.id} className="card" style={{ padding: '14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--gold-light)' }}>
+                  {fmt(w.ton_amount, 4)} TON
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  {w.first_name || w.username} (TG:{w.tg_id})
+                </div>
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', textAlign: 'right' }}>
+                #{w.id}<br/>{new Date(w.created_at).toLocaleString()}
+              </div>
+            </div>
+            <div style={{
+              fontSize: 11, color: 'var(--text-secondary)', fontFamily: 'monospace',
+              wordBreak: 'break-all', marginBottom: 10,
+              background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: '6px 10px'
+            }}>
+              {w.wallet_address}
+            </div>
+
+            {filter === 'pending' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <button onClick={() => approve(w.id)} disabled={loading} style={{
+                  padding: 10, borderRadius: 10, border: 'none',
+                  background: 'var(--green-bg)', color: 'var(--green)',
+                  fontWeight: 700, fontSize: 13, cursor: 'pointer'
+                }}>✅ Одобрить</button>
+                <button onClick={() => reject(w.id)} disabled={loading} style={{
+                  padding: 10, borderRadius: 10, border: 'none',
+                  background: 'var(--red-bg)', color: 'var(--red)',
+                  fontWeight: 700, fontSize: 13, cursor: 'pointer'
+                }}>❌ Отклонить</button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════ TASKS ═══════════════════
+function TasksPanel() {
+  const [tasks, setTasks] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ title: '', description: '', reward_power: '', type: 'other', link: '' });
+
+  const load = async () => {
+    const { data } = await api.get('/admin/tasks');
+    setTasks(data);
+  };
+  useEffect(() => { load(); }, []);
+
+  const create = async () => {
+    if (!form.title || !form.reward_power) return;
+    await api.post('/admin/tasks', { ...form, reward_power: parseFloat(form.reward_power) });
+    setForm({ title: '', description: '', reward_power: '', type: 'other', link: '' });
+    setShowForm(false);
+    load();
+  };
+
+  const toggle = async (id) => { await api.post(`/admin/tasks/${id}/toggle`); load(); };
+  const del = async (id) => { await api.delete(`/admin/tasks/${id}`); load(); };
+
+  return (
+    <div>
+      <button onClick={() => setShowForm(!showForm)} className="btn-gold" style={{ marginBottom: 14, padding: 10, fontSize: 13 }}>
+        {showForm ? '✕ Отмена' : '+ Новое задание'}
+      </button>
+
+      {showForm && (
+        <div className="card" style={{ marginBottom: 14 }}>
+          <input type="text" value={form.title} onChange={e => setForm({...form, title: e.target.value})}
+            placeholder="Название задания" style={{ marginBottom: 8, fontSize: 13 }} />
+          <input type="text" value={form.description} onChange={e => setForm({...form, description: e.target.value})}
+            placeholder="Описание (опц.)" style={{ marginBottom: 8, fontSize: 13 }} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+            <input type="number" value={form.reward_power} onChange={e => setForm({...form, reward_power: e.target.value})}
+              placeholder="Power награда" style={{ fontSize: 13 }} />
+            <select value={form.type} onChange={e => setForm({...form, type: e.target.value})}
+              style={{
+                padding: '10px', borderRadius: 16, background: 'rgba(255,255,255,0.04)',
+                border: '1px solid var(--border)', color: '#fff', fontSize: 13
+              }}>
+              <option value="other">⚡ Другое</option>
+              <option value="subscribe_channel">📢 Подписка</option>
+              <option value="invite_friends">👥 Инвайт</option>
+              <option value="daily">📅 Ежедневное</option>
+            </select>
+          </div>
+          <input type="text" value={form.link} onChange={e => setForm({...form, link: e.target.value})}
+            placeholder="Ссылка (опц.)" style={{ marginBottom: 10, fontSize: 13 }} />
+          <button className="btn-gold" onClick={create} style={{ padding: 10, fontSize: 13 }}>💾 Создать</button>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {tasks.map(t => (
+          <div key={t.id} className="card" style={{
+            padding: '12px 14px', opacity: t.is_active ? 1 : 0.5,
+            display: 'flex', alignItems: 'center', gap: 12
+          }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{t.title}</div>
+              <div style={{ fontSize: 11, color: 'var(--gold)' }}>+{fmtK(t.reward_power)} POWER</div>
+            </div>
+            <button onClick={() => toggle(t.id)} style={{
+              background: t.is_active ? 'var(--green-bg)' : 'var(--red-bg)',
+              border: 'none', borderRadius: 8, padding: '4px 10px',
+              color: t.is_active ? 'var(--green)' : 'var(--red)',
+              fontSize: 11, fontWeight: 600, cursor: 'pointer'
+            }}>{t.is_active ? 'ON' : 'OFF'}</button>
+            <button onClick={() => del(t.id)} style={{
+              background: 'var(--red-bg)', border: 'none', borderRadius: 8,
+              padding: '4px 8px', color: 'var(--red)', fontSize: 11, cursor: 'pointer'
+            }}>🗑</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════ PACKAGES ═══════════════════
+function PackagesPanel() {
+  const [packages, setPackages] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [form, setForm] = useState({ name: '', power_amount: '', price_ton: '' });
+  const [msg, setMsg] = useState(null);
+
+  const load = async () => { const { data } = await api.get('/admin/packages'); setPackages(data); };
+  useEffect(() => { load(); }, []);
+
+  const resetForm = () => {
+    setForm({ name: '', power_amount: '', price_ton: '' });
+    setShowForm(false);
+    setEditingId(null);
+  };
+
+  const create = async () => {
+    if (!form.name || !form.power_amount || !form.price_ton) return;
+    await api.post('/admin/packages', {
+      name: form.name, power_amount: parseFloat(form.power_amount), price_ton: parseFloat(form.price_ton)
+    });
+    resetForm();
+    load();
+  };
+
+  const startEdit = (pkg) => {
+    setEditingId(pkg.id);
+    setForm({ name: pkg.name, power_amount: String(pkg.power_amount), price_ton: String(pkg.price_ton) });
+    setShowForm(false);
+  };
+
+  const saveEdit = async () => {
+    if (!form.name || !form.power_amount || !form.price_ton) return;
+    await api.put(`/admin/packages/${editingId}`, {
+      name: form.name, power_amount: parseFloat(form.power_amount), price_ton: parseFloat(form.price_ton)
+    });
+    resetForm();
+    load();
+  };
+
+  const cancelEdit = () => resetForm();
+
+  const toggle = async (id) => { await api.post(`/admin/packages/${id}/toggle`); load(); };
+
+  const del = async (id) => {
+    try {
+      const { data } = await api.delete(`/admin/packages/${id}`);
+      if (data.soft) {
+        setMsg('⚠️ Пакет деактивирован (есть покупки)');
+        setTimeout(() => setMsg(null), 3000);
+      }
+    } catch (e) {
+      setMsg('❌ Ошибка удаления');
+      setTimeout(() => setMsg(null), 3000);
+    }
+    setConfirmDelete(null);
+    load();
+  };
+
+  return (
+    <div>
+      {/* Status message */}
+      {msg && (
+        <div style={{
+          padding: '10px 14px', borderRadius: 10, marginBottom: 12,
+          background: msg.startsWith('⚠️') ? 'rgba(251,191,36,0.1)' : 'var(--red-bg)',
+          color: msg.startsWith('⚠️') ? 'var(--orange)' : 'var(--red)',
+          fontSize: 12, fontWeight: 600, textAlign: 'center',
+          animation: 'fadeIn 0.3s ease'
+        }}>{msg}</div>
+      )}
+
+      {/* New / Cancel buttons (hide when editing) */}
+      {!editingId && (
+        <button onClick={() => { setShowForm(!showForm); setEditingId(null); }}
+          className="btn-gold" style={{ marginBottom: 14, padding: 10, fontSize: 13 }}>
+          {showForm ? '✕ Отмена' : '+ Новый пакет'}
+        </button>
+      )}
+
+      {/* Create form */}
+      {showForm && !editingId && (
+        <div className="card" style={{ marginBottom: 14 }}>
+          <input type="text" value={form.name} onChange={e => setForm({...form, name: e.target.value})}
+            placeholder="Название" style={{ marginBottom: 8, fontSize: 13 }} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+            <input type="number" value={form.power_amount} onChange={e => setForm({...form, power_amount: e.target.value})}
+              placeholder="Power" style={{ fontSize: 13 }} />
+            <input type="number" value={form.price_ton} onChange={e => setForm({...form, price_ton: e.target.value})}
+              placeholder="Цена TON" step="0.01" style={{ fontSize: 13 }} />
+          </div>
+          <button className="btn-gold" onClick={create} style={{ padding: 10, fontSize: 13 }}>💾 Создать</button>
+        </div>
+      )}
+
+      {/* Delete confirmation */}
+      {confirmDelete && (
+        <div className="card" style={{
+          marginBottom: 14, border: '1px solid rgba(248,113,113,0.4)',
+          background: 'rgba(248,113,113,0.06)'
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--red)', marginBottom: 8 }}>
+            🗑 Удалить «{packages.find(p => p.id === confirmDelete)?.name}»?
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12 }}>
+            Если есть покупки — пакет будет деактивирован вместо удаления
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <button onClick={() => setConfirmDelete(null)} style={{
+              padding: 10, borderRadius: 10, border: 'none',
+              background: 'var(--bg-card)', color: 'var(--text-muted)',
+              fontWeight: 700, fontSize: 13, cursor: 'pointer'
+            }}>Отмена</button>
+            <button onClick={() => del(confirmDelete)} style={{
+              padding: 10, borderRadius: 10, border: 'none',
+              background: 'var(--red-bg)', color: 'var(--red)',
+              fontWeight: 700, fontSize: 13, cursor: 'pointer'
+            }}>🗑 Удалить</button>
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {packages.map(p => (
+          <div key={p.id} className="card" style={{
+            padding: '12px 14px', opacity: p.is_active ? 1 : 0.5,
+            border: editingId === p.id ? '1px solid var(--gold)' : undefined,
+            transition: 'var(--transition)'
+          }}>
+            {/* Edit mode */}
+            {editingId === p.id ? (
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 700, marginBottom: 8, letterSpacing: 1 }}>
+                  ✏️ РЕДАКТИРОВАНИЕ
+                </div>
+                <input type="text" value={form.name} onChange={e => setForm({...form, name: e.target.value})}
+                  placeholder="Название" style={{ marginBottom: 8, fontSize: 13 }} />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+                  <div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>POWER</div>
+                    <input type="number" value={form.power_amount} onChange={e => setForm({...form, power_amount: e.target.value})}
+                      style={{ fontSize: 13 }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>ЦЕНА TON</div>
+                    <input type="number" value={form.price_ton} onChange={e => setForm({...form, price_ton: e.target.value})}
+                      step="0.01" style={{ fontSize: 13 }} />
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <button onClick={cancelEdit} style={{
+                    padding: 10, borderRadius: 10, border: 'none',
+                    background: 'var(--bg-card)', color: 'var(--text-muted)',
+                    fontWeight: 700, fontSize: 13, cursor: 'pointer'
+                  }}>✕ Отмена</button>
+                  <button className="btn-gold" onClick={saveEdit} style={{ padding: 10, fontSize: 13 }}>
+                    💾 Сохранить
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* View mode */
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700 }}>{p.name}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    {fmtK(p.power_amount)} POWER • {p.price_ton} TON
+                  </div>
+                </div>
+                <button onClick={() => startEdit(p)} style={{
+                  background: 'rgba(255,255,255,0.04)', border: 'none', borderRadius: 8,
+                  padding: '6px 10px', color: 'var(--text-muted)',
+                  fontSize: 12, cursor: 'pointer'
+                }}>✏️</button>
+                <button onClick={() => toggle(p.id)} style={{
+                  background: p.is_active ? 'var(--green-bg)' : 'var(--red-bg)',
+                  border: 'none', borderRadius: 8, padding: '6px 12px',
+                  color: p.is_active ? 'var(--green)' : 'var(--red)',
+                  fontSize: 12, fontWeight: 600, cursor: 'pointer'
+                }}>{p.is_active ? '✅' : '❌'}</button>
+                <button onClick={() => setConfirmDelete(p.id)} style={{
+                  background: 'var(--red-bg)', border: 'none', borderRadius: 8,
+                  padding: '6px 8px', color: 'var(--red)',
+                  fontSize: 12, cursor: 'pointer'
+                }}>🗑</button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════ REFERRALS ═══════════════════
+function ReferralsPanel() {
+  const [settings, setSettings] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [form, setForm] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  const load = async () => {
+    const [settingsRes, statsRes] = await Promise.all([
+      api.get('/admin/ref-settings'),
+      api.get('/admin/ref-stats'),
+    ]);
+    setSettings(settingsRes.data);
+    setStats(statsRes.data);
+    const formData = {};
+    settingsRes.data.forEach(s => { formData[s.key] = s.value; });
+    setForm(formData);
+  };
+  useEffect(() => { load(); }, []);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const arr = Object.entries(form).map(([key, value]) => {
+        const existing = settings.find(s => s.key === key);
+        return { key, value, label: existing?.label || key };
+      });
+      await api.put('/admin/ref-settings', { settings: arr });
+      setMsg('✅ Настройки сохранены');
+      setTimeout(() => setMsg(null), 2500);
+      load();
+    } catch {
+      setMsg('❌ Ошибка сохранения');
+      setTimeout(() => setMsg(null), 2500);
+    } finally { setSaving(false); }
+  };
+
+  const FIELDS = [
+    { key: 'ref_power_premium', label: '⭐ Power за Premium', icon: '⭐', suffix: 'POWER' },
+    { key: 'ref_power_normal', label: '👤 Power за обычного', icon: '👤', suffix: 'POWER' },
+    { key: 'ref_commission_pct', label: '💰 Комиссия с покупок', icon: '💰', suffix: '%' },
+  ];
+
+  return (
+    <div>
+      {/* Status message */}
+      {msg && (
+        <div style={{
+          padding: '10px 14px', borderRadius: 10, marginBottom: 12,
+          background: msg.startsWith('✅') ? 'rgba(52,211,153,0.1)' : 'var(--red-bg)',
+          color: msg.startsWith('✅') ? 'var(--green)' : 'var(--red)',
+          fontSize: 12, fontWeight: 600, textAlign: 'center',
+          animation: 'fadeIn 0.3s ease'
+        }}>{msg}</div>
+      )}
+
+      {/* Stats cards */}
+      {stats && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
+          {[
+            { icon: '🤝', label: 'Всего рефералов', val: stats.total_referrals, color: 'var(--gold)' },
+            { icon: '✅', label: 'Активных', val: stats.confirmed_referrals, color: 'var(--green)' },
+            { icon: '⚡', label: 'Power выдано', val: fmtK(stats.total_power_given), color: 'var(--gold-light)' },
+            { icon: '💎', label: 'TON выдано', val: fmt(stats.total_ton_given, 4), color: 'var(--orange)' },
+          ].map((c, i) => (
+            <div key={c.label} className="card" style={{
+              padding: 14, animation: `fadeIn 0.3s ease ${i * 0.05}s both`
+            }}>
+              <div style={{ fontSize: 16, marginBottom: 4 }}>{c.icon}</div>
+              <div style={{ fontSize: 20, fontWeight: 900, color: c.color }}>{c.val}</div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{c.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Settings form */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12, color: 'var(--gold)', letterSpacing: 0.5 }}>
+          ⚙️ НАСТРОЙКИ РЕФЕРАЛОВ
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 14 }}>
+          Награда за регистрацию начисляется при первой покупке друга (активация)
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {FIELDS.map(f => (
+            <div key={f.key}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
+                {f.icon} {f.label}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  type="number"
+                  value={form[f.key] || ''}
+                  onChange={e => setForm({ ...form, [f.key]: e.target.value })}
+                  style={{ flex: 1, fontSize: 14, padding: '10px 12px' }}
+                />
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, minWidth: 50 }}>
+                  {f.suffix}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <button className="btn-gold" onClick={save} disabled={saving}
+          style={{ marginTop: 14, padding: 12, fontSize: 13 }}>
+          {saving ? '⏳ Сохраняю...' : '💾 Сохранить настройки'}
+        </button>
+      </div>
+
+      {/* Top referrers */}
+      {stats?.top_referrers?.length > 0 && (
+        <div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', letterSpacing: 1, marginBottom: 10, fontWeight: 600 }}>
+            🏆 ТОП РЕФЕРЕРЫ
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {stats.top_referrers.map((r, i) => (
+              <div key={r.id} className="card" style={{
+                padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 12,
+                animation: `fadeIn 0.3s ease ${i * 0.05}s both`
+              }}>
+                <div style={{
+                  width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                  background: i < 3 ? 'linear-gradient(135deg, var(--gold-dark), var(--gold))' : 'var(--bg-card)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 12, fontWeight: 800, color: i < 3 ? '#000' : 'var(--text-muted)'
+                }}>{i + 1}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {r.first_name || r.username || `ID:${r.id}`}
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                    TG:{r.tg_id}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--gold)' }}>{r.ref_count}</div>
+                  <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>рефер. ({r.confirmed_count} актив)</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════ HELPERS ═══════════════════
+function MiniStat({ label, val, color }) {
+  return (
+    <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: '6px 8px', textAlign: 'center' }}>
+      <div style={{ fontSize: 13, fontWeight: 800, color: color || 'var(--text)' }}>{val}</div>
+      <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{label}</div>
+    </div>
+  );
+}
+
+function PagBtn({ children, ...props }) {
+  return (
+    <button {...props} style={{
+      padding: '8px 18px', borderRadius: 10, border: 'none',
+      background: props.disabled ? 'rgba(255,255,255,0.03)' : 'var(--bg-card)',
+      color: props.disabled ? 'var(--text-muted)' : 'var(--text)',
+      fontWeight: 600, fontSize: 12, cursor: props.disabled ? 'default' : 'pointer',
+      opacity: props.disabled ? 0.4 : 1
+    }}>{children}</button>
+  );
+}
+
+function Loading() {
+  return <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>Загрузка...</div>;
+}

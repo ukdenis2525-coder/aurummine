@@ -12,11 +12,23 @@ router.post('/', authMiddleware, async (req, res) => {
   if (!wallet_address || !ton_amount) {
     return res.status(400).json({ error: 'wallet_address and ton_amount required' });
   }
+  // Validate TON wallet address format
+  const addr = wallet_address.trim();
+  if (addr.length < 48 || !/^(UQ|EQ|0:|kQ|Ef)/.test(addr)) {
+    return res.status(400).json({ error: 'Invalid TON wallet address' });
+  }
   if (parseFloat(ton_amount) < MIN_WITHDRAW) {
     return res.status(400).json({ error: `Minimum withdrawal: ${MIN_WITHDRAW} TON` });
   }
   if (parseFloat(user.ton_balance) < parseFloat(ton_amount)) {
     return res.status(400).json({ error: 'Insufficient balance' });
+  }
+  // Check for existing pending withdrawal
+  const { rows: pending } = await pool.query(
+    `SELECT id FROM withdrawals WHERE user_id = $1 AND status = 'pending'`, [user.id]
+  );
+  if (pending.length > 0) {
+    return res.status(400).json({ error: 'You already have a pending withdrawal' });
   }
 
   const client = await pool.connect();

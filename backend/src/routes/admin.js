@@ -3,73 +3,71 @@ import { pool } from '../db.js';
 
 const router = Router();
 
-const adminMiddleware = (req, res, next) => {
+// Admin auth: either x-admin-key header OR Telegram user with matching tg_id
+const adminMiddleware = async (req, res, next) => {
   const key = req.headers['x-admin-key'];
-  if (key !== process.env.ADMIN_KEY) return res.status(403).json({ error: 'Forbidden' });
-  next();
+  if (key && key === process.env.ADMIN_KEY) return next();
+
+  // TG-based admin auth
+  const initData = req.headers['x-init-data'];
+  if (initData) {
+    try {
+      const params = new URLSearchParams(initData);
+      const userParam = params.get('user');
+      if (userParam) {
+        const tgUser = JSON.parse(userParam);
+        const adminIds = (process.env.ADMIN_TG_IDS || process.env.ADMIN_TG_ID || '').split(',').map(s => s.trim());
+        if (adminIds.includes(String(tgUser.id))) return next();
+      }
+    } catch (e) {}
+  }
+
+  return res.status(403).json({ error: 'Forbidden' });
 };
 
 router.use(adminMiddleware);
 
+// ── Dashboard Stats ──
+router.get('/stats', async (req, res) => {
+  const [users, power, ton, pending, completed, revenue] = await Promise.all([
+    pool.query(`SELECT COUNT(*) as total FROM users`),
+    pool.query(`SELECT COALESCE(SUM(power), 0) as total FROM users`),
+    pool.query(`SELECT COALESCE(SUM(ton_balance), 0) as total FROM users`),
+    pool.query(`SELECT COUNT(*) as total FROM withdrawals WHERE status = 'pending'`),
+    pool.query(`SELECT COUNT(*) as total, COALESCE(SUM(ton_paid), 0) as sum FROM purchases`),
+    pool.query(`SELECT COUNT(*) as total FROM users WHERE created_at > NOW() - INTERVAL '24 hours'`),
+  ]);
+  res.json({
+    total_users: parseInt(users.rows[0].total),
+    total_power: parseFloat(power.rows[0].total),
+    total_ton_balance: parseFloat(ton.rows[0].total),
+    pending_withdrawals: parseInt(pending.rows[0].total),
+    total_purchases: parseInt(completed.rows[0].total),
+    total_revenue: parseFloat(completed.rows[0].sum),
+    new_users_24h: parseInt(revenue.rows[0].total),
+  });
+});
+
+// ── Users ──
 router.get('/users', async (req, res) => {
   const page = parseInt(req.query.page) || 1;
-  const limit = 50;
+  const search = req.query.search || '';
+  const limit = 30;
   const offset = (page - 1) * limit;
+
+  let where = '';
+  let params = [limit, offset];
+  if (search) {
+    where = `WHERE username ILIKE $3 OR first_name ILIKE $3 OR CAST(tg_id AS TEXT) LIKE $3`;
+    params.push(`%${search}%`);
+  }
 
   const { rows } = await pool.query(
     `SELECT id, tg_id, username, first_name, power, hashes, ton_balance, is_premium, created_at
-     FROM users ORDER BY id DESC LIMIT $1 OFFSET $2`,
-    [limit, offset]
+     FROM users ${where} ORDER BY id DESC LIMIT $1 OFFSET $2`, params
   );
-  const { rows: count } = await pool.query(`SELECT COUNT(*) FROM users`);
+  const { rows: count } = await pool.query(`SELECT COUNT(*) FROM users ${where}`, search ? [`%${search}%`] : []);
   res.json({ users: rows, total: parseInt(count[0].count), page });
-});
-
-router.get('/withdrawals', async (req, res) => {
-  const status = req.query.status || 'pending';
-  const { rows } = await pool.query(
-    `SELECT w.*, u.tg_id, u.username 
-     FROM withdrawals w JOIN users u ON u.id = w.user_id
-     WHERE w.status = $1 ORDER BY w.created_at DESC`,
-    [status]
-  );
-  res.json(rows);
-});
-
-router.post('/withdrawals/:id/approve', async (req, res) => {
-  const { tx_hash } = req.body;
-  await pool.query(
-    `UPDATE withdrawals SET status = 'completed', tx_hash = $1 WHERE id = $2`,
-    [tx_hash, req.params.id]
-  );
-  res.json({ success: true });
-});
-
-router.post('/withdrawals/:id/reject', async (req, res) => {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const { rows } = await client.query(
-      `SELECT * FROM withdrawals WHERE id = $1`, [req.params.id]
-    );
-    if (!rows.length) return res.status(404).json({ error: 'Not found' });
-
-    const w = rows[0];
-    await client.query(
-      `UPDATE withdrawals SET status = 'rejected' WHERE id = $1`, [w.id]
-    );
-    await client.query(
-      `UPDATE users SET ton_balance = ton_balance + $1 WHERE id = $2`,
-      [w.ton_amount, w.user_id]
-    );
-    await client.query('COMMIT');
-    res.json({ success: true });
-  } catch (e) {
-    await client.query('ROLLBACK');
-    res.status(500).json({ error: 'Failed' });
-  } finally {
-    client.release();
-  }
 });
 
 router.post('/users/:id/adjust', async (req, res) => {
@@ -83,6 +81,166 @@ router.post('/users/:id/adjust', async (req, res) => {
   vals.push(req.params.id);
   await pool.query(`UPDATE users SET ${fields.join(', ')} WHERE id = $${idx}`, vals);
   res.json({ success: true });
+});
+
+// ── Withdrawals ──
+router.get('/withdrawals', async (req, res) => {
+  const status = req.query.status || 'pending';
+  const { rows } = await pool.query(
+    `SELECT w.*, u.tg_id, u.username, u.first_name
+     FROM withdrawals w JOIN users u ON u.id = w.user_id
+     WHERE w.status = $1 ORDER BY w.created_at DESC LIMIT 50`, [status]
+  );
+  res.json(rows);
+});
+
+router.post('/withdrawals/:id/approve', async (req, res) => {
+  const { tx_hash } = req.body;
+  await pool.query(
+    `UPDATE withdrawals SET status = 'completed', tx_hash = $1 WHERE id = $2`,
+    [tx_hash || 'manual', req.params.id]
+  );
+  res.json({ success: true });
+});
+
+router.post('/withdrawals/:id/reject', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(`SELECT * FROM withdrawals WHERE id = $1`, [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    const w = rows[0];
+    await client.query(`UPDATE withdrawals SET status = 'rejected' WHERE id = $1`, [w.id]);
+    await client.query(`UPDATE users SET ton_balance = ton_balance + $1 WHERE id = $2`, [w.ton_amount, w.user_id]);
+    await client.query('COMMIT');
+    res.json({ success: true });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: 'Failed' });
+  } finally { client.release(); }
+});
+
+// ── Tasks CRUD ──
+router.get('/tasks', async (req, res) => {
+  const { rows } = await pool.query(`SELECT * FROM tasks ORDER BY id DESC`);
+  res.json(rows);
+});
+
+router.post('/tasks', async (req, res) => {
+  const { title, description, reward_power, type, link } = req.body;
+  if (!title || !reward_power) return res.status(400).json({ error: 'title and reward_power required' });
+  const { rows } = await pool.query(
+    `INSERT INTO tasks (title, description, reward_power, type, link) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+    [title, description || '', reward_power, type || 'other', link || '']
+  );
+  res.json(rows[0]);
+});
+
+router.post('/tasks/:id/toggle', async (req, res) => {
+  await pool.query(`UPDATE tasks SET is_active = NOT is_active WHERE id = $1`, [req.params.id]);
+  res.json({ success: true });
+});
+
+router.delete('/tasks/:id', async (req, res) => {
+  await pool.query(`DELETE FROM tasks WHERE id = $1`, [req.params.id]);
+  res.json({ success: true });
+});
+
+// ── Packages ──
+router.get('/packages', async (req, res) => {
+  const { rows } = await pool.query(`SELECT * FROM power_packages ORDER BY power_amount ASC`);
+  res.json(rows);
+});
+
+router.post('/packages', async (req, res) => {
+  const { name, power_amount, price_ton } = req.body;
+  if (!name || !power_amount || !price_ton) return res.status(400).json({ error: 'All fields required' });
+  const { rows } = await pool.query(
+    `INSERT INTO power_packages (name, power_amount, price_ton) VALUES ($1, $2, $3) RETURNING *`,
+    [name, power_amount, price_ton]
+  );
+  res.json(rows[0]);
+});
+
+router.post('/packages/:id/toggle', async (req, res) => {
+  await pool.query(`UPDATE power_packages SET is_active = NOT is_active WHERE id = $1`, [req.params.id]);
+  res.json({ success: true });
+});
+
+router.put('/packages/:id', async (req, res) => {
+  const { name, power_amount, price_ton } = req.body;
+  if (!name || !power_amount || !price_ton) return res.status(400).json({ error: 'All fields required' });
+  const { rows } = await pool.query(
+    `UPDATE power_packages SET name = $1, power_amount = $2, price_ton = $3 WHERE id = $4 RETURNING *`,
+    [name, power_amount, price_ton, req.params.id]
+  );
+  if (!rows.length) return res.status(404).json({ error: 'Package not found' });
+  res.json(rows[0]);
+});
+
+router.delete('/packages/:id', async (req, res) => {
+  // Check if any purchases reference this package
+  const { rows: refs } = await pool.query(
+    `SELECT COUNT(*) as cnt FROM purchases WHERE package_id = $1`, [req.params.id]
+  );
+  if (parseInt(refs[0].cnt) > 0) {
+    // Soft-deactivate instead of hard delete if there are purchases
+    await pool.query(`UPDATE power_packages SET is_active = FALSE WHERE id = $1`, [req.params.id]);
+    return res.json({ success: true, soft: true, message: 'Package deactivated (has purchases)' });
+  }
+  await pool.query(`DELETE FROM power_packages WHERE id = $1`, [req.params.id]);
+  res.json({ success: true });
+});
+
+// ── Referral Settings ──
+router.get('/ref-settings', async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT key, value, label FROM app_settings WHERE key LIKE 'ref_%' ORDER BY key`
+  );
+  res.json(rows);
+});
+
+router.put('/ref-settings', async (req, res) => {
+  const { settings } = req.body;
+  if (!Array.isArray(settings)) return res.status(400).json({ error: 'settings array required' });
+  for (const s of settings) {
+    if (!s.key || s.value === undefined) continue;
+    await pool.query(
+      `INSERT INTO app_settings (key, value, label)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (key) DO UPDATE SET value = $2`,
+      [s.key, String(s.value), s.label || s.key]
+    );
+  }
+  res.json({ success: true });
+});
+
+// ── Referral Stats (admin overview) ──
+router.get('/ref-stats', async (req, res) => {
+  const [totalRefs, confirmedRefs, totalPowerGiven, totalTonGiven] = await Promise.all([
+    pool.query(`SELECT COUNT(*) as cnt FROM referrals`),
+    pool.query(`SELECT COUNT(*) as cnt FROM referrals WHERE is_confirmed = TRUE`),
+    pool.query(`SELECT COALESCE(SUM(power_amount), 0) as total FROM referral_rewards WHERE reward_type = 'power'`),
+    pool.query(`SELECT COALESCE(SUM(ton_amount), 0) as total FROM referral_rewards WHERE reward_type = 'commission'`),
+  ]);
+  // Top referrers
+  const { rows: topReferrers } = await pool.query(
+    `SELECT u.id, u.tg_id, u.username, u.first_name,
+            COUNT(r.id) as ref_count,
+            COALESCE(SUM(CASE WHEN r.is_confirmed THEN 1 ELSE 0 END), 0) as confirmed_count
+     FROM users u
+     JOIN referrals r ON r.referrer_id = u.id
+     GROUP BY u.id
+     ORDER BY ref_count DESC
+     LIMIT 10`
+  );
+  res.json({
+    total_referrals: parseInt(totalRefs.rows[0].cnt),
+    confirmed_referrals: parseInt(confirmedRefs.rows[0].cnt),
+    total_power_given: parseFloat(totalPowerGiven.rows[0].total),
+    total_ton_given: parseFloat(totalTonGiven.rows[0].total),
+    top_referrers: topReferrers,
+  });
 });
 
 export default router;

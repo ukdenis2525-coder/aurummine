@@ -1,18 +1,24 @@
 import { create } from 'zustand';
 import api from '../utils/api.js';
 
+const ADMIN_ID = import.meta.env.VITE_ADMIN_ID;
+
 export const useStore = create((set, get) => ({
   user: null,
   mining: null,
   loading: true,
   activeTab: 'power',
+  isAdmin: false,
 
   setTab: (tab) => set({ activeTab: tab }),
 
   init: async () => {
     try {
       const { data } = await api.post('/auth/init');
-      set({ user: data.user });
+      const user = data.user;
+      const tgId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+      const isAdmin = ADMIN_ID && String(tgId || user.tg_id) === String(ADMIN_ID);
+      set({ user, isAdmin });
       await get().fetchMining();
     } catch (e) {
       console.error('Init error:', e);

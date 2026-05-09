@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import cron from 'node-cron';
 import { pool } from './db.js';
+import { rateLimit } from './middleware/rateLimit.js';
 import authRoutes from './routes/auth.js';
 import miningRoutes from './routes/mining.js';
 import shopRoutes from './routes/shop.js';
@@ -12,24 +13,34 @@ import tasksRoutes from './routes/tasks.js';
 import leaderboardRoutes from './routes/leaderboard.js';
 import adminRoutes from './routes/admin.js';
 import { accrueHashes } from './services/mining.js';
+import { checkPendingPayments } from './services/payment.js';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
+// CORS — configurable via env, defaults to * for Telegram WebApp compatibility
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'x-init-data', 'x-admin-key', 'x-ref-id']
+}));
 app.use(express.json());
 
+// Rate limiters
+const generalLimit = rateLimit(100, 60000);   // 100 req/min per IP
+const strictLimit = rateLimit(10, 60000);      // 10 req/min per IP
+
 // Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/mining', miningRoutes);
-app.use('/api/shop', shopRoutes);
-app.use('/api/withdraw', withdrawRoutes);
-app.use('/api/referrals', referralRoutes);
-app.use('/api/tasks', tasksRoutes);
-app.use('/api/leaderboard', leaderboardRoutes);
-app.use('/api/admin', adminRoutes);
+app.use('/api/auth', generalLimit, authRoutes);
+app.use('/api/mining', generalLimit, miningRoutes);
+app.use('/api/shop', generalLimit, shopRoutes);
+app.use('/api/withdraw', strictLimit, withdrawRoutes);
+app.use('/api/referrals', generalLimit, referralRoutes);
+app.use('/api/tasks', generalLimit, tasksRoutes);
+app.use('/api/leaderboard', generalLimit, leaderboardRoutes);
+app.use('/api/admin', strictLimit, adminRoutes);
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
@@ -38,7 +49,42 @@ cron.schedule('* * * * *', async () => {
   try {
     await accrueHashes();
   } catch (e) {
-    console.error('Cron error:', e.message);
+    console.error('Mining cron error:', e.message);
+  }
+});
+
+// Cron: check pending payments every 2 minutes
+cron.schedule('*/2 * * * *', async () => {
+  try {
+    await checkPendingPayments();
+  } catch (e) {
+    console.error('Payment cron error:', e.message);
+  }
+});
+
+// Admin: manual payment check trigger
+app.post('/api/admin/check-payments', async (req, res) => {
+  const key = req.headers['x-admin-key'];
+  const initData = req.headers['x-init-data'];
+  let auth = key && key === process.env.ADMIN_KEY;
+  if (!auth && initData) {
+    try {
+      const params = new URLSearchParams(initData);
+      const u = JSON.parse(params.get('user') || '{}');
+      const ids = (process.env.ADMIN_TG_IDS || process.env.ADMIN_TG_ID || '').split(',');
+      auth = ids.includes(String(u.id));
+    } catch {}
+  }
+  if (!auth) return res.status(403).json({ error: 'Forbidden' });
+
+  try {
+    await checkPendingPayments();
+    const { rows } = await pool.query(
+      `SELECT id, user_id, memo, ton_amount, status, created_at FROM pending_purchases ORDER BY created_at DESC LIMIT 20`
+    );
+    res.json({ message: 'Payment check completed', recent_purchases: rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 

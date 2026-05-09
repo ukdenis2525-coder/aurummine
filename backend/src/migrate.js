@@ -89,6 +89,33 @@ const migrate = async () => {
         ton_converted NUMERIC(10,8) DEFAULT 0,
         created_at TIMESTAMP DEFAULT NOW()
       );
+
+      CREATE TABLE IF NOT EXISTS pending_purchases (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id),
+        package_id INTEGER REFERENCES power_packages(id),
+        memo VARCHAR(32) UNIQUE NOT NULL,
+        ton_amount NUMERIC(10,4) NOT NULL,
+        status VARCHAR(20) DEFAULT 'pending',
+        expires_at TIMESTAMP NOT NULL,
+        tx_hash VARCHAR(255),
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS app_settings (
+        key VARCHAR(100) PRIMARY KEY,
+        value TEXT NOT NULL,
+        label VARCHAR(255)
+      );
+    `);
+
+    // Add indexes for performance
+    await client.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_power_packages_name ON power_packages(name);
+      CREATE INDEX IF NOT EXISTS idx_pending_purchases_status ON pending_purchases(status, expires_at);
+      CREATE INDEX IF NOT EXISTS idx_users_power ON users(power DESC) WHERE power > 0;
+      CREATE INDEX IF NOT EXISTS idx_withdrawals_status ON withdrawals(status);
+      CREATE INDEX IF NOT EXISTS idx_mining_log_user ON mining_log(user_id, created_at DESC);
     `);
 
     // Seed packages
@@ -98,7 +125,16 @@ const migrate = async () => {
         ('Basic',     100000,   0.85),
         ('Advanced',  500000,   3.50),
         ('Pro',      1000000,   6.00)
-      ON CONFLICT DO NOTHING;
+      ON CONFLICT (name) DO NOTHING;
+    `);
+
+    // Seed referral settings
+    await client.query(`
+      INSERT INTO app_settings (key, value, label) VALUES
+        ('ref_power_premium', '6000', 'Power за Premium реферала'),
+        ('ref_power_normal',  '3000', 'Power за обычного реферала'),
+        ('ref_commission_pct', '15',  'Комиссия с покупок (%)')
+      ON CONFLICT (key) DO NOTHING;
     `);
 
     console.log('Migration complete');

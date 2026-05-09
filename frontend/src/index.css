@@ -1,14 +1,29 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
 :root {
   --gold: #D4AF37;
   --gold-light: #F5D76E;
   --gold-dark: #B8860B;
-  --bg: #0F0F0F;
-  --bg-card: #1A1A1A;
-  --bg-card2: #222222;
+  --gold-glow: rgba(212, 175, 55, 0.25);
+  --bg: #08080C;
+  --bg-card: rgba(255,255,255,0.04);
+  --bg-card-hover: rgba(255,255,255,0.07);
+  --bg-glass: rgba(255,255,255,0.06);
+  --border: rgba(255,255,255,0.08);
+  --border-gold: rgba(212,175,55,0.25);
   --text: #FFFFFF;
-  --text-muted: #888888;
-  --green: #4CAF50;
-  --red: #F44336;
+  --text-secondary: #9CA3AF;
+  --text-muted: #6B7280;
+  --green: #34D399;
+  --green-bg: rgba(52,211,153,0.1);
+  --red: #F87171;
+  --red-bg: rgba(248,113,113,0.1);
+  --orange: #FBBF24;
+  --radius: 16px;
+  --radius-sm: 10px;
+  --radius-lg: 24px;
+  --shadow: 0 8px 32px rgba(0,0,0,0.4);
+  --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -16,9 +31,10 @@
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   min-height: 100vh;
   overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
 }
 
 #root {
@@ -27,6 +43,7 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 button {
@@ -34,38 +51,147 @@ button {
   border: none;
   outline: none;
   font-family: inherit;
+  transition: var(--transition);
 }
 
+/* ── Primary Button ── */
 .btn-gold {
   background: linear-gradient(135deg, var(--gold-dark), var(--gold), var(--gold-light));
   color: #000;
   font-weight: 700;
-  border-radius: 14px;
+  border-radius: var(--radius);
   padding: 14px 24px;
-  font-size: 15px;
+  font-size: 14px;
   width: 100%;
-  transition: opacity 0.2s, transform 0.1s;
+  letter-spacing: 0.3px;
+  position: relative;
+  overflow: hidden;
 }
-.btn-gold:active { transform: scale(0.97); opacity: 0.9; }
+.btn-gold::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.3) 50%, transparent 60%);
+  transform: translateX(-100%);
+  transition: transform 0.6s;
+}
+.btn-gold:active { transform: scale(0.97); }
+.btn-gold:active::after { transform: translateX(100%); }
+.btn-gold:disabled { opacity: 0.4; pointer-events: none; }
 
+/* ── Outline Button ── */
 .btn-outline {
-  background: transparent;
+  background: rgba(212,175,55,0.08);
   color: var(--gold);
   font-weight: 600;
-  border-radius: 14px;
+  border-radius: var(--radius);
   padding: 14px 24px;
-  font-size: 15px;
+  font-size: 14px;
   width: 100%;
-  border: 1.5px solid var(--gold);
-  transition: opacity 0.2s;
+  border: 1px solid var(--border-gold);
+  backdrop-filter: blur(10px);
 }
-.btn-outline:active { opacity: 0.7; }
+.btn-outline:active { opacity: 0.7; transform: scale(0.98); }
 
+/* ── Glass Card ── */
 .card {
   background: var(--bg-card);
-  border-radius: 20px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: var(--radius-lg);
   padding: 20px;
-  border: 1px solid #2a2a2a;
+  border: 1px solid var(--border);
+  transition: var(--transition);
 }
 
-.page { flex: 1; padding: 16px 16px 90px; overflow-y: auto; }
+/* ── Page Container ── */
+.page {
+  flex: 1;
+  padding: 16px 16px 100px;
+  overflow-y: auto;
+  animation: fadeIn 0.3s ease;
+}
+
+/* ── Stat Pill ── */
+.stat-pill {
+  background: rgba(255,255,255,0.04);
+  border-radius: var(--radius-sm);
+  padding: 12px 8px;
+  text-align: center;
+  border: 1px solid var(--border);
+}
+.stat-pill .label { font-size: 10px; color: var(--text-muted); letter-spacing: 1px; margin-bottom: 4px; }
+.stat-pill .value { font-size: 14px; font-weight: 800; color: var(--gold-light); }
+.stat-pill .sub { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+
+/* ── Inputs ── */
+input[type="text"], input[type="number"] {
+  -webkit-appearance: none;
+  -moz-appearance: textfield;
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: 'Inter', monospace;
+  font-size: 14px;
+  outline: none;
+  transition: var(--transition);
+}
+input:focus { border-color: var(--gold) !important; box-shadow: 0 0 0 3px var(--gold-glow); }
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input::placeholder { color: var(--text-muted); }
+
+/* ── Animations ── */
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+@keyframes glow { 0%,100% { box-shadow: 0 0 20px var(--gold-glow); } 50% { box-shadow: 0 0 40px var(--gold-glow), 0 0 80px rgba(212,175,55,0.1); } }
+@keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+@keyframes shimmer { 0% { background-position: -200% center; } 100% { background-position: 200% center; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes countUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+
+/* ── Page Title ── */
+.page-title {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  margin-bottom: 4px;
+}
+.page-subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* ── RTL Support ── */
+[dir="rtl"] .page { direction: rtl; text-align: right; }
+[dir="rtl"] .stat-pill { text-align: center; }
+[dir="rtl"] .btn-gold, [dir="rtl"] .btn-outline { text-align: center; }
+
+/* ── Language Switcher ── */
+.lang-btn {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  font-family: inherit;
+}
+.lang-btn:hover, .lang-btn.active {
+  border-color: var(--gold);
+  color: var(--gold);
+  background: rgba(212,175,55,0.08);
+}
+

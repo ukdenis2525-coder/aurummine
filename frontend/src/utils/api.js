@@ -9,6 +9,11 @@ api.interceptors.request.use((config) => {
   if (tg?.initData) {
     config.headers['x-init-data'] = tg.initData;
   }
+  // Pass referral start_param
+  const startParam = tg?.initDataUnsafe?.start_param;
+  if (startParam) {
+    config.headers['x-ref-id'] = startParam;
+  }
   // dev fallback
   if (!tg?.initData && import.meta.env.DEV) {
     config.headers['x-init-data'] = 'user=%7B%22id%22%3A123456%2C%22first_name%22%3A%22Test%22%2C%22username%22%3A%22testuser%22%7D&hash=dev';

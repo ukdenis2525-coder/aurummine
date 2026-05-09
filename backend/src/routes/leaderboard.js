@@ -12,8 +12,9 @@ router.get('/', authMiddleware, async (req, res) => {
   );
 
   const { rows: myRank } = await pool.query(
-    `SELECT RANK() OVER (ORDER BY power DESC) as rank
-     FROM users WHERE id = $1`, [req.user.id]
+    `SELECT rank FROM (
+       SELECT id, RANK() OVER (ORDER BY power DESC) as rank FROM users
+     ) t WHERE id = $1`, [req.user.id]
   );
 
   res.json({ leaderboard: rows, my_rank: myRank[0]?.rank || null });

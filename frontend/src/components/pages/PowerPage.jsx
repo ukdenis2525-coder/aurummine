@@ -1,37 +1,55 @@
 import React, { useEffect, useState } from 'react';
 import { useStore } from '../../store/index.js';
+import { fmt, fmtK } from '../../utils/format.js';
+import { useTranslation } from 'react-i18next';
 
-const fmt = (n, d = 8) => parseFloat(parseFloat(n || 0).toFixed(d));
-const fmtK = (n) => n >= 1000000 ? `${(n/1000000).toFixed(1)}M` : n >= 1000 ? `${(n/1000).toFixed(1)}K` : n;
+const LANGS = [
+  { code: 'en', label: 'EN' },
+  { code: 'ru', label: 'RU' },
+  { code: 'uk', label: 'UA' },
+  { code: 'ar', label: 'AR' },
+];
 
 export default function PowerPage() {
-  const { user, mining, fetchMining, collect } = useStore();
+  const { user, mining, fetchMining, collect, setTab, isAdmin } = useStore();
+  const { t, i18n } = useTranslation();
+  const [showLang, setShowLang] = useState(false);
+
+  const changeLang = (code) => {
+    i18n.changeLanguage(code);
+    localStorage.setItem('aurummine_lang', code);
+    setShowLang(false);
+  };
   const [collecting, setCollecting] = useState(false);
   const [collected, setCollected] = useState(null);
   const [liveHashes, setLiveHashes] = useState(0);
 
-  useEffect(() => {
-    fetchMining();
-  }, []);
+  useEffect(() => { fetchMining(); }, []);
 
   useEffect(() => {
     if (!mining) return;
     setLiveHashes(parseFloat(mining.hashes || 0));
     const hps = (mining.hashes_per_day || 0) / 86400;
-    const interval = setInterval(() => {
-      setLiveHashes(prev => prev + hps);
-    }, 1000);
+    const interval = setInterval(() => setLiveHashes(prev => prev + hps), 1000);
     return () => clearInterval(interval);
   }, [mining]);
 
-  const handleCollect = async () => {
-    if (collecting || liveHashes <= 0) return;
+  const handleCollectAndWithdraw = async () => {
+    if (collecting) return;
+
+    // If no hashes — go straight to withdraw
+    if (liveHashes <= 0) {
+      setTab('withdraw');
+      return;
+    }
+
     setCollecting(true);
     try {
       const res = await collect();
       setCollected(res.ton_earned);
       setLiveHashes(0);
-      setTimeout(() => setCollected(null), 3000);
+      // Navigate to withdraw after showing success
+      setTimeout(() => setTab('withdraw'), 1500);
     } finally {
       setCollecting(false);
     }
@@ -39,94 +57,177 @@ export default function PowerPage() {
 
   const power = parseFloat(user?.power || 0);
   const tonBalance = parseFloat(user?.ton_balance || 0);
+  const hashesPerDay = mining?.hashes_per_day || 0;
 
   return (
     <div className="page">
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+      {/* ── Header ── */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{
-            width: 38, height: 38, borderRadius: '50%',
-            background: 'linear-gradient(135deg, #B8860B, #D4AF37)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18
+            width: 40, height: 40, borderRadius: 12,
+            background: 'linear-gradient(135deg, var(--gold-dark), var(--gold))',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 20, animation: 'pulse 3s ease-in-out infinite'
           }}>⚡</div>
-          <span style={{ fontSize: 20, fontWeight: 800, color: '#D4AF37', letterSpacing: 1 }}>AURUMMINE</span>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--gold)', letterSpacing: 1.5 }}>{t('power.brand')}</div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: 0.5 }}>{t('power.subtitle')}</div>
+          </div>
         </div>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: 12, color: '#888' }}>Баланс</div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: '#D4AF37' }}>{fmt(tonBalance, 4)} TON</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {isAdmin && (
+            <button onClick={() => setTab('admin')} style={{
+              background: 'var(--red-bg)', border: '1px solid rgba(248,113,113,0.3)',
+              borderRadius: 12, padding: '8px 12px', cursor: 'pointer',
+              fontSize: 16, lineHeight: 1
+            }}>🛡️</button>
+          )}
+          {/* Language switcher */}
+          <div style={{ position: 'relative' }}>
+            <button onClick={() => setShowLang(!showLang)} className="lang-btn">
+              🌐 {LANGS.find(l => l.code === i18n.language)?.label || 'EN'}
+            </button>
+            {showLang && (
+              <div style={{
+                position: 'absolute', top: '100%', right: 0, marginTop: 6,
+                background: 'rgba(18,18,26,0.98)', backdropFilter: 'blur(20px)',
+                border: '1px solid var(--border-gold)', borderRadius: 12,
+                padding: 4, zIndex: 50, minWidth: 80,
+                animation: 'fadeIn 0.2s ease'
+              }}>
+                {LANGS.map(l => (
+                  <button key={l.code} onClick={() => changeLang(l.code)} style={{
+                    display: 'block', width: '100%', padding: '8px 14px',
+                    background: i18n.language === l.code ? 'rgba(212,175,55,0.12)' : 'transparent',
+                    border: 'none', borderRadius: 8,
+                    color: i18n.language === l.code ? 'var(--gold)' : 'var(--text-muted)',
+                    fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                    textAlign: 'left', transition: 'var(--transition)'
+                  }}>{l.label}</button>
+                ))}
+              </div>
+            )}
+          </div>
+          <button onClick={() => setTab('withdraw')} style={{
+          background: 'var(--bg-card)', border: '1px solid var(--border-gold)',
+          borderRadius: 14, padding: '8px 14px', cursor: 'pointer', textAlign: 'right'
+        }}>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: 0.5 }}>{t('power.balance')}</div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--gold-light)' }}>{fmt(tonBalance, 4)} TON</div>
+        </button>
         </div>
       </div>
 
-      {/* Power card */}
-      <div className="card" style={{
-        background: 'linear-gradient(135deg, #1a1400, #2a2000)',
-        border: '1px solid #3a3000', marginBottom: 16, textAlign: 'center'
+      {/* ── Mining Orb ── */}
+      <div style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
+        marginBottom: 24, position: 'relative'
       }}>
-        <div style={{ fontSize: 12, color: '#D4AF37', letterSpacing: 2, marginBottom: 8 }}>ВАША POWER</div>
-        <div style={{ fontSize: 52, fontWeight: 900, color: '#F5D76E', lineHeight: 1 }}>
-          {fmtK(Math.floor(power))}
-        </div>
-        <div style={{ fontSize: 14, color: '#D4AF37', letterSpacing: 3, marginBottom: 16 }}>POWER</div>
+        {/* Background glow */}
+        <div style={{
+          position: 'absolute', width: 200, height: 200, borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(212,175,55,0.15) 0%, transparent 70%)',
+          filter: 'blur(30px)', top: -20
+        }} />
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 16 }}>
-          {[
-            { label: 'ДЕНЬ', val: fmt(mining?.ton_per_day, 5) },
-            { label: 'МЕСЯЦ', val: fmt(mining?.ton_per_month, 4) },
-            { label: '3 МЕС', val: fmt(mining?.ton_per_3months, 3) },
-          ].map(item => (
-            <div key={item.label} style={{ background: '#1a1500', borderRadius: 10, padding: '10px 6px' }}>
-              <div style={{ fontSize: 10, color: '#888', marginBottom: 4 }}>{item.label}</div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#F5D76E' }}>{item.val}</div>
-              <div style={{ fontSize: 10, color: '#666' }}>TON</div>
+        {/* Outer ring */}
+        <div style={{
+          width: 160, height: 160, borderRadius: '50%',
+          background: `conic-gradient(var(--gold) ${Math.min(power / 10000, 100)}%, transparent 0)`,
+          padding: 3, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          animation: power > 0 ? 'glow 3s ease-in-out infinite' : 'none',
+          position: 'relative'
+        }}>
+          {/* Inner circle */}
+          <div style={{
+            width: '100%', height: '100%', borderRadius: '50%',
+            background: 'linear-gradient(135deg, #0a0a10, #12121a)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'
+          }}>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: 2, marginBottom: 4 }}>{t('power.power_label')}</div>
+            <div style={{
+              fontSize: 32, fontWeight: 900, color: 'var(--gold-light)',
+              lineHeight: 1, animation: 'countUp 0.5s ease'
+            }}>
+              {fmtK(Math.floor(power))}
             </div>
-          ))}
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          <button className="btn-gold" onClick={() => useStore.getState().setTab('shop')}>
-            ⚡ Добавить POWER
-          </button>
-          <button className="btn-outline" onClick={() => useStore.getState().setTab('tasks')}>
-            🎁 Бесплатно
-          </button>
+            {power > 0 && (
+              <div style={{ fontSize: 10, color: 'var(--green)', marginTop: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--green)', animation: 'blink 2s infinite' }} />
+                {t('power.mining_active')}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Hashes card */}
+      {/* ── Earnings Grid ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 16 }}>
+        {[
+          { label: t('power.day'), val: fmt(mining?.ton_per_day, 5) },
+          { label: t('power.month'), val: fmt(mining?.ton_per_month, 4) },
+          { label: t('power.three_months'), val: fmt(mining?.ton_per_3months, 3) },
+        ].map(item => (
+          <div key={item.label} className="stat-pill">
+            <div className="label">{item.label}</div>
+            <div className="value">{item.val}</div>
+            <div className="sub">TON</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Quick Actions ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+        <button className="btn-gold" onClick={() => setTab('shop')}>
+          {t('power.buy_power')}
+        </button>
+        <button className="btn-outline" onClick={() => setTab('tasks')}>
+          {t('power.free_power')}
+        </button>
+      </div>
+
+      {/* ── Hashes Card ── */}
       <div className="card" style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-          <span style={{ fontSize: 18 }}>⛏️</span>
-          <span style={{ fontSize: 13, color: '#888', letterSpacing: 1 }}>HASHES ДОБЫТО</span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 18 }}>⛏️</span>
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)', letterSpacing: 1, fontWeight: 600 }}>{t('power.mined')}</span>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+            {hashesPerDay.toFixed(1)} {t('power.h_per_day')}
+          </div>
         </div>
-        <div style={{ fontSize: 36, fontWeight: 900, color: '#D4AF37', marginBottom: 4 }}>
+
+        <div style={{
+          fontSize: 28, fontWeight: 900, color: 'var(--gold)',
+          fontFamily: "'Inter', monospace", letterSpacing: -0.5, marginBottom: 2
+        }}>
           {liveHashes.toFixed(8)}
+          <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 500, marginLeft: 6 }}>{t('power.hashes')}</span>
         </div>
-        <div style={{ fontSize: 13, color: '#666', marginBottom: 16 }}>
+        <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 18 }}>
           ≈ {(liveHashes * (mining?.ton_per_hash || 0)).toFixed(8)} TON
         </div>
 
+        {/* Success toast */}
         {collected !== null && (
           <div style={{
-            background: '#1a2a1a', border: '1px solid #4CAF50',
-            borderRadius: 10, padding: '10px 16px', marginBottom: 12,
-            color: '#4CAF50', fontWeight: 600, textAlign: 'center'
+            background: 'var(--green-bg)', border: '1px solid rgba(52,211,153,0.3)',
+            borderRadius: 12, padding: '12px 16px', marginBottom: 14,
+            color: 'var(--green)', fontWeight: 600, textAlign: 'center',
+            fontSize: 14, animation: 'fadeIn 0.3s ease'
           }}>
-            ✅ Получено +{fmt(collected, 6)} TON
+            {t('power.collected_success', { amount: fmt(collected, 6) })}
           </div>
         )}
 
         <button
           className="btn-gold"
-          onClick={handleCollect}
-          disabled={collecting || liveHashes <= 0}
-          style={{ opacity: liveHashes <= 0 ? 0.5 : 1 }}
+          onClick={handleCollectAndWithdraw}
+          disabled={collecting || (liveHashes <= 0 && tonBalance <= 0)}
         >
-          {collecting ? '⏳ Обработка...' : '▶ НАЧАТЬ ПРОИЗВОДСТВО'}
-        </button>
-
-        <button className="btn-outline" style={{ marginTop: 10 }}>
-          ⇄ ОБМЕНЯТЬ HASHES
+          {collecting ? t('power.exchanging') : t('power.exchange_btn')}
         </button>
       </div>
     </div>

@@ -12,6 +12,8 @@ export const getHashesPerMinute = (power) => {
 export const accrueHashes = async () => {
   const client = await pool.connect();
   try {
+    await client.query('BEGIN');
+
     // Get all users with power > 0
     const { rows: users } = await client.query(
       `SELECT id, power, last_accrue_at FROM users WHERE power > 0`
@@ -38,6 +40,11 @@ export const accrueHashes = async () => {
         [user.id, hashesEarned]
       );
     }
+
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('accrueHashes transaction error:', e.message);
   } finally {
     client.release();
   }

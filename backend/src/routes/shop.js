@@ -1,8 +1,11 @@
 import { Router } from 'express';
 import { authMiddleware } from '../middleware/auth.js';
 import { pool } from '../db.js';
+import crypto from 'crypto';
 
 const router = Router();
+
+const generateMemo = () => crypto.randomBytes(6).toString('hex').toUpperCase(); // e.g. A1B2C3D4E5F6
 
 router.get('/packages', authMiddleware, async (req, res) => {
   const { rows } = await pool.query(
@@ -11,97 +14,86 @@ router.get('/packages', authMiddleware, async (req, res) => {
   res.json(rows);
 });
 
-router.post('/buy', authMiddleware, async (req, res) => {
-  const { package_id, tx_hash } = req.body;
+// Create pending purchase — returns memo + wallet address
+router.post('/create-order', authMiddleware, async (req, res) => {
+  const { package_id } = req.body;
   const user = req.user;
 
-  if (!package_id || !tx_hash) {
-    return res.status(400).json({ error: 'package_id and tx_hash required' });
-  }
-
-  // Check tx_hash not already used
-  const { rows: existing } = await pool.query(
-    `SELECT id FROM purchases WHERE tx_hash = $1`, [tx_hash]
-  );
-  if (existing.length > 0) return res.status(400).json({ error: 'Transaction already used' });
+  if (!package_id) return res.status(400).json({ error: 'package_id required' });
 
   // Get package
   const { rows: pkgs } = await pool.query(
     `SELECT * FROM power_packages WHERE id = $1 AND is_active = TRUE`, [package_id]
   );
   if (!pkgs.length) return res.status(404).json({ error: 'Package not found' });
-
   const pkg = pkgs[0];
 
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
+  // Cancel any existing pending order for this user
+  await pool.query(
+    `UPDATE pending_purchases SET status = 'cancelled'
+     WHERE user_id = $1 AND status = 'pending'`,
+    [user.id]
+  );
 
-    // Record purchase
-    await client.query(
-      `INSERT INTO purchases (user_id, package_id, power_amount, ton_paid, tx_hash)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [user.id, pkg.id, pkg.power_amount, pkg.price_ton, tx_hash]
+  // Generate unique memo
+  let memo, attempts = 0;
+  do {
+    memo = generateMemo();
+    const { rows } = await pool.query(
+      `SELECT id FROM pending_purchases WHERE memo = $1`, [memo]
     );
+    if (!rows.length) break;
+    attempts++;
+  } while (attempts < 10);
 
-    // Add power to user
-    await client.query(
-      `UPDATE users SET power = power + $1 WHERE id = $2`,
-      [pkg.power_amount, user.id]
-    );
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
-    // Referral commission 15%
-    const { rows: refRows } = await client.query(
-      `SELECT referrer_id FROM referrals WHERE referee_id = $1`, [user.id]
-    );
-    if (refRows.length > 0) {
-      const commission = parseFloat(pkg.price_ton) * 0.15;
-      await client.query(
-        `UPDATE users SET ton_balance = ton_balance + $1 WHERE id = $2`,
-        [commission, refRows[0].referrer_id]
-      );
-      await client.query(
-        `INSERT INTO referral_rewards (referrer_id, referee_id, reward_type, ton_amount)
-         VALUES ($1, $2, 'commission', $3)`,
-        [refRows[0].referrer_id, user.id, commission]
-      );
+  const { rows } = await pool.query(
+    `INSERT INTO pending_purchases (user_id, package_id, memo, ton_amount, expires_at)
+     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+    [user.id, pkg.id, memo, pkg.price_ton, expiresAt]
+  );
 
-      // Confirm referral
-      await client.query(
-        `UPDATE referrals SET is_confirmed = TRUE WHERE referee_id = $1`, [user.id]
-      );
+  res.json({
+    order: rows[0],
+    package: pkg,
+    wallet: process.env.PAYMENT_WALLET,
+    expires_at: expiresAt
+  });
+});
 
-      // Give power bonus to referrer if not already given
-      const { rows: prevReward } = await client.query(
-        `SELECT id FROM referral_rewards 
-         WHERE referrer_id = $1 AND referee_id = $2 AND reward_type = 'power'`,
-        [refRows[0].referrer_id, user.id]
-      );
-      if (!prevReward.length) {
-        const powerBonus = user.is_premium ? 6000 : 3000;
-        await client.query(
-          `UPDATE users SET power = power + $1 WHERE id = $2`,
-          [powerBonus, refRows[0].referrer_id]
-        );
-        await client.query(
-          `INSERT INTO referral_rewards (referrer_id, referee_id, reward_type, power_amount)
-           VALUES ($1, $2, 'power', $3)`,
-          [refRows[0].referrer_id, user.id, powerBonus]
-        );
-      }
-    }
+// Get current pending order status
+router.get('/order-status', authMiddleware, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT pp.*, pkg.name as package_name, pkg.power_amount
+     FROM pending_purchases pp
+     JOIN power_packages pkg ON pkg.id = pp.package_id
+     WHERE pp.user_id = $1 AND pp.status = 'pending' AND pp.expires_at > NOW()
+     ORDER BY pp.created_at DESC LIMIT 1`,
+    [req.user.id]
+  );
+  res.json(rows[0] || null);
+});
 
-    await client.query('COMMIT');
+// Cancel pending order
+router.post('/cancel-order', authMiddleware, async (req, res) => {
+  await pool.query(
+    `UPDATE pending_purchases SET status = 'cancelled'
+     WHERE user_id = $1 AND status = 'pending'`,
+    [req.user.id]
+  );
+  res.json({ success: true });
+});
 
-    const { rows: updated } = await pool.query(`SELECT * FROM users WHERE id = $1`, [user.id]);
-    res.json({ success: true, user: updated[0] });
-  } catch (e) {
-    await client.query('ROLLBACK');
-    console.error(e);
-    res.status(500).json({ error: 'Purchase failed' });
-  } finally {
-    client.release();
-  }
+// Get last order status (for checking after expiry)
+router.get('/order-history', authMiddleware, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT status FROM pending_purchases
+     WHERE user_id = $1
+     ORDER BY created_at DESC LIMIT 1`,
+    [req.user.id]
+  );
+  res.json({ last_status: rows[0]?.status || null });
 });
 
 export default router;

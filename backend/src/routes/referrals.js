@@ -6,6 +6,9 @@ const router = Router();
 
 router.get('/', authMiddleware, async (req, res) => {
   const user = req.user;
+  const page = parseInt(req.query.page) || 1;
+  const limit = 30;
+  const offset = (page - 1) * limit;
 
   const { rows: stats } = await pool.query(
     `SELECT
@@ -28,15 +31,30 @@ router.get('/', authMiddleware, async (req, res) => {
      FROM referrals r
      JOIN users u ON u.id = r.referee_id
      WHERE r.referrer_id = $1
-     ORDER BY r.created_at DESC`,
-    [user.id]
+     ORDER BY r.created_at DESC
+     LIMIT $2 OFFSET $3`,
+    [user.id, limit, offset]
   );
+
+  // Load referral settings for display
+  const { rows: settingsRows } = await pool.query(
+    `SELECT key, value FROM app_settings WHERE key LIKE 'ref_%'`
+  );
+  const settings = {};
+  for (const r of settingsRows) settings[r.key] = parseFloat(r.value);
 
   res.json({
     stats: stats[0],
     rewards: rewards[0],
     team,
-    ref_link: `https://t.me/${process.env.BOT_USERNAME}?start=${user.id}`
+    page,
+    has_more: team.length === limit,
+    ref_link: `https://t.me/${process.env.BOT_USERNAME}?start=${user.id}`,
+    settings: {
+      power_premium: settings.ref_power_premium ?? 6000,
+      power_normal: settings.ref_power_normal ?? 3000,
+      commission_pct: settings.ref_commission_pct ?? 15,
+    }
   });
 });
 
