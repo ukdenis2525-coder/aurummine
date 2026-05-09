@@ -3,12 +3,11 @@ import { useRef, useCallback } from 'react';
 
 const ADSGRAM_INTERSTITIAL_ID = import.meta.env.VITE_ADSGRAM_INTERSTITIAL_ID || 'int-29785';
 const ADSGRAM_REWARD_ID = import.meta.env.VITE_ADSGRAM_BLOCK_ID || '29776';
-const MONETAG_ZONE_ID = import.meta.env.VITE_MONETAG_ZONE_ID || '';
+const MONETAG_ZONE_ID = import.meta.env.VITE_MONETAG_ZONE_ID || '10984603';
 
 export function useInterstitialAd() {
   const interstitialRef = useRef(null);
   const rewardRef = useRef(null);
-  const monetagRef = useRef(null);
 
   // Adsgram Interstitial
   const getInterstitial = useCallback(() => {
@@ -32,15 +31,16 @@ export function useInterstitialAd() {
     return rewardRef.current;
   }, []);
 
-  // Monetag (second fallback)
+  // Monetag via global show_ function
   const showMonetag = useCallback(async () => {
     if (!MONETAG_ZONE_ID) return false;
-
-    // Try dynamic import of monetag-tg-sdk
+    const showFn = window[`show_${MONETAG_ZONE_ID}`];
+    if (typeof showFn !== 'function') {
+      console.log('[Ad] Monetag show function not found');
+      return false;
+    }
     try {
-      const { createAdHandler } = await import('monetag-tg-sdk');
-      const adHandler = createAdHandler(MONETAG_ZONE_ID);
-      await adHandler();
+      await showFn();
       return true;
     } catch (e) {
       console.log('[Ad] Monetag failed:', e);
