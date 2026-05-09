@@ -7,6 +7,7 @@ export const useStore = create((set, get) => ({
   user: null,
   mining: null,
   loading: true,
+  blocked: false,
   activeTab: 'power',
   isAdmin: false,
 
@@ -21,6 +22,10 @@ export const useStore = create((set, get) => ({
       set({ user, isAdmin });
       await get().fetchMining();
     } catch (e) {
+      // 403 = blocked user (silent block)
+      if (e.response?.status === 403) {
+        set({ blocked: true });
+      }
       console.error('Init error:', e);
     } finally {
       set({ loading: false });
@@ -45,3 +50,4 @@ export const useStore = create((set, get) => ({
     set({ user: data.user });
   }
 }));
+

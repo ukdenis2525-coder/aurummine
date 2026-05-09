@@ -12,7 +12,7 @@ import ErrorBoundary from './components/ui/ErrorBoundary.jsx';
 import Loader from './components/ui/Loader.jsx';
 
 export default function App() {
-  const { init, loading, activeTab } = useStore();
+  const { init, loading, blocked, activeTab } = useStore();
 
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
@@ -26,6 +26,30 @@ export default function App() {
   }, []);
 
   if (loading) return <Loader />;
+
+  // Blocked user — show dead screen (looks like maintenance, no hint about ban)
+  if (blocked) {
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', background: '#08080C',
+        padding: 24, gap: 16
+      }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: '50%',
+          background: 'linear-gradient(135deg, #B8860B, #D4AF37)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 28, opacity: 0.4
+        }}>⚡</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: 'rgba(255,255,255,0.3)' }}>
+          Service temporarily unavailable
+        </div>
+        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.15)', textAlign: 'center' }}>
+          Please try again later
+        </div>
+      </div>
+    );
+  }
 
   return (
     <ErrorBoundary>
@@ -42,3 +66,4 @@ export default function App() {
     </ErrorBoundary>
   );
 }
+
