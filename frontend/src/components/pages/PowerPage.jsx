@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useStore } from '../../store/index.js';
 import { fmt, fmtK } from '../../utils/format.js';
 import { useTranslation } from 'react-i18next';
+import { useInterstitialAd } from '../../hooks/useInterstitialAd.js';
 
 const LANGS = [
   { code: 'en', label: 'EN' },
@@ -14,6 +15,7 @@ export default function PowerPage() {
   const { user, mining, fetchMining, collect, setTab, isAdmin } = useStore();
   const { t, i18n } = useTranslation();
   const [showLang, setShowLang] = useState(false);
+  const { showAdThen } = useInterstitialAd();
 
   const changeLang = (code) => {
     i18n.changeLanguage(code);
@@ -34,7 +36,7 @@ export default function PowerPage() {
     return () => clearInterval(interval);
   }, [mining]);
 
-  const handleCollectAndWithdraw = async () => {
+  const doExchange = async () => {
     if (collecting) return;
 
     // If no hashes — go straight to withdraw
@@ -48,11 +50,16 @@ export default function PowerPage() {
       const res = await collect();
       setCollected(res.ton_earned);
       setLiveHashes(0);
-      // Navigate to withdraw after showing success
       setTimeout(() => setTab('withdraw'), 1500);
     } finally {
       setCollecting(false);
     }
+  };
+
+  // Show interstitial ad before exchange
+  const handleCollectAndWithdraw = () => {
+    if (collecting) return;
+    showAdThen(doExchange);
   };
 
   const power = parseFloat(user?.power || 0);

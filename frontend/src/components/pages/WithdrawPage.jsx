@@ -3,6 +3,7 @@ import api from '../../utils/api.js';
 import { useStore } from '../../store/index.js';
 import { fmt } from '../../utils/format.js';
 import { useTranslation } from 'react-i18next';
+import { useInterstitialAd } from '../../hooks/useInterstitialAd.js';
 
 const MIN_WITHDRAW = 0.1;
 
@@ -15,6 +16,7 @@ export default function WithdrawPage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(null);
   const [error, setError] = useState(null);
+  const { showAdThen } = useInterstitialAd();
 
   const balance = parseFloat(user?.ton_balance || 0);
 
@@ -111,7 +113,7 @@ export default function WithdrawPage() {
           {t('withdraw.processing_time', { min: MIN_WITHDRAW })}
         </div>
 
-        <button className="btn-gold" onClick={handleSubmit}
+        <button className="btn-gold" onClick={() => showAdThen(handleSubmit)}
           disabled={loading || balance < MIN_WITHDRAW}
         >
           {loading ? t('withdraw.processing') : t('withdraw.withdraw_btn')}
