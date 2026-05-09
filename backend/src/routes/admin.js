@@ -63,7 +63,7 @@ router.get('/users', async (req, res) => {
   }
 
   const { rows } = await pool.query(
-    `SELECT id, tg_id, username, first_name, power, hashes, ton_balance, is_premium, created_at
+    `SELECT id, tg_id, username, first_name, power, hashes, ton_balance, is_premium, is_blocked, created_at
      FROM users ${where} ORDER BY id DESC LIMIT $1 OFFSET $2`, params
   );
   const { rows: count } = await pool.query(`SELECT COUNT(*) FROM users ${where}`, search ? [`%${search}%`] : []);
@@ -81,6 +81,94 @@ router.post('/users/:id/adjust', async (req, res) => {
   vals.push(req.params.id);
   await pool.query(`UPDATE users SET ${fields.join(', ')} WHERE id = $${idx}`, vals);
   res.json({ success: true });
+});
+
+// ── User Details ──
+router.get('/users/:id/details', async (req, res) => {
+  const uid = req.params.id;
+  const [user, purchases, referrals, rewards, withdrawals, pendingOrders] = await Promise.all([
+    pool.query(`SELECT * FROM users WHERE id = $1`, [uid]),
+    pool.query(
+      `SELECT p.id, p.ton_paid, p.power_amount, p.created_at, pp.name as package_name
+       FROM purchases p LEFT JOIN power_packages pp ON pp.id = p.package_id
+       WHERE p.user_id = $1 ORDER BY p.created_at DESC`, [uid]
+    ),
+    pool.query(
+      `SELECT r.id, r.is_confirmed, r.created_at, u.tg_id, u.username, u.first_name
+       FROM referrals r JOIN users u ON u.id = r.referee_id
+       WHERE r.referrer_id = $1 ORDER BY r.created_at DESC`, [uid]
+    ),
+    pool.query(
+      `SELECT COALESCE(SUM(power_amount), 0) as total_power,
+              COALESCE(SUM(ton_amount), 0) as total_ton
+       FROM referral_rewards WHERE referrer_id = $1`, [uid]
+    ),
+    pool.query(
+      `SELECT id, ton_amount, status, wallet_address, created_at
+       FROM withdrawals WHERE user_id = $1 ORDER BY created_at DESC`, [uid]
+    ),
+    pool.query(
+      `SELECT id, ton_amount, status, memo, created_at
+       FROM pending_purchases WHERE user_id = $1 ORDER BY created_at DESC LIMIT 10`, [uid]
+    ),
+  ]);
+  if (!user.rows.length) return res.status(404).json({ error: 'User not found' });
+
+  // Referrer info
+  let referrer = null;
+  if (user.rows[0].ref_id) {
+    const { rows } = await pool.query(
+      `SELECT id, tg_id, username, first_name FROM users WHERE id = $1`, [user.rows[0].ref_id]
+    );
+    if (rows.length) referrer = rows[0];
+  }
+
+  res.json({
+    user: user.rows[0],
+    referrer,
+    purchases: purchases.rows,
+    purchases_total: purchases.rows.reduce((s, p) => s + parseFloat(p.ton_paid || 0), 0),
+    referrals: referrals.rows,
+    referral_rewards: rewards.rows[0],
+    withdrawals: withdrawals.rows,
+    withdrawals_total: withdrawals.rows
+      .filter(w => w.status === 'completed')
+      .reduce((s, w) => s + parseFloat(w.ton_amount || 0), 0),
+    pending_orders: pendingOrders.rows,
+  });
+});
+
+// ── Block / Unblock User ──
+router.post('/users/:id/block', async (req, res) => {
+  const { blocked } = req.body;
+  await pool.query(`UPDATE users SET is_blocked = $1 WHERE id = $2`, [!!blocked, req.params.id]);
+  res.json({ success: true, is_blocked: !!blocked });
+});
+
+// ── Delete User ──
+router.delete('/users/:id', async (req, res) => {
+  const uid = req.params.id;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Cascade delete all related data
+    await client.query(`DELETE FROM referral_rewards WHERE referrer_id = $1 OR referee_id = $1`, [uid]);
+    await client.query(`DELETE FROM referrals WHERE referrer_id = $1 OR referee_id = $1`, [uid]);
+    await client.query(`DELETE FROM user_tasks WHERE user_id = $1`, [uid]);
+    await client.query(`DELETE FROM mining_log WHERE user_id = $1`, [uid]);
+    await client.query(`DELETE FROM pending_purchases WHERE user_id = $1`, [uid]);
+    await client.query(`DELETE FROM purchases WHERE user_id = $1`, [uid]);
+    await client.query(`DELETE FROM withdrawals WHERE user_id = $1`, [uid]);
+    // Unlink referrals pointing to this user
+    await client.query(`UPDATE users SET ref_id = NULL WHERE ref_id = $1`, [uid]);
+    await client.query(`DELETE FROM users WHERE id = $1`, [uid]);
+    await client.query('COMMIT');
+    res.json({ success: true });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('Delete user error:', e);
+    res.status(500).json({ error: 'Failed to delete user' });
+  } finally { client.release(); }
 });
 
 // ── Withdrawals ──

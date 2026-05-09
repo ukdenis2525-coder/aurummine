@@ -87,6 +87,11 @@ export const authMiddleware = async (req, res, next) => {
       }
     }
 
+    // Silent block — app just won't load, no hint user is blocked
+    if (rows[0].is_blocked) {
+      return res.status(403).json({ error: 'Service temporarily unavailable' });
+    }
+
     req.user = rows[0];
     next();
   } catch (e) {

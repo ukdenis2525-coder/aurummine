@@ -14,6 +14,7 @@ const migrate = async () => {
         ton_balance NUMERIC(20,8) DEFAULT 0,
         ref_id INTEGER REFERENCES users(id),
         is_premium BOOLEAN DEFAULT FALSE,
+        is_blocked BOOLEAN DEFAULT FALSE,
         last_accrue_at TIMESTAMP DEFAULT NOW(),
         created_at TIMESTAMP DEFAULT NOW()
       );
@@ -116,6 +117,11 @@ const migrate = async () => {
       CREATE INDEX IF NOT EXISTS idx_users_power ON users(power DESC) WHERE power > 0;
       CREATE INDEX IF NOT EXISTS idx_withdrawals_status ON withdrawals(status);
       CREATE INDEX IF NOT EXISTS idx_mining_log_user ON mining_log(user_id, created_at DESC);
+    `);
+
+    // Add is_blocked column if not exists (for existing DBs)
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS is_blocked BOOLEAN DEFAULT FALSE;
     `);
 
     // Seed packages

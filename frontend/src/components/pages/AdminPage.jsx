@@ -142,6 +142,11 @@ function UsersPanel() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [editing, setEditing] = useState(null);
+  const [detail, setDetail] = useState(null);
+  const [detailData, setDetailData] = useState(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [msg, setMsg] = useState(null);
 
   const load = useCallback(async () => {
     const { data } = await api.get(`/admin/users?page=${page}&search=${search}`);
@@ -151,14 +156,206 @@ function UsersPanel() {
 
   useEffect(() => { load(); }, [load]);
 
+  const showMsg = (text) => { setMsg(text); setTimeout(() => setMsg(null), 2500); };
+
   const handleAdjust = async (userId, power, ton) => {
     await api.post(`/admin/users/${userId}/adjust`, { power: parseFloat(power), ton_balance: parseFloat(ton) });
     setEditing(null);
+    showMsg('✅ Баланс обновлён');
     load();
   };
 
+  const toggleBlock = async (userId, block) => {
+    await api.post(`/admin/users/${userId}/block`, { blocked: block });
+    showMsg(block ? '🚫 Пользователь заблокирован' : '✅ Разблокирован');
+    load();
+    if (detailData?.user?.id === userId) loadDetails(userId);
+  };
+
+  const deleteUser = async (userId) => {
+    try {
+      await api.delete(`/admin/users/${userId}`);
+      showMsg('🗑️ Пользователь удалён');
+      setConfirmDelete(null);
+      setDetail(null);
+      setDetailData(null);
+      load();
+    } catch {
+      showMsg('❌ Ошибка удаления');
+    }
+  };
+
+  const loadDetails = async (userId) => {
+    setDetail(userId);
+    setLoadingDetail(true);
+    try {
+      const { data } = await api.get(`/admin/users/${userId}/details`);
+      setDetailData(data);
+    } catch { showMsg('❌ Ошибка загрузки'); }
+    finally { setLoadingDetail(false); }
+  };
+
+  // ── Detail View ──
+  if (detail && detailData) {
+    const u = detailData.user;
+    const statCards = [
+      { icon: '⚡', label: 'POWER', val: fmtK(Math.floor(u.power)), color: 'var(--gold)' },
+      { icon: '💰', label: 'TON', val: fmt(u.ton_balance, 4), color: 'var(--gold-light)' },
+      { icon: '🛒', label: 'Покупок', val: detailData.purchases.length, color: 'var(--green)' },
+      { icon: '💵', label: 'Потрачено', val: `${fmt(detailData.purchases_total, 2)}`, color: 'var(--orange)' },
+      { icon: '👥', label: 'Рефералов', val: detailData.referrals.length, color: 'var(--gold)' },
+      { icon: '💸', label: 'Выведено', val: `${fmt(detailData.withdrawals_total, 4)}`, color: 'var(--red)' },
+    ];
+    return (
+      <div>
+        {msg && <div style={{ padding: '10px 14px', borderRadius: 10, marginBottom: 12, background: msg.startsWith('✅') || msg.startsWith('🗑') ? 'rgba(52,211,153,0.1)' : 'var(--red-bg)', color: msg.startsWith('✅') || msg.startsWith('🗑') ? 'var(--green)' : 'var(--red)', fontSize: 12, fontWeight: 600, textAlign: 'center' }}>{msg}</div>}
+
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+          <button onClick={() => { setDetail(null); setDetailData(null); }} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, color: '#fff', padding: '8px 12px', fontSize: 14, cursor: 'pointer' }}>←</button>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 16, fontWeight: 800 }}>
+              {u.first_name || u.username || '—'}
+              {u.is_premium && <span style={{ color: 'var(--gold)', marginLeft: 4 }}>★</span>}
+              {u.is_blocked && <span style={{ color: 'var(--red)', marginLeft: 6, fontSize: 12 }}>🚫 BLOCKED</span>}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+              ID:{u.id} • TG:{u.tg_id} {u.username ? `• @${u.username}` : ''}
+            </div>
+          </div>
+        </div>
+
+        {/* Stats grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginBottom: 14 }}>
+          {statCards.map((c, i) => (
+            <div key={c.label} className="card" style={{ padding: 10, textAlign: 'center', animation: `fadeIn 0.2s ease ${i * 0.03}s both` }}>
+              <div style={{ fontSize: 14 }}>{c.icon}</div>
+              <div style={{ fontSize: 16, fontWeight: 900, color: c.color }}>{c.val}</div>
+              <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{c.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Referrer */}
+        {detailData.referrer && (
+          <div className="card" style={{ padding: '10px 14px', marginBottom: 10 }}>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>👤 ПРИГЛАСИЛ</div>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>
+              {detailData.referrer.first_name || detailData.referrer.username} • TG:{detailData.referrer.tg_id}
+            </div>
+          </div>
+        )}
+
+        {/* Referral rewards */}
+        <div className="card" style={{ padding: '10px 14px', marginBottom: 10 }}>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>🎁 РЕФЕРАЛЬНЫЙ ДОХОД</div>
+          <div style={{ display: 'flex', gap: 16 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--gold)' }}>⚡ {fmtK(detailData.referral_rewards?.total_power || 0)} POWER</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--gold-light)' }}>💎 {fmt(detailData.referral_rewards?.total_ton || 0, 4)} TON</span>
+          </div>
+        </div>
+
+        {/* Purchases */}
+        {detailData.purchases.length > 0 && (
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: 1, marginBottom: 6, fontWeight: 600 }}>🛒 ПОКУПКИ ({detailData.purchases.length})</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {detailData.purchases.map(p => (
+                <div key={p.id} className="card" style={{ padding: '8px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600 }}>{p.package_name || 'Пакет'}</div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{new Date(p.created_at).toLocaleDateString()}</div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gold)' }}>{fmt(p.ton_paid, 2)} TON</div>
+                    <div style={{ fontSize: 10, color: 'var(--green)' }}>+{fmtK(p.power_amount)} PW</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Referrals */}
+        {detailData.referrals.length > 0 && (
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: 1, marginBottom: 6, fontWeight: 600 }}>👥 РЕФЕРАЛЫ ({detailData.referrals.length})</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {detailData.referrals.slice(0, 20).map(r => (
+                <div key={r.id} className="card" style={{ padding: '8px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ fontSize: 12, fontWeight: 600 }}>{r.first_name || r.username || `TG:${r.tg_id}`}</div>
+                  <div style={{ fontSize: 11, color: r.is_confirmed ? 'var(--green)' : 'var(--text-muted)', fontWeight: 600 }}>
+                    {r.is_confirmed ? '✓ Актив' : '⏳ Ожид'}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Withdrawals */}
+        {detailData.withdrawals.length > 0 && (
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: 1, marginBottom: 6, fontWeight: 600 }}>💸 ВЫВОДЫ ({detailData.withdrawals.length})</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {detailData.withdrawals.map(w => (
+                <div key={w.id} className="card" style={{ padding: '8px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gold-light)' }}>{fmt(w.ton_amount, 4)} TON</div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace' }}>{w.wallet_address?.slice(0, 8)}...</div>
+                  </div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: w.status === 'completed' ? 'var(--green)' : w.status === 'rejected' ? 'var(--red)' : 'var(--orange)' }}>
+                    {w.status === 'completed' ? '✅' : w.status === 'rejected' ? '❌' : '⏳'} {w.status}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="card" style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: 1, marginBottom: 10, fontWeight: 600 }}>⚙️ ДЕЙСТВИЯ</div>
+          <AdjustForm user={u} onSave={(id, pw, ton) => { handleAdjust(id, pw, ton).then(() => loadDetails(id)); }} />
+        </div>
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => toggleBlock(u.id, !u.is_blocked)} style={{
+            flex: 1, padding: 12, borderRadius: 12, border: 'none', fontWeight: 700, fontSize: 13, cursor: 'pointer',
+            background: u.is_blocked ? 'var(--green-bg)' : 'rgba(251,191,36,0.1)',
+            color: u.is_blocked ? 'var(--green)' : 'var(--orange)',
+          }}>
+            {u.is_blocked ? '✅ Разблокировать' : '🚫 Заблокировать'}
+          </button>
+          <button onClick={() => setConfirmDelete(u.id)} style={{
+            padding: '12px 16px', borderRadius: 12, border: 'none', fontWeight: 700, fontSize: 13, cursor: 'pointer',
+            background: 'var(--red-bg)', color: 'var(--red)',
+          }}>🗑️</button>
+        </div>
+
+        {/* Delete confirmation */}
+        {confirmDelete === u.id && (
+          <div style={{ marginTop: 10, padding: 14, background: 'var(--red-bg)', borderRadius: 14, border: '1px solid rgba(248,113,113,0.3)', textAlign: 'center' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--red)', marginBottom: 10 }}>⚠️ Удалить пользователя и ВСЕ его данные?</div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+              <button onClick={() => deleteUser(u.id)} style={{ padding: '8px 24px', borderRadius: 10, border: 'none', background: 'var(--red)', color: '#fff', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>Да, удалить</button>
+              <button onClick={() => setConfirmDelete(null)} style={{ padding: '8px 24px', borderRadius: 10, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>Отмена</button>
+            </div>
+          </div>
+        )}
+
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', textAlign: 'center', marginTop: 12 }}>
+          Создан: {new Date(u.created_at).toLocaleString()}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Users List ──
   return (
     <div>
+      {msg && <div style={{ padding: '10px 14px', borderRadius: 10, marginBottom: 12, background: msg.startsWith('✅') || msg.startsWith('🗑') ? 'rgba(52,211,153,0.1)' : 'var(--red-bg)', color: msg.startsWith('✅') || msg.startsWith('🗑') ? 'var(--green)' : 'var(--red)', fontSize: 12, fontWeight: 600, textAlign: 'center' }}>{msg}</div>}
+
       <input type="text" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
         placeholder="🔍 Поиск по имени, username, tg_id..."
         style={{ marginBottom: 14, fontSize: 13 }} />
@@ -169,23 +366,40 @@ function UsersPanel() {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {users.map(u => (
-          <div key={u.id} className="card" style={{ padding: '12px 14px' }}>
+          <div key={u.id} className="card" style={{
+            padding: '12px 14px',
+            opacity: u.is_blocked ? 0.5 : 1,
+            border: u.is_blocked ? '1px solid rgba(248,113,113,0.3)' : '1px solid var(--border)'
+          }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div>
+              <div onClick={() => loadDetails(u.id)} style={{ cursor: 'pointer', flex: 1 }}>
                 <div style={{ fontSize: 14, fontWeight: 700 }}>
                   {u.first_name || u.username || '—'}
                   {u.is_premium && <span style={{ color: 'var(--gold)', marginLeft: 4 }}>★</span>}
+                  {u.is_blocked && <span style={{ color: 'var(--red)', marginLeft: 6, fontSize: 10 }}>🚫</span>}
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
                   ID:{u.id} • TG:{u.tg_id}
                 </div>
               </div>
-              <button onClick={() => setEditing(editing === u.id ? null : u.id)} style={{
-                background: editing === u.id ? 'var(--red-bg)' : 'var(--bg-card)',
-                border: '1px solid var(--border)', borderRadius: 8,
-                color: editing === u.id ? 'var(--red)' : 'var(--text-muted)',
-                padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer'
-              }}>{editing === u.id ? '✕' : '✏️'}</button>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <button onClick={() => loadDetails(u.id)} style={{
+                  background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8,
+                  color: 'var(--text-muted)', padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer'
+                }}>👁️</button>
+                <button onClick={() => setEditing(editing === u.id ? null : u.id)} style={{
+                  background: editing === u.id ? 'var(--red-bg)' : 'var(--bg-card)',
+                  border: '1px solid var(--border)', borderRadius: 8,
+                  color: editing === u.id ? 'var(--red)' : 'var(--text-muted)',
+                  padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer'
+                }}>{editing === u.id ? '✕' : '✏️'}</button>
+                <button onClick={() => toggleBlock(u.id, !u.is_blocked)} style={{
+                  background: u.is_blocked ? 'var(--green-bg)' : 'var(--red-bg)',
+                  border: '1px solid var(--border)', borderRadius: 8,
+                  color: u.is_blocked ? 'var(--green)' : 'var(--red)',
+                  padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer'
+                }}>{u.is_blocked ? '✅' : '🚫'}</button>
+              </div>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginTop: 8 }}>
@@ -204,6 +418,9 @@ function UsersPanel() {
         <PagBtn disabled={page <= 1} onClick={() => setPage(p => p - 1)}>← Назад</PagBtn>
         <PagBtn disabled={users.length < 30} onClick={() => setPage(p => p + 1)}>Далее →</PagBtn>
       </div>
+
+      {/* Detail loading overlay */}
+      {loadingDetail && <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}><Loading /></div>}
     </div>
   );
 }
