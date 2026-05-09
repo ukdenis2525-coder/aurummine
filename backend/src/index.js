@@ -14,6 +14,7 @@ import leaderboardRoutes from './routes/leaderboard.js';
 import adminRoutes from './routes/admin.js';
 import { accrueHashes } from './services/mining.js';
 import { checkPendingPayments } from './services/payment.js';
+import './bot.js'; // Start Telegram bot
 
 dotenv.config();
 
