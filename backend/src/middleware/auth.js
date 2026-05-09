@@ -42,28 +42,48 @@ export const authMiddleware = async (req, res, next) => {
     );
 
     if (rows.length === 0) {
-      const rawRefId = req.headers['x-ref-id'] || null;
-      const refId = rawRefId ? parseInt(rawRefId, 10) : null;
+      // Referral: start_param is the referrer's tg_id
+      const rawRefTgId = req.headers['x-ref-id'] || null;
+      const refTgId = rawRefTgId ? parseInt(rawRefTgId, 10) : null;
 
-      // Verify referrer exists before setting ref_id
-      let validRefId = null;
-      if (refId && !isNaN(refId)) {
+      // Lookup referrer by tg_id (not internal id)
+      let referrerId = null;
+      if (refTgId && !isNaN(refTgId) && refTgId !== tgUser.id) {
         const { rows: refRows } = await pool.query(
-          `SELECT id FROM users WHERE id = $1`, [refId]
+          `SELECT id FROM users WHERE tg_id = $1`, [refTgId]
         );
-        if (refRows.length > 0) validRefId = refId;
+        if (refRows.length > 0) referrerId = refRows[0].id;
       }
 
       const { rows: newRows } = await pool.query(
         `INSERT INTO users (tg_id, username, first_name, is_premium, ref_id)
          VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-        [tgUser.id, tgUser.username, tgUser.first_name, tgUser.is_premium || false, validRefId]
+        [tgUser.id, tgUser.username, tgUser.first_name, tgUser.is_premium || false, referrerId]
       );
       rows = newRows;
 
       // Process referral
-      if (validRefId) {
-        await processReferral(validRefId, newRows[0].id);
+      if (referrerId) {
+        await processReferral(referrerId, newRows[0].id);
+        console.log(`✅ Referral: tg:${refTgId} → user:${newRows[0].id}`);
+      }
+    } else {
+      // Existing user — check if they came via ref link but have no referral yet
+      const rawRefTgId = req.headers['x-ref-id'] || null;
+      const refTgId = rawRefTgId ? parseInt(rawRefTgId, 10) : null;
+      const existingUser = rows[0];
+
+      if (refTgId && !isNaN(refTgId) && refTgId !== tgUser.id && !existingUser.ref_id) {
+        const { rows: refRows } = await pool.query(
+          `SELECT id FROM users WHERE tg_id = $1`, [refTgId]
+        );
+        if (refRows.length > 0) {
+          const referrerId = refRows[0].id;
+          await pool.query(`UPDATE users SET ref_id = $1 WHERE id = $2`, [referrerId, existingUser.id]);
+          await processReferral(referrerId, existingUser.id);
+          rows[0].ref_id = referrerId;
+          console.log(`✅ Late referral: tg:${refTgId} → existing user:${existingUser.id}`);
+        }
       }
     }
 

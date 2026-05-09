@@ -49,7 +49,7 @@ router.get('/', authMiddleware, async (req, res) => {
     team,
     page,
     has_more: team.length === limit,
-    ref_link: `https://t.me/${process.env.BOT_USERNAME}?start=${user.id}`,
+    ref_link: `https://t.me/${process.env.BOT_USERNAME}?start=${user.tg_id}`,
     settings: {
       power_premium: settings.ref_power_premium ?? 6000,
       power_normal: settings.ref_power_normal ?? 3000,
