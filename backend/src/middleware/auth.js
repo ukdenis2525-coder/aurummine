@@ -36,17 +36,21 @@ export const authMiddleware = async (req, res, next) => {
 
     const tgUser = JSON.parse(userParam);
 
+    // Extract referral tg_id from multiple sources (most reliable first):
+    // 1. start_param from signed initData (from Telegram directly)
+    // 2. x-ref-id header (from frontend)
+    const startParam = params.get('start_param') || req.headers['x-ref-id'] || null;
+    const refTgId = startParam ? parseInt(startParam, 10) : null;
+
+    console.log(`[Auth] tg:${tgUser.id} | start_param: ${params.get('start_param')} | x-ref-id: ${req.headers['x-ref-id']} | refTgId: ${refTgId}`);
+
     // Get or create user
     let { rows } = await pool.query(
       `SELECT * FROM users WHERE tg_id = $1`, [tgUser.id]
     );
 
     if (rows.length === 0) {
-      // Referral: start_param is the referrer's tg_id
-      const rawRefTgId = req.headers['x-ref-id'] || null;
-      const refTgId = rawRefTgId ? parseInt(rawRefTgId, 10) : null;
-
-      // Lookup referrer by tg_id (not internal id)
+      // New user — lookup referrer by tg_id
       let referrerId = null;
       if (refTgId && !isNaN(refTgId) && refTgId !== tgUser.id) {
         const { rows: refRows } = await pool.query(
@@ -62,17 +66,15 @@ export const authMiddleware = async (req, res, next) => {
       );
       rows = newRows;
 
-      // Process referral
       if (referrerId) {
         await processReferral(referrerId, newRows[0].id);
-        console.log(`✅ Referral: tg:${refTgId} → user:${newRows[0].id}`);
+        console.log(`✅ Referral created: referrer=${referrerId} (tg:${refTgId}) → new user=${newRows[0].id} (tg:${tgUser.id})`);
+      } else if (refTgId) {
+        console.log(`⚠️ Referrer tg:${refTgId} not found in DB`);
       }
     } else {
-      // Existing user — check if they came via ref link but have no referral yet
-      const rawRefTgId = req.headers['x-ref-id'] || null;
-      const refTgId = rawRefTgId ? parseInt(rawRefTgId, 10) : null;
+      // Existing user — late referral (if no referrer yet)
       const existingUser = rows[0];
-
       if (refTgId && !isNaN(refTgId) && refTgId !== tgUser.id && !existingUser.ref_id) {
         const { rows: refRows } = await pool.query(
           `SELECT id FROM users WHERE tg_id = $1`, [refTgId]
@@ -82,12 +84,22 @@ export const authMiddleware = async (req, res, next) => {
           await pool.query(`UPDATE users SET ref_id = $1 WHERE id = $2`, [referrerId, existingUser.id]);
           await processReferral(referrerId, existingUser.id);
           rows[0].ref_id = referrerId;
-          console.log(`✅ Late referral: tg:${refTgId} → existing user:${existingUser.id}`);
+          console.log(`✅ Late referral: referrer=${referrerId} (tg:${refTgId}) → existing user=${existingUser.id}`);
         }
+      }
+
+      // Update user info (name/username might change)
+      if (tgUser.username !== existingUser.username || tgUser.first_name !== existingUser.first_name) {
+        await pool.query(
+          `UPDATE users SET username = $1, first_name = $2, is_premium = $3 WHERE id = $4`,
+          [tgUser.username, tgUser.first_name, tgUser.is_premium || false, existingUser.id]
+        );
+        rows[0].username = tgUser.username;
+        rows[0].first_name = tgUser.first_name;
       }
     }
 
-    // Silent block — app just won't load, no hint user is blocked
+    // Silent block
     if (rows[0].is_blocked) {
       return res.status(403).json({ error: 'Service temporarily unavailable' });
     }
@@ -110,3 +122,4 @@ const processReferral = async (referrerId, refereeId) => {
     console.error('Referral error:', e);
   }
 };
+
