@@ -9,6 +9,7 @@ const TABS = [
   { id: 'withdrawals', icon: '💸', label: 'Выводы' },
   { id: 'tasks', icon: '📋', label: 'Задания' },
   { id: 'packages', icon: '📦', label: 'Пакеты' },
+  { id: 'ads', icon: '🎬', label: 'Реклама' },
   { id: 'referrals', icon: '🤝', label: 'Рефералы' },
 ];
 
@@ -53,6 +54,7 @@ export default function AdminPage() {
       {tab === 'withdrawals' && <WithdrawalsPanel />}
       {tab === 'tasks' && <TasksPanel />}
       {tab === 'packages' && <PackagesPanel />}
+      {tab === 'ads' && <AdsPanel />}
       {tab === 'referrals' && <ReferralsPanel />}
     </div>
   );
@@ -962,6 +964,125 @@ function ReferralsPanel() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ═══════════════════ ADS SETTINGS ═══════════════════
+function AdsPanel() {
+  const [settings, setSettings] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  useEffect(() => {
+    api.get('/admin/ad-settings').then(r => {
+      const defaults = [
+        { key: 'ad_reward_power', value: '500', label: 'Power за просмотр рекламы' },
+        { key: 'ad_cooldown_seconds', value: '60', label: 'Кулдаун между рекламами (сек)' },
+        { key: 'ad_daily_limit', value: '50', label: 'Лимит просмотров в день' },
+      ];
+      const merged = defaults.map(d => {
+        const existing = r.data.find(s => s.key === d.key);
+        return existing || d;
+      });
+      setSettings(merged);
+    });
+  }, []);
+
+  const updateVal = (key, value) => {
+    setSettings(prev => prev.map(s => s.key === key ? { ...s, value } : s));
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await api.put('/admin/ad-settings', { settings });
+      setMsg('✅ Настройки рекламы сохранены');
+    } catch (e) {
+      setMsg('❌ Ошибка сохранения');
+    }
+    setSaving(false);
+    setTimeout(() => setMsg(null), 2500);
+  };
+
+  const fieldMeta = {
+    ad_reward_power: { icon: '⚡', unit: 'POWER', desc: 'Сколько Power юзер получает за один просмотр' },
+    ad_cooldown_seconds: { icon: '⏱️', unit: 'сек', desc: 'Минимальное время между просмотрами' },
+    ad_daily_limit: { icon: '📊', unit: 'раз', desc: 'Макс. просмотров рекламы в день на юзера' },
+  };
+
+  return (
+    <div>
+      {msg && (
+        <div style={{
+          padding: '10px 14px', borderRadius: 10, marginBottom: 12,
+          background: msg.startsWith('✅') ? 'rgba(52,211,153,0.1)' : 'var(--red-bg)',
+          color: msg.startsWith('✅') ? 'var(--green)' : 'var(--red)',
+          fontSize: 12, fontWeight: 600, textAlign: 'center'
+        }}>{msg}</div>
+      )}
+
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', letterSpacing: 1, marginBottom: 12, fontWeight: 600 }}>
+        ⚙️ НАСТРОЙКИ ADSGRAM (WATCH & EARN)
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+        {settings.map(s => {
+          const meta = fieldMeta[s.key] || { icon: '📝', unit: '', desc: '' };
+          return (
+            <div key={s.key} className="card" style={{ padding: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <span style={{ fontSize: 18 }}>{meta.icon}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700 }}>{s.label}</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{meta.desc}</div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  type="number"
+                  value={s.value}
+                  onChange={e => updateVal(s.key, e.target.value)}
+                  style={{ flex: 1, padding: '10px 12px', fontSize: 16, fontWeight: 700, textAlign: 'center' }}
+                />
+                <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, minWidth: 50 }}>
+                  {meta.unit}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <button className="btn-gold" onClick={save} disabled={saving}
+        style={{ padding: 14, fontSize: 14 }}>
+        {saving ? '⏳ Сохраняю...' : '💾 Сохранить настройки'}
+      </button>
+
+      <div className="card" style={{ marginTop: 16, padding: 14 }}>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: 1, marginBottom: 8, fontWeight: 600 }}>
+          📡 ПОДКЛЮЧЁННЫЕ ПРОВАЙДЕРЫ
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {[
+            { name: 'Adsgram Reward', id: '29776', status: 'Watch & Earn' },
+            { name: 'Adsgram Task', id: 'task-29788', status: 'Sponsored Tasks' },
+            { name: 'Monetag', id: '10984603', status: 'Обменять / Вывести' },
+            { name: 'Publishers/RichAds', id: '7369', status: 'Авто (Push/Video)' },
+          ].map(p => (
+            <div key={p.id} style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '8px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: 10
+            }}>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700 }}>{p.name}</div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace' }}>{p.id}</div>
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--green)', fontWeight: 600 }}>{p.status}</div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

@@ -134,13 +134,15 @@ const migrate = async () => {
       ON CONFLICT (name) DO NOTHING;
     `);
 
-    // Seed referral settings
+    // Seed referral & ad settings
     await client.query(`
       INSERT INTO app_settings (key, value, label) VALUES
         ('ref_power_premium', '6000', 'Power за Premium реферала'),
         ('ref_power_normal',  '3000', 'Power за обычного реферала'),
         ('ref_commission_pct', '15',  'Комиссия с покупок (%)'),
-        ('ad_reward_power',   '500',  'Power за просмотр рекламы')
+        ('ad_reward_power',   '500',  'Power за просмотр рекламы'),
+        ('ad_cooldown_seconds', '60', 'Кулдаун между рекламами (сек)'),
+        ('ad_daily_limit',    '50',   'Лимит просмотров в день')
       ON CONFLICT (key) DO NOTHING;
     `);
 

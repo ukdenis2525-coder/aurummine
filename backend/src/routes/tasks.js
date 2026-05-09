@@ -4,9 +4,9 @@ import { pool } from '../db.js';
 
 const router = Router();
 
-// Ad cooldown tracking (in-memory per user)
+// Ad tracking (in-memory per user)
 const adCooldowns = new Map();
-const AD_COOLDOWN_SEC = 60;
+const adDailyCounts = new Map(); // userId -> { date, count }
 
 router.get('/', authMiddleware, async (req, res) => {
   const { rows } = await pool.query(
@@ -67,21 +67,30 @@ router.post('/:id/complete', authMiddleware, async (req, res) => {
 router.post('/ad-reward', authMiddleware, async (req, res) => {
   const userId = req.user.id;
 
-  // Check cooldown
-  const lastWatch = adCooldowns.get(userId);
-  const now = Date.now();
-  if (lastWatch && (now - lastWatch) < AD_COOLDOWN_SEC * 1000) {
-    const remaining = Math.ceil((AD_COOLDOWN_SEC * 1000 - (now - lastWatch)) / 1000);
-    return res.status(429).json({ error: 'Cooldown', cooldown: remaining });
-  }
-
-  // Get reward amount from settings
+  // Get all ad settings from DB
   const { rows: settingsRows } = await pool.query(
-    `SELECT key, value FROM app_settings WHERE key IN ('ad_reward_power', 'ref_power_premium', 'ref_power_normal')`
+    `SELECT key, value FROM app_settings WHERE key IN ('ad_reward_power', 'ad_cooldown_seconds', 'ad_daily_limit', 'ref_power_premium', 'ref_power_normal')`
   );
   const settings = {};
   for (const r of settingsRows) settings[r.key] = parseFloat(r.value);
   const rewardPower = settings.ad_reward_power || 500;
+  const cooldownSec = settings.ad_cooldown_seconds || 60;
+  const dailyLimit = settings.ad_daily_limit || 50;
+
+  // Check cooldown
+  const lastWatch = adCooldowns.get(userId);
+  const now = Date.now();
+  if (lastWatch && (now - lastWatch) < cooldownSec * 1000) {
+    const remaining = Math.ceil((cooldownSec * 1000 - (now - lastWatch)) / 1000);
+    return res.status(429).json({ error: 'Cooldown', cooldown: remaining });
+  }
+
+  // Check daily limit
+  const today = new Date().toISOString().slice(0, 10);
+  const daily = adDailyCounts.get(userId);
+  if (daily && daily.date === today && daily.count >= dailyLimit) {
+    return res.status(429).json({ error: 'Daily limit reached', daily_limit: dailyLimit });
+  }
 
   // Give ad reward to user
   await pool.query(
@@ -128,17 +137,36 @@ router.post('/ad-reward', authMiddleware, async (req, res) => {
   // Set cooldown
   adCooldowns.set(userId, now);
 
-  console.log(`[Ad] User ${userId} watched ad, +${rewardPower} POWER`);
-  res.json({ success: true, reward: rewardPower, cooldown: AD_COOLDOWN_SEC, ref_activated: refActivated });
+  // Update daily count
+  if (daily && daily.date === today) {
+    daily.count++;
+  } else {
+    adDailyCounts.set(userId, { date: today, count: 1 });
+  }
+
+  const dailyCurrent = adDailyCounts.get(userId);
+  console.log(`[Ad] User ${userId} watched ad, +${rewardPower} POWER (${dailyCurrent.count}/${dailyLimit} today)`);
+  res.json({ success: true, reward: rewardPower, cooldown: cooldownSec, ref_activated: refActivated, daily_count: dailyCurrent.count, daily_limit: dailyLimit });
 });
 
 // ── Adsgram: Check ad cooldown ──
-router.get('/ad-status', authMiddleware, (req, res) => {
+router.get('/ad-status', authMiddleware, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT key, value FROM app_settings WHERE key IN ('ad_cooldown_seconds', 'ad_daily_limit')`
+  );
+  const s = {};
+  for (const r of rows) s[r.key] = parseFloat(r.value);
+  const cooldownSec = s.ad_cooldown_seconds || 60;
+  const dailyLimit = s.ad_daily_limit || 50;
+
   const lastWatch = adCooldowns.get(req.user.id);
-  if (!lastWatch) return res.json({ cooldown: 0 });
-  const elapsed = Math.floor((Date.now() - lastWatch) / 1000);
-  const remaining = Math.max(0, AD_COOLDOWN_SEC - elapsed);
-  res.json({ cooldown: remaining });
+  const cooldown = lastWatch ? Math.max(0, cooldownSec - Math.floor((Date.now() - lastWatch) / 1000)) : 0;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const daily = adDailyCounts.get(req.user.id);
+  const dailyCount = (daily && daily.date === today) ? daily.count : 0;
+
+  res.json({ cooldown, daily_count: dailyCount, daily_limit: dailyLimit });
 });
 
 export default router;
