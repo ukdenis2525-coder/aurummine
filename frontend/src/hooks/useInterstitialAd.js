@@ -1,42 +1,67 @@
-// Adsgram Interstitial hook — shows a full-screen ad before an action
+// Adsgram Interstitial hook with fallback
+// Primary: Interstitial → Fallback: Reward block → Action proceeds regardless
 import { useRef, useCallback } from 'react';
 
 const INTERSTITIAL_BLOCK_ID = import.meta.env.VITE_ADSGRAM_INTERSTITIAL_ID || 'int-29785';
+const REWARD_BLOCK_ID = import.meta.env.VITE_ADSGRAM_BLOCK_ID || '29776';
 
 export function useInterstitialAd() {
-  const controllerRef = useRef(null);
+  const interstitialRef = useRef(null);
+  const rewardRef = useRef(null);
 
-  // Initialize on first use
-  const getController = useCallback(() => {
+  const getInterstitial = useCallback(() => {
     if (!INTERSTITIAL_BLOCK_ID || !window.Adsgram) return null;
-    if (!controllerRef.current) {
+    if (!interstitialRef.current) {
       try {
-        controllerRef.current = window.Adsgram.init({ blockId: INTERSTITIAL_BLOCK_ID });
+        interstitialRef.current = window.Adsgram.init({ blockId: INTERSTITIAL_BLOCK_ID });
       } catch (e) {
-        console.error('[Adsgram] Interstitial init error:', e);
+        console.error('[Ad] Interstitial init error:', e);
       }
     }
-    return controllerRef.current;
+    return interstitialRef.current;
   }, []);
 
-  // Show ad, then execute callback regardless of result
+  const getReward = useCallback(() => {
+    if (!REWARD_BLOCK_ID || !window.Adsgram) return null;
+    if (!rewardRef.current) {
+      try {
+        rewardRef.current = window.Adsgram.init({ blockId: REWARD_BLOCK_ID });
+      } catch (e) {
+        console.error('[Ad] Reward fallback init error:', e);
+      }
+    }
+    return rewardRef.current;
+  }, []);
+
+  // Try interstitial first, then reward as fallback, then just proceed
   const showAdThen = useCallback(async (callback) => {
-    const ctrl = getController();
-    if (!ctrl) {
-      // No ads available — just run the action
-      callback();
-      return;
+    // Try Interstitial
+    const interstitial = getInterstitial();
+    if (interstitial) {
+      try {
+        await interstitial.show();
+        callback();
+        return;
+      } catch (e) {
+        console.log('[Ad] Interstitial failed, trying reward fallback:', e);
+      }
     }
 
-    try {
-      await ctrl.show();
-    } catch (e) {
-      // Ad skipped or failed — still proceed
-      console.log('[Adsgram] Interstitial skipped:', e);
+    // Fallback: Reward ad
+    const reward = getReward();
+    if (reward) {
+      try {
+        await reward.show();
+        callback();
+        return;
+      } catch (e) {
+        console.log('[Ad] Reward fallback also failed:', e);
+      }
     }
-    // Always run the callback after ad
+
+    // No ads available — just run the action
     callback();
-  }, [getController]);
+  }, [getInterstitial, getReward]);
 
   return { showAdThen };
 }
