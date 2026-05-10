@@ -108,7 +108,11 @@
     "memo_warning": "Include MEMO in your transfer, otherwise payment won't be found!",
     "close_payment": "Close",
     "bot_admin_hint": "Add bot @AurumMiBot as admin to your channel for subscription verification. Use public link (t.me/channel), not invite.",
-    "bot_not_admin_error": "Bot is not a channel admin. Add @AurumMiBot as administrator!"
+    "bot_not_admin_error": "Bot is not a channel admin. Add @AurumMiBot as administrator!",
+    "check_payment": "Check payment",
+    "payment_found": "Payment found! Order created.",
+    "payment_not_found": "Payment not found yet. Try again later.",
+    "cancel_order": "Cancel order"
   },
   "team": {
     "title": "👥 Team",

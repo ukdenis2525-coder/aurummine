@@ -48,12 +48,40 @@ export default function TasksPage() {
   const [orderMsg, setOrderMsg] = useState(null);
   const [myOrders, setMyOrders] = useState([]);
   const [orderPayment, setOrderPayment] = useState(null); // { memo, amount, wallet, expires_at }
+  const [payTimeLeft, setPayTimeLeft] = useState(0);
+  const [checkCooldown, setCheckCooldown] = useState(0);
+  const [checking, setChecking] = useState(false);
+  const [payStatus, setPayStatus] = useState(null); // 'completed' | 'not_found'
 
   useEffect(() => { api.get('/tasks').then(r => setTasks(r.data)); }, []);
   useEffect(() => {
     api.get('/tasks/order-config').then(r => setOrderConfig(r.data)).catch(() => {});
     api.get('/tasks/my-orders').then(r => setMyOrders(r.data)).catch(() => {});
+    // Load existing pending payment
+    api.get('/tasks/order-payment-status').then(r => {
+      if (r.data) setOrderPayment(r.data);
+    }).catch(() => {});
   }, []);
+
+  // Payment timer
+  useEffect(() => {
+    if (!orderPayment?.expires_at) return;
+    const update = () => {
+      const left = Math.max(0, Math.floor((new Date(orderPayment.expires_at) - Date.now()) / 1000));
+      setPayTimeLeft(left);
+      if (left === 0) { setOrderPayment(null); setPayStatus(null); }
+    };
+    update();
+    const timer = setInterval(update, 1000);
+    return () => clearInterval(timer);
+  }, [orderPayment?.expires_at]);
+
+  // Check cooldown timer
+  useEffect(() => {
+    if (checkCooldown <= 0) return;
+    const t = setInterval(() => setCheckCooldown(p => p <= 1 ? 0 : p - 1), 1000);
+    return () => clearInterval(t);
+  }, [checkCooldown]);
 
   // Initialize Adsgram
   useEffect(() => {
@@ -578,6 +606,16 @@ export default function TasksPage() {
                 <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('tasks.send_ton_desc')}</div>
               </div>
 
+              {/* Timer */}
+              <div style={{
+                textAlign: 'center', padding: '8px', marginBottom: 10,
+                background: payTimeLeft < 300 ? 'rgba(248,113,113,0.1)' : 'rgba(59,130,246,0.1)',
+                borderRadius: 10, fontSize: 13, fontWeight: 700,
+                color: payTimeLeft < 300 ? 'var(--red)' : '#3b82f6'
+              }}>
+                ⏱ {Math.floor(payTimeLeft / 60)}:{String(payTimeLeft % 60).padStart(2, '0')}
+              </div>
+
               {/* Amount */}
               <div style={{
                 textAlign: 'center', padding: 12, background: 'rgba(255,255,255,0.03)',
@@ -617,14 +655,60 @@ export default function TasksPage() {
                 ⚠️ {t('tasks.memo_warning')}
               </div>
 
-              <button onClick={() => {
-                setOrderPayment(null);
-                api.get('/tasks/my-orders').then(r => setMyOrders(r.data));
+              {/* Status message */}
+              {payStatus && (
+                <div style={{
+                  marginBottom: 10, padding: '8px 12px', borderRadius: 10, fontSize: 12, fontWeight: 600, textAlign: 'center',
+                  background: payStatus === 'completed' ? 'rgba(52,211,153,0.1)' : 'rgba(248,113,113,0.1)',
+                  color: payStatus === 'completed' ? 'var(--green)' : 'var(--red)',
+                }}>
+                  {payStatus === 'completed' ? `✅ ${t('tasks.payment_found')}` : `⏳ ${t('tasks.payment_not_found')}`}
+                </div>
+              )}
+
+              {/* Check button */}
+              <button onClick={async () => {
+                if (checking || checkCooldown > 0) return;
+                setChecking(true);
+                try {
+                  const { data } = await api.post('/tasks/check-order-payment');
+                  if (data.status === 'completed') {
+                    setPayStatus('completed');
+                    setTimeout(() => {
+                      setOrderPayment(null);
+                      setPayStatus(null);
+                      api.get('/tasks/my-orders').then(r => setMyOrders(r.data));
+                    }, 2000);
+                  } else {
+                    setPayStatus('not_found');
+                    setCheckCooldown(30);
+                  }
+                } catch (e) {
+                  if (e.response?.status === 429) {
+                    setCheckCooldown(e.response.data.wait || 30);
+                  }
+                } finally { setChecking(false); }
+              }} disabled={checking || checkCooldown > 0} style={{
+                width: '100%', padding: 12, borderRadius: 12, border: 'none', fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                marginBottom: 8,
+                background: checkCooldown > 0 ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg, #2563eb, #3b82f6)',
+                color: checkCooldown > 0 ? 'var(--text-muted)' : '#fff',
+              }}>
+                {checking ? '⏳...' : checkCooldown > 0 ? `🔍 ${t('tasks.check_payment')} (${checkCooldown}s)` : `🔍 ${t('tasks.check_payment')}`}
+              </button>
+
+              {/* Cancel button */}
+              <button onClick={async () => {
+                try {
+                  await api.post('/tasks/cancel-order-payment');
+                  setOrderPayment(null);
+                  setPayStatus(null);
+                } catch (e) {}
               }} style={{
                 width: '100%', padding: 10, borderRadius: 10, border: '1px solid var(--border)',
-                background: 'transparent', color: 'var(--text-muted)', fontWeight: 600, fontSize: 12, cursor: 'pointer'
+                background: 'transparent', color: 'var(--red)', fontWeight: 600, fontSize: 12, cursor: 'pointer'
               }}>
-                ✕ {t('tasks.close_payment')}
+                ✕ {t('tasks.cancel_order')}
               </button>
             </div>
           )}

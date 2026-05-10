@@ -108,7 +108,11 @@
     "memo_warning": "أدخل MEMO في التحويل، وإلا لن يتم العثور على الدفع!",
     "close_payment": "إغلاق",
     "bot_admin_hint": "أضف البوت @AurumMiBot كمشرف في القناة للتحقق. استخدم رابط عام (t.me/channel).",
-    "bot_not_admin_error": "البوت ليس مشرفاً. أضف @AurumMiBot كمشرف!"
+    "bot_not_admin_error": "البوت ليس مشرفاً. أضف @AurumMiBot كمشرف!",
+    "check_payment": "تحقق من الدفع",
+    "payment_found": "تم العثور على الدفع! تم إنشاء الطلب.",
+    "payment_not_found": "لم يتم العثور على الدفع بعد. حاول لاحقاً.",
+    "cancel_order": "إلغاء الطلب"
   },
   "team": {
     "title": "👥 الفريق",

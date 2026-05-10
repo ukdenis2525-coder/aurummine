@@ -519,4 +519,62 @@ router.get('/my-orders', authMiddleware, async (req, res) => {
   res.json(rows);
 });
 
+// Get current pending order payment
+router.get('/order-payment-status', authMiddleware, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT * FROM pending_purchases
+     WHERE user_id = $1 AND status = 'pending' AND order_data IS NOT NULL AND expires_at > NOW()
+     ORDER BY created_at DESC LIMIT 1`,
+    [req.user.id]
+  );
+  if (!rows.length) return res.json(null);
+  const p = rows[0];
+  res.json({
+    memo: p.memo,
+    amount: parseFloat(p.ton_amount),
+    wallet: process.env.PAYMENT_WALLET,
+    expires_at: p.expires_at,
+    order_data: p.order_data,
+  });
+});
+
+// Manual check for order payment
+const orderCheckCooldowns = new Map();
+router.post('/check-order-payment', authMiddleware, async (req, res) => {
+  const userId = req.user.id;
+  const lastCheck = orderCheckCooldowns.get(userId);
+  if (lastCheck && Date.now() - lastCheck < 30000) {
+    const wait = Math.ceil((30000 - (Date.now() - lastCheck)) / 1000);
+    return res.status(429).json({ error: 'cooldown', wait });
+  }
+  orderCheckCooldowns.set(userId, Date.now());
+
+  try {
+    const { checkPendingPayments } = await import('../services/payment.js');
+    await checkPendingPayments();
+
+    const { rows } = await pool.query(
+      `SELECT status FROM pending_purchases
+       WHERE user_id = $1 AND order_data IS NOT NULL
+       ORDER BY created_at DESC LIMIT 1`,
+      [userId]
+    );
+    const status = rows[0]?.status || null;
+    res.json({ checked: true, status });
+  } catch (e) {
+    console.error('Order manual check error:', e.message);
+    res.status(500).json({ error: 'Check failed' });
+  }
+});
+
+// Cancel pending order payment
+router.post('/cancel-order-payment', authMiddleware, async (req, res) => {
+  await pool.query(
+    `UPDATE pending_purchases SET status = 'cancelled'
+     WHERE user_id = $1 AND status = 'pending' AND order_data IS NOT NULL`,
+    [req.user.id]
+  );
+  res.json({ success: true });
+});
+
 export default router;
