@@ -324,13 +324,16 @@ router.delete('/task-orders/:id', async (req, res) => {
   try {
     await client.query('BEGIN');
     if (order.task_id) {
-      await client.query(`UPDATE tasks SET is_active = FALSE WHERE id = $1`, [order.task_id]);
+      // Delete user completions first, then the task itself
+      await client.query(`DELETE FROM user_tasks WHERE task_id = $1`, [order.task_id]);
+      await client.query(`DELETE FROM tasks WHERE id = $1`, [order.task_id]);
     }
     await client.query(`DELETE FROM task_orders WHERE id = $1`, [orderId]);
     await client.query('COMMIT');
     res.json({ success: true });
   } catch (e) {
     await client.query('ROLLBACK');
+    console.error('[TaskOrder] Delete error:', e);
     res.status(500).json({ error: 'Delete failed' });
   } finally {
     client.release();
