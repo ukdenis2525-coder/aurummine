@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authMiddleware } from '../middleware/auth.js';
 import { pool } from '../db.js';
+import axios from 'axios';
 
 const router = Router();
 
@@ -27,6 +28,24 @@ router.get('/', authMiddleware, async (req, res) => {
   res.json(rows);
 });
 
+// ── Check Telegram channel subscription ──
+async function checkTgSubscription(chatId, userId) {
+  try {
+    const token = process.env.BOT_TOKEN;
+    if (!token) return false;
+    const { data } = await axios.get(
+      `https://api.telegram.org/bot${token}/getChatMember`,
+      { params: { chat_id: chatId, user_id: userId } }
+    );
+    const status = data?.result?.status;
+    // member, administrator, creator = subscribed; left, kicked = not
+    return ['member', 'administrator', 'creator'].includes(status);
+  } catch (e) {
+    console.error('[Tasks] Subscription check failed:', e.response?.data?.description || e.message);
+    return false;
+  }
+}
+
 router.post('/:id/complete', authMiddleware, async (req, res) => {
   const taskId = parseInt(req.params.id);
   const user = req.user;
@@ -44,6 +63,25 @@ router.post('/:id/complete', authMiddleware, async (req, res) => {
     [user.id, taskId]
   );
   if (existing.length) return res.status(400).json({ error: 'Already completed' });
+
+  // ── Verify subscription for subscribe_channel tasks ──
+  if (task.type === 'subscribe_channel' && task.link) {
+    // Extract channel username or chat_id from link
+    // Supports: https://t.me/channelname, @channelname, -100xxxx
+    let chatId = task.link.trim();
+    if (chatId.startsWith('https://t.me/')) {
+      chatId = '@' + chatId.replace('https://t.me/', '').replace(/\/$/, '');
+    } else if (chatId.startsWith('t.me/')) {
+      chatId = '@' + chatId.replace('t.me/', '').replace(/\/$/, '');
+    } else if (!chatId.startsWith('@') && !chatId.startsWith('-')) {
+      chatId = '@' + chatId;
+    }
+
+    const isSubscribed = await checkTgSubscription(chatId, user.tg_id);
+    if (!isSubscribed) {
+      return res.status(400).json({ error: 'not_subscribed', message: 'You must subscribe first' });
+    }
+  }
 
   const client = await pool.connect();
   try {

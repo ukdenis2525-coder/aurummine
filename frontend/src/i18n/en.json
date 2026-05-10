@@ -83,7 +83,12 @@
     "monetag_section": "MONETAG ADS",
     "monetag_title": "Watch Monetag",
     "monetag_desc": "Watch a Monetag ad and earn POWER",
-    "monetag_reward": "+POWER reward"
+    "monetag_reward": "+POWER reward",
+    "go": "Go",
+    "check": "✓ Check",
+    "not_subscribed": "❌ You haven't subscribed yet! Subscribe and tap Check.",
+    "subscribe_hint": "Subscribe to the channel and tap ✓ Check",
+    "task_error": "Error completing task. Try again later."
   },
   "team": {
     "title": "👥 Team",

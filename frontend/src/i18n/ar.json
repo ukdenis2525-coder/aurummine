@@ -83,7 +83,12 @@
     "monetag_section": "إعلانات MONETAG",
     "monetag_title": "مشاهدة Monetag",
     "monetag_desc": "شاهد إعلان Monetag واحصل على POWER",
-    "monetag_reward": "+POWER مكافأة"
+    "monetag_reward": "+POWER مكافأة",
+    "go": "انتقل",
+    "check": "✓ تحقق",
+    "not_subscribed": "❌ لم تشترك بعد! اشترك واضغط تحقق.",
+    "subscribe_hint": "اشترك في القناة واضغط ✓ تحقق",
+    "task_error": "خطأ في إكمال المهمة. حاول لاحقاً."
   },
   "team": {
     "title": "👥 الفريق",

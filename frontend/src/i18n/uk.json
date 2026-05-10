@@ -83,7 +83,12 @@
     "monetag_section": "MONETAG РЕКЛАМА",
     "monetag_title": "Дивитися Monetag",
     "monetag_desc": "Подивись рекламу Monetag та отримай POWER",
-    "monetag_reward": "+POWER нагорода"
+    "monetag_reward": "+POWER нагорода",
+    "go": "Перейти",
+    "check": "✓ Перевірити",
+    "not_subscribed": "❌ Ви ще не підписались! Підпишіться і натисніть Перевірити.",
+    "subscribe_hint": "Підпишіться на канал і натисніть ✓ Перевірити",
+    "task_error": "Помилка при виконанні. Спробуйте пізніше."
   },
   "team": {
     "title": "👥 Команда",

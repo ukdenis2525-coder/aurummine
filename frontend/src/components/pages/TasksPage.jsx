@@ -11,19 +11,23 @@ const MONETAG_ZONE_ID = import.meta.env.VITE_MONETAG_ZONE_ID || '10984603';
 
 const typeIcons = {
   subscribe_channel: '📢',
+  start_bot: '🤖',
   invite_friends: '👥',
   daily: '📅',
   adsgram: '🎬',
+  link: '🔗',
   default: '⚡'
 };
 
 export default function TasksPage() {
   const [tasks, setTasks] = useState([]);
   const [completing, setCompleting] = useState(null);
+  const [taskError, setTaskError] = useState(null); // { taskId, msg }
   const [adWatching, setAdWatching] = useState(false);
   const [adCooldown, setAdCooldown] = useState(0);
   const [adMsg, setAdMsg] = useState(null);
   const [adAvailable, setAdAvailable] = useState(false);
+  const [opened, setOpened] = useState({}); // taskId -> true (user clicked "Go")
 
   // Monetag state
   const [monetagWatching, setMonetagWatching] = useState(false);
@@ -38,26 +42,20 @@ export default function TasksPage() {
 
   useEffect(() => { api.get('/tasks').then(r => setTasks(r.data)); }, []);
 
-  // Initialize Adsgram (wait for async script to load)
+  // Initialize Adsgram
   useEffect(() => {
     const tryInit = () => {
       if (ADSGRAM_BLOCK_ID && window.Adsgram) {
         try {
           adControllerRef.current = window.Adsgram.init({ blockId: ADSGRAM_BLOCK_ID });
           setAdAvailable(true);
-        } catch (e) {
-          console.error('[Adsgram] Init error:', e);
-        }
+        } catch (e) { console.error('[Adsgram] Init error:', e); }
         return true;
       }
       return false;
     };
-
     if (!tryInit()) {
-      // Script loading async — retry for up to 5s
-      const interval = setInterval(() => {
-        if (tryInit()) clearInterval(interval);
-      }, 500);
+      const interval = setInterval(() => { if (tryInit()) clearInterval(interval); }, 500);
       const timeout = setTimeout(() => clearInterval(interval), 5000);
       return () => { clearInterval(interval); clearTimeout(timeout); };
     }
@@ -69,20 +67,14 @@ export default function TasksPage() {
     try {
       monetagHandlerRef.current = createAdHandler(MONETAG_ZONE_ID);
       setMonetagAvailable(true);
-      console.log('[Monetag] Task handler initialized');
-    } catch (e) {
-      console.error('[Monetag] Init error:', e);
-    }
+    } catch (e) { console.error('[Monetag] Init error:', e); }
   }, []);
 
   // Adsgram cooldown timer
   useEffect(() => {
     if (adCooldown <= 0) return;
     const timer = setInterval(() => {
-      setAdCooldown(prev => {
-        if (prev <= 1) { clearInterval(timer); return 0; }
-        return prev - 1;
-      });
+      setAdCooldown(prev => { if (prev <= 1) { clearInterval(timer); return 0; } return prev - 1; });
     }, 1000);
     return () => clearInterval(timer);
   }, [adCooldown]);
@@ -91,35 +83,50 @@ export default function TasksPage() {
   useEffect(() => {
     if (monetagCooldown <= 0) return;
     const timer = setInterval(() => {
-      setMonetagCooldown(prev => {
-        if (prev <= 1) { clearInterval(timer); return 0; }
-        return prev - 1;
-      });
+      setMonetagCooldown(prev => { if (prev <= 1) { clearInterval(timer); return 0; } return prev - 1; });
     }, 1000);
     return () => clearInterval(timer);
   }, [monetagCooldown]);
 
-  // Load ad cooldown from server
+  // Load cooldowns from server
   useEffect(() => {
-    api.get('/tasks/ad-status').then(r => {
-      if (r.data.cooldown > 0) setAdCooldown(r.data.cooldown);
-    }).catch(() => {});
-
-    api.get('/tasks/monetag-status').then(r => {
-      if (r.data.cooldown > 0) setMonetagCooldown(r.data.cooldown);
-    }).catch(() => {});
+    api.get('/tasks/ad-status').then(r => { if (r.data.cooldown > 0) setAdCooldown(r.data.cooldown); }).catch(() => {});
+    api.get('/tasks/monetag-status').then(r => { if (r.data.cooldown > 0) setMonetagCooldown(r.data.cooldown); }).catch(() => {});
   }, []);
 
+  // Open task link (step 1)
+  const openTask = (task) => {
+    if (task.link) {
+      if (task.type === 'start_bot') {
+        window.Telegram?.WebApp?.openTelegramLink(task.link);
+      } else if (task.type === 'subscribe_channel') {
+        window.Telegram?.WebApp?.openTelegramLink(task.link);
+      } else {
+        window.Telegram?.WebApp?.openLink(task.link);
+      }
+    }
+    setOpened(prev => ({ ...prev, [task.id]: true }));
+    setTaskError(null);
+  };
+
+  // Complete task (step 2 — verify)
   const complete = async (task) => {
     if (task.completed || completing === task.id) return;
-    if (task.link) window.Telegram?.WebApp?.openLink(task.link);
     setCompleting(task.id);
+    setTaskError(null);
     try {
-      await api.post(`/tasks/${task.id}/complete`);
+      const { data } = await api.post(`/tasks/${task.id}/complete`);
       setTasks(prev => prev.map(t => t.id === task.id ? { ...t, completed: true } : t));
       await refreshUser();
     } catch (e) {
-      console.error(e);
+      const errCode = e.response?.data?.error;
+      if (errCode === 'not_subscribed') {
+        setTaskError({ taskId: task.id, msg: t('tasks.not_subscribed') });
+      } else if (errCode === 'Already completed') {
+        setTasks(prev => prev.map(t => t.id === task.id ? { ...t, completed: true } : t));
+      } else {
+        setTaskError({ taskId: task.id, msg: t('tasks.task_error') });
+      }
     } finally {
       setCompleting(null);
     }
@@ -127,66 +134,36 @@ export default function TasksPage() {
 
   const watchAd = async () => {
     if (adWatching || adCooldown > 0) return;
-    if (!adControllerRef.current) {
-      setAdMsg('⚠️ Ads not available');
-      setTimeout(() => setAdMsg(null), 2000);
-      return;
-    }
-
+    if (!adControllerRef.current) { setAdMsg('⚠️ Ads not available'); setTimeout(() => setAdMsg(null), 2000); return; }
     setAdWatching(true);
     try {
       const result = await adControllerRef.current.show();
-      // Ad watched successfully — claim reward
       if (result.done) {
         const { data } = await api.post('/tasks/ad-reward');
         setAdMsg(t('tasks.ad_reward_msg', { reward: fmtK(data.reward) }));
         setAdCooldown(data.cooldown || 60);
         await refreshUser();
       }
-    } catch (e) {
-      // User skipped or ad failed
-      console.log('[Adsgram] Ad skipped/failed:', e);
-      setAdMsg(t('tasks.watch_full_ad'));
-    } finally {
-      setAdWatching(false);
-      setTimeout(() => setAdMsg(null), 3000);
-    }
+    } catch (e) { setAdMsg(t('tasks.watch_full_ad')); }
+    finally { setAdWatching(false); setTimeout(() => setAdMsg(null), 3000); }
   };
 
   const watchMonetagAd = useCallback(async () => {
     if (monetagWatching || monetagCooldown > 0) return;
-    if (!monetagHandlerRef.current) {
-      setMonetagMsg('⚠️ Monetag not available');
-      setTimeout(() => setMonetagMsg(null), 2000);
-      return;
-    }
-
+    if (!monetagHandlerRef.current) { setMonetagMsg('⚠️ Monetag not available'); setTimeout(() => setMonetagMsg(null), 2000); return; }
     setMonetagWatching(true);
     try {
       await monetagHandlerRef.current();
-      console.log('[Monetag] Ad completed');
-      // Ad watched — claim reward
       const { data } = await api.post('/tasks/monetag-reward');
       setMonetagMsg(t('tasks.ad_reward_msg', { reward: fmtK(data.reward) }));
       setMonetagCooldown(data.cooldown || 60);
       await refreshUser();
     } catch (e) {
       if (e.response?.status === 429) {
-        // Cooldown or daily limit
-        if (e.response.data?.cooldown) {
-          setMonetagCooldown(e.response.data.cooldown);
-          setMonetagMsg(t('tasks.daily_limit_msg'));
-        } else {
-          setMonetagMsg(t('tasks.daily_limit_msg'));
-        }
-      } else {
-        console.log('[Monetag] Ad skipped/failed:', e);
-        setMonetagMsg(t('tasks.watch_full_ad'));
-      }
-    } finally {
-      setMonetagWatching(false);
-      setTimeout(() => setMonetagMsg(null), 3000);
-    }
+        setMonetagCooldown(e.response.data?.cooldown || 30);
+        setMonetagMsg(t('tasks.daily_limit_msg'));
+      } else { setMonetagMsg(t('tasks.watch_full_ad')); }
+    } finally { setMonetagWatching(false); setTimeout(() => setMonetagMsg(null), 3000); }
   }, [monetagWatching, monetagCooldown, refreshUser, t]);
 
   const active = tasks.filter(t => !t.completed);
@@ -198,6 +175,33 @@ export default function TasksPage() {
     return m > 0 ? `${m}:${String(s).padStart(2, '0')}` : `${s}s`;
   };
 
+  // Determine button label and action for a task
+  const getTaskAction = (task) => {
+    const isOpened = opened[task.id];
+    const needsVerify = task.type === 'subscribe_channel';
+
+    if (needsVerify) {
+      if (!isOpened) {
+        return { label: t('tasks.go'), action: () => openTask(task), style: 'go' };
+      }
+      return { label: completing === task.id ? '⏳' : t('tasks.check'), action: () => complete(task), style: 'check' };
+    }
+
+    // For start_bot / link — open first, then complete
+    if (task.link && !isOpened) {
+      return { label: t('tasks.go'), action: () => openTask(task), style: 'go' };
+    }
+
+    return {
+      label: completing === task.id ? '⏳' : t('tasks.start'),
+      action: () => {
+        if (task.link && !isOpened) openTask(task);
+        complete(task);
+      },
+      style: 'start'
+    };
+  };
+
   return (
     <div className="page">
       <div style={{ marginBottom: 24 }}>
@@ -205,15 +209,14 @@ export default function TasksPage() {
         <div className="page-subtitle">{t('tasks.subtitle')}</div>
       </div>
 
-      {/* Adsgram Ad Task - only shown if ads are available */}
+      {/* Adsgram Ad Task */}
       {adAvailable && (
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', letterSpacing: 1, marginBottom: 10, fontWeight: 600 }}>
             🎬 {t('tasks.watch_earn')}
           </div>
           <div className="card" style={{
-            padding: '16px 18px',
-            border: '1px solid rgba(212,175,55,0.3)',
+            padding: '16px 18px', border: '1px solid rgba(212,175,55,0.3)',
             background: 'linear-gradient(135deg, rgba(212,175,55,0.06), rgba(184,134,11,0.03))',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -225,42 +228,25 @@ export default function TasksPage() {
               }}>🎬</div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 3 }}>{t('tasks.watch_ad')}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                  {t('tasks.watch_desc')}
-                </div>
-                <div style={{ fontSize: 13, color: 'var(--gold)', fontWeight: 700, marginTop: 4 }}>
-                  {t('tasks.watch_reward')}
-                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('tasks.watch_desc')}</div>
+                <div style={{ fontSize: 13, color: 'var(--gold)', fontWeight: 700, marginTop: 4 }}>{t('tasks.watch_reward')}</div>
               </div>
-              <button
-                onClick={watchAd}
-                disabled={adWatching || adCooldown > 0}
-                style={{
-                  padding: '10px 18px', borderRadius: 12,
-                  background: adCooldown > 0
-                    ? 'rgba(255,255,255,0.05)'
-                    : 'linear-gradient(135deg, var(--gold-dark), var(--gold))',
-                  color: adCooldown > 0 ? 'var(--text-muted)' : '#000',
-                  fontWeight: 700, fontSize: 12, border: 'none',
-                  cursor: adCooldown > 0 ? 'default' : 'pointer',
-                  flexShrink: 0, transition: 'var(--transition)',
-                  minWidth: 70, textAlign: 'center'
-                }}
-              >
+              <button onClick={watchAd} disabled={adWatching || adCooldown > 0} style={{
+                padding: '10px 18px', borderRadius: 12,
+                background: adCooldown > 0 ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg, var(--gold-dark), var(--gold))',
+                color: adCooldown > 0 ? 'var(--text-muted)' : '#000',
+                fontWeight: 700, fontSize: 12, border: 'none',
+                cursor: adCooldown > 0 ? 'default' : 'pointer', flexShrink: 0, minWidth: 70, textAlign: 'center'
+              }}>
                 {adWatching ? '⏳' : adCooldown > 0 ? formatCooldown(adCooldown) : `▶️ ${t('tasks.watch_btn')}`}
               </button>
             </div>
-
             {adMsg && (
               <div style={{
-                marginTop: 10, padding: '8px 12px', borderRadius: 10, fontSize: 12, fontWeight: 600,
-                textAlign: 'center',
+                marginTop: 10, padding: '8px 12px', borderRadius: 10, fontSize: 12, fontWeight: 600, textAlign: 'center',
                 background: adMsg.startsWith('✅') ? 'rgba(52,211,153,0.1)' : 'rgba(251,191,36,0.1)',
-                color: adMsg.startsWith('✅') ? 'var(--green)' : 'var(--orange)',
-                animation: 'fadeIn 0.2s ease'
-              }}>
-                {adMsg}
-              </div>
+                color: adMsg.startsWith('✅') ? 'var(--green)' : 'var(--orange)', animation: 'fadeIn 0.2s ease'
+              }}>{adMsg}</div>
             )}
           </div>
         </div>
@@ -273,8 +259,7 @@ export default function TasksPage() {
             💎 {t('tasks.monetag_section')}
           </div>
           <div className="card" style={{
-            padding: '16px 18px',
-            border: '1px solid rgba(139,92,246,0.3)',
+            padding: '16px 18px', border: '1px solid rgba(139,92,246,0.3)',
             background: 'linear-gradient(135deg, rgba(139,92,246,0.06), rgba(109,40,217,0.03))',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -286,42 +271,25 @@ export default function TasksPage() {
               }}>💎</div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 3 }}>{t('tasks.monetag_title')}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                  {t('tasks.monetag_desc')}
-                </div>
-                <div style={{ fontSize: 13, color: '#8b5cf6', fontWeight: 700, marginTop: 4 }}>
-                  {t('tasks.monetag_reward')}
-                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('tasks.monetag_desc')}</div>
+                <div style={{ fontSize: 13, color: '#8b5cf6', fontWeight: 700, marginTop: 4 }}>{t('tasks.monetag_reward')}</div>
               </div>
-              <button
-                onClick={watchMonetagAd}
-                disabled={monetagWatching || monetagCooldown > 0}
-                style={{
-                  padding: '10px 18px', borderRadius: 12,
-                  background: monetagCooldown > 0
-                    ? 'rgba(255,255,255,0.05)'
-                    : 'linear-gradient(135deg, #7c3aed, #8b5cf6)',
-                  color: monetagCooldown > 0 ? 'var(--text-muted)' : '#fff',
-                  fontWeight: 700, fontSize: 12, border: 'none',
-                  cursor: monetagCooldown > 0 ? 'default' : 'pointer',
-                  flexShrink: 0, transition: 'var(--transition)',
-                  minWidth: 70, textAlign: 'center'
-                }}
-              >
+              <button onClick={watchMonetagAd} disabled={monetagWatching || monetagCooldown > 0} style={{
+                padding: '10px 18px', borderRadius: 12,
+                background: monetagCooldown > 0 ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg, #7c3aed, #8b5cf6)',
+                color: monetagCooldown > 0 ? 'var(--text-muted)' : '#fff',
+                fontWeight: 700, fontSize: 12, border: 'none',
+                cursor: monetagCooldown > 0 ? 'default' : 'pointer', flexShrink: 0, minWidth: 70, textAlign: 'center'
+              }}>
                 {monetagWatching ? '⏳' : monetagCooldown > 0 ? formatCooldown(monetagCooldown) : `▶️ ${t('tasks.watch_btn')}`}
               </button>
             </div>
-
             {monetagMsg && (
               <div style={{
-                marginTop: 10, padding: '8px 12px', borderRadius: 10, fontSize: 12, fontWeight: 600,
-                textAlign: 'center',
+                marginTop: 10, padding: '8px 12px', borderRadius: 10, fontSize: 12, fontWeight: 600, textAlign: 'center',
                 background: monetagMsg.startsWith('✅') ? 'rgba(52,211,153,0.1)' : 'rgba(251,191,36,0.1)',
-                color: monetagMsg.startsWith('✅') ? 'var(--green)' : 'var(--orange)',
-                animation: 'fadeIn 0.2s ease'
-              }}>
-                {monetagMsg}
-              </div>
+                color: monetagMsg.startsWith('✅') ? 'var(--green)' : 'var(--orange)', animation: 'fadeIn 0.2s ease'
+              }}>{monetagMsg}</div>
             )}
           </div>
         </div>
@@ -341,19 +309,12 @@ export default function TasksPage() {
           <div style={{ fontSize: 12, color: 'var(--text-muted)', letterSpacing: 1, marginBottom: 10, fontWeight: 600 }}>
             📋 {t('tasks.sponsored')}
           </div>
-          <adsgram-task
-            data-block-id={ADSGRAM_TASK_ID}
-            data-debug="false"
-            style={{
-              '--adsgram-task-bg': 'rgba(18, 18, 26, 0.95)',
-              '--adsgram-task-color': '#e8e8e8',
-              '--adsgram-task-btn-bg': 'linear-gradient(135deg, #b8860b, #d4af37)',
-              '--adsgram-task-btn-color': '#000',
-              '--adsgram-task-border-radius': '14px',
-              width: '100%',
-              display: 'block',
-            }}
-          ></adsgram-task>
+          <adsgram-task data-block-id={ADSGRAM_TASK_ID} data-debug="false" style={{
+            '--adsgram-task-bg': 'rgba(18, 18, 26, 0.95)', '--adsgram-task-color': '#e8e8e8',
+            '--adsgram-task-btn-bg': 'linear-gradient(135deg, #b8860b, #d4af37)',
+            '--adsgram-task-btn-color': '#000', '--adsgram-task-border-radius': '14px',
+            width: '100%', display: 'block',
+          }}></adsgram-task>
         </div>
       )}
 
@@ -364,39 +325,70 @@ export default function TasksPage() {
             {t('tasks.available', { count: active.length })}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {active.map((task, i) => (
-              <div key={task.id} className="card" style={{
-                display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px',
-                border: '1px solid var(--border-gold)',
-                animation: `fadeIn 0.3s ease ${i * 0.06}s both`
-              }}>
-                <div style={{
-                  width: 44, height: 44, borderRadius: 14, flexShrink: 0,
-                  background: 'linear-gradient(135deg, rgba(212,175,55,0.15), rgba(212,175,55,0.05))',
-                  border: '1px solid var(--border-gold)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20
+            {active.map((task, i) => {
+              const { label, action, style } = getTaskAction(task);
+              const btnBg = style === 'check'
+                ? 'linear-gradient(135deg, #059669, #10b981)'
+                : style === 'go'
+                  ? 'linear-gradient(135deg, #2563eb, #3b82f6)'
+                  : 'linear-gradient(135deg, var(--gold-dark), var(--gold))';
+              const btnColor = style === 'go' || style === 'check' ? '#fff' : '#000';
+
+              return (
+                <div key={task.id} className="card" style={{
+                  padding: '14px 16px', border: '1px solid var(--border-gold)',
+                  animation: `fadeIn 0.3s ease ${i * 0.06}s both`
                 }}>
-                  {typeIcons[task.type] || typeIcons.default}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 2 }}>{task.title}</div>
-                  {task.description && (
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.description}</div>
-                  )}
-                  <div style={{ fontSize: 12, color: 'var(--gold)', fontWeight: 700, marginTop: 4 }}>
-                    +{fmtK(task.reward_power)} POWER
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <div style={{
+                      width: 44, height: 44, borderRadius: 14, flexShrink: 0,
+                      background: 'linear-gradient(135deg, rgba(212,175,55,0.15), rgba(212,175,55,0.05))',
+                      border: '1px solid var(--border-gold)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20
+                    }}>
+                      {typeIcons[task.type] || typeIcons.default}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 2 }}>{task.title}</div>
+                      {task.description && (
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.description}</div>
+                      )}
+                      <div style={{ fontSize: 12, color: 'var(--gold)', fontWeight: 700, marginTop: 4 }}>
+                        +{fmtK(task.reward_power)} POWER
+                      </div>
+                    </div>
+                    <button onClick={action} style={{
+                      padding: '8px 16px', borderRadius: 10, background: btnBg,
+                      color: btnColor, fontWeight: 700, fontSize: 12, border: 'none',
+                      cursor: 'pointer', flexShrink: 0, transition: 'var(--transition)', minWidth: 70, textAlign: 'center'
+                    }}>
+                      {label}
+                    </button>
                   </div>
+
+                  {/* Error message for this task */}
+                  {taskError?.taskId === task.id && (
+                    <div style={{
+                      marginTop: 10, padding: '8px 12px', borderRadius: 10, fontSize: 12, fontWeight: 600,
+                      textAlign: 'center', background: 'rgba(248,113,113,0.1)', color: 'var(--red)',
+                      animation: 'fadeIn 0.2s ease'
+                    }}>
+                      {taskError.msg}
+                    </div>
+                  )}
+
+                  {/* Hint for subscribe tasks after opening */}
+                  {task.type === 'subscribe_channel' && opened[task.id] && !taskError?.taskId && (
+                    <div style={{
+                      marginTop: 8, fontSize: 11, color: 'var(--text-muted)', textAlign: 'center',
+                      animation: 'fadeIn 0.3s ease'
+                    }}>
+                      {t('tasks.subscribe_hint')}
+                    </div>
+                  )}
                 </div>
-                <button onClick={() => complete(task)} style={{
-                  padding: '8px 16px', borderRadius: 10,
-                  background: 'linear-gradient(135deg, var(--gold-dark), var(--gold))',
-                  color: '#000', fontWeight: 700, fontSize: 12, border: 'none',
-                  cursor: 'pointer', flexShrink: 0, transition: 'var(--transition)'
-                }}>
-                  {completing === task.id ? '⏳' : t('tasks.start')}
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -410,8 +402,7 @@ export default function TasksPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {done.map(task => (
               <div key={task.id} className="card" style={{
-                display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px',
-                opacity: 0.5
+                display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px', opacity: 0.5
               }}>
                 <div style={{
                   width: 40, height: 40, borderRadius: 12, flexShrink: 0,

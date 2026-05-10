@@ -590,7 +590,9 @@ function TasksPanel() {
                 border: '1px solid var(--border)', color: '#fff', fontSize: 13
               }}>
               <option value="other">⚡ Другое</option>
-              <option value="subscribe_channel">📢 Подписка</option>
+              <option value="subscribe_channel">📢 Подписка (проверка)</option>
+              <option value="start_bot">🤖 Запуск бота</option>
+              <option value="link">🔗 Ссылка</option>
               <option value="invite_friends">👥 Инвайт</option>
               <option value="daily">📅 Ежедневное</option>
             </select>
