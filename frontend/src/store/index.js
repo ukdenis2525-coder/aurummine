@@ -19,8 +19,7 @@ export const useStore = create((set, get) => ({
       const user = data.user;
       const tgId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
       const isAdmin = ADMIN_ID && String(tgId || user.tg_id) === String(ADMIN_ID);
-      set({ user, isAdmin });
-      await get().fetchMining();
+      set({ user, isAdmin, mining: data.mining || null });
     } catch (e) {
       // 403 = blocked user (silent block)
       if (e.response?.status === 403) {

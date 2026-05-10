@@ -12,39 +12,18 @@ export const getHashesPerMinute = (power) => {
 export const accrueHashes = async () => {
   const client = await pool.connect();
   try {
-    await client.query('BEGIN');
-
-    // Get all users with power > 0
-    const { rows: users } = await client.query(
-      `SELECT id, power, last_accrue_at FROM users WHERE power > 0`
-    );
-
-    for (const user of users) {
-      const minutesSince = Math.floor(
-        (Date.now() - new Date(user.last_accrue_at).getTime()) / 60000
-      );
-      if (minutesSince < 1) continue;
-
-      const hashesEarned = getHashesPerMinute(parseFloat(user.power)) * minutesSince;
-
-      await client.query(
-        `UPDATE users SET 
-          hashes = hashes + $1,
-          last_accrue_at = NOW()
-         WHERE id = $2`,
-        [hashesEarned, user.id]
-      );
-
-      await client.query(
-        `INSERT INTO mining_log (user_id, hashes_earned) VALUES ($1, $2)`,
-        [user.id, hashesEarned]
-      );
-    }
-
-    await client.query('COMMIT');
+    // Single batch UPDATE — accrue hashes for all users with power > 0
+    // who haven't been updated in the last 55 seconds
+    await client.query(`
+      UPDATE users SET
+        hashes = hashes + (power / 100000.0) * ($1::numeric / 1440.0) *
+          GREATEST(1, EXTRACT(EPOCH FROM (NOW() - last_accrue_at)) / 60.0),
+        last_accrue_at = NOW()
+      WHERE power > 0
+        AND last_accrue_at < NOW() - INTERVAL '55 seconds'
+    `, [HASHES_PER_DAY_PER_100K]);
   } catch (e) {
-    await client.query('ROLLBACK');
-    console.error('accrueHashes transaction error:', e.message);
+    console.error('accrueHashes error:', e.message);
   } finally {
     client.release();
   }
