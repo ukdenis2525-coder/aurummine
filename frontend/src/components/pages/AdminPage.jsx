@@ -663,11 +663,45 @@ function OrdersPanel() {
   const [orders, setOrders] = useState([]);
   const [processing, setProcessing] = useState(null);
 
+  // Pricing settings
+  const [prices, setPrices] = useState({
+    order_price_subscribe: '0.01',
+    order_price_start_bot: '0.008',
+    order_price_link: '0.005',
+    order_reward_subscribe: '500',
+    order_reward_start_bot: '300',
+    order_reward_link: '200',
+  });
+  const [savingPrices, setSavingPrices] = useState(false);
+  const [priceMsg, setPriceMsg] = useState(null);
+
   const load = async () => {
     const { data } = await api.get('/admin/task-orders');
     setOrders(data);
   };
-  useEffect(() => { load(); }, []);
+  const loadPrices = async () => {
+    try {
+      const { data } = await api.get('/admin/ad-settings');
+      // ad-settings returns order_% keys too
+      const orderSettings = {};
+      data.forEach(s => {
+        if (s.key.startsWith('order_')) orderSettings[s.key] = s.value;
+      });
+      if (Object.keys(orderSettings).length) setPrices(prev => ({ ...prev, ...orderSettings }));
+    } catch (e) {}
+  };
+  useEffect(() => { load(); loadPrices(); }, []);
+
+  const savePrices = async () => {
+    setSavingPrices(true);
+    try {
+      const settings = Object.entries(prices).map(([key, value]) => ({ key, value: String(value) }));
+      await api.post('/admin/ad-settings', { settings });
+      setPriceMsg('✅ Сохранено');
+    } catch (e) { setPriceMsg('❌ Ошибка'); }
+    setSavingPrices(false);
+    setTimeout(() => setPriceMsg(null), 2000);
+  };
 
   const approve = async (id) => {
     setProcessing(id);
@@ -685,8 +719,45 @@ function OrdersPanel() {
   const statusColors = { pending: 'var(--orange)', active: 'var(--green)', completed: 'var(--gold)', rejected: 'var(--red)' };
   const statusLabels = { pending: '⏳ Ожидает', active: '✅ Активен', completed: '🏁 Завершён', rejected: '❌ Отклонён' };
 
+  const priceFields = [
+    { key: 'order_price_subscribe', label: '📢 Цена подписки (TON)', icon: '💰' },
+    { key: 'order_reward_subscribe', label: '📢 Награда за подписку (POWER)', icon: '⚡' },
+    { key: 'order_price_start_bot', label: '🤖 Цена запуска бота (TON)', icon: '💰' },
+    { key: 'order_reward_start_bot', label: '🤖 Награда за запуск (POWER)', icon: '⚡' },
+    { key: 'order_price_link', label: '🔗 Цена перехода (TON)', icon: '💰' },
+    { key: 'order_reward_link', label: '🔗 Награда за переход (POWER)', icon: '⚡' },
+  ];
+
   return (
     <div>
+      {/* ── Pricing Settings ── */}
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', letterSpacing: 1, marginBottom: 12, fontWeight: 600 }}>
+        💰 ЦЕНООБРАЗОВАНИЕ ЗАКАЗОВ
+      </div>
+      <div className="card" style={{ padding: 14, marginBottom: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          {priceFields.map(f => (
+            <div key={f.key}>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>{f.label}</div>
+              <input type="number" step={f.key.includes('price') ? '0.001' : '1'} value={prices[f.key] || ''}
+                onChange={e => setPrices({ ...prices, [f.key]: e.target.value })}
+                style={{ fontSize: 13, padding: '8px 10px', width: '100%', boxSizing: 'border-box' }} />
+            </div>
+          ))}
+        </div>
+        <button onClick={savePrices} disabled={savingPrices} style={{
+          width: '100%', padding: 10, borderRadius: 10, border: 'none', fontWeight: 700, fontSize: 12, cursor: 'pointer',
+          marginTop: 10, background: 'linear-gradient(135deg, var(--gold-dark), var(--gold))', color: '#000',
+        }}>
+          {savingPrices ? '⏳...' : '💾 Сохранить цены'}
+        </button>
+        {priceMsg && (
+          <div style={{ marginTop: 8, fontSize: 12, fontWeight: 600, textAlign: 'center',
+            color: priceMsg.startsWith('✅') ? 'var(--green)' : 'var(--red)' }}>{priceMsg}</div>
+        )}
+      </div>
+
+      {/* ── Orders List ── */}
       <div style={{ fontSize: 12, color: 'var(--text-muted)', letterSpacing: 1, marginBottom: 12, fontWeight: 600 }}>
         🛒 ЗАКАЗЫ ПОЛЬЗОВАТЕЛЕЙ ({orders.filter(o => o.status === 'pending').length} ожидают)
       </div>

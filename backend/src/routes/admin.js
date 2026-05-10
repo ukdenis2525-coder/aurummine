@@ -363,12 +363,27 @@ router.delete('/packages/:id', async (req, res) => {
 // ── Ad Settings ──
 router.get('/ad-settings', async (req, res) => {
   const { rows } = await pool.query(
-    `SELECT key, value, label FROM app_settings WHERE key LIKE 'ad_%' OR key LIKE 'monetag_%' ORDER BY key`
+    `SELECT key, value, label FROM app_settings WHERE key LIKE 'ad_%' OR key LIKE 'monetag_%' OR key LIKE 'order_%' ORDER BY key`
   );
   res.json(rows);
 });
 
 router.put('/ad-settings', async (req, res) => {
+  const { settings } = req.body;
+  if (!Array.isArray(settings)) return res.status(400).json({ error: 'settings array required' });
+  for (const s of settings) {
+    if (!s.key || s.value === undefined) continue;
+    await pool.query(
+      `INSERT INTO app_settings (key, value, label)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (key) DO UPDATE SET value = $2`,
+      [s.key, String(s.value), s.label || s.key]
+    );
+  }
+  res.json({ success: true });
+});
+
+router.post('/ad-settings', async (req, res) => {
   const { settings } = req.body;
   if (!Array.isArray(settings)) return res.status(400).json({ error: 'settings array required' });
   for (const s of settings) {
