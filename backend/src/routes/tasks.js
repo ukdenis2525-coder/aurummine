@@ -375,10 +375,8 @@ router.get('/monetag-status', authMiddleware, async (req, res) => {
 
 // ═══════════════ TASK ORDERS (Advertising) ═══════════════
 
-// Get pricing config for ordering tasks (admin only for now)
+// Get pricing config for ordering tasks
 router.get('/order-config', authMiddleware, async (req, res) => {
-  const adminIds = (process.env.ADMIN_TG_IDS || process.env.ADMIN_TG_ID || '').split(',').map(s => s.trim());
-  if (!adminIds.includes(String(req.user.tg_id))) return res.status(403).json({ error: 'hidden' });
   const { rows } = await pool.query(
     `SELECT key, value FROM app_settings WHERE key LIKE 'order_%'`
   );
