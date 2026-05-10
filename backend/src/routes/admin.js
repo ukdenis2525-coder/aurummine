@@ -314,6 +314,29 @@ router.post('/task-orders/:id/reject', async (req, res) => {
   }
 });
 
+router.delete('/task-orders/:id', async (req, res) => {
+  const orderId = req.params.id;
+  const { rows } = await pool.query(`SELECT * FROM task_orders WHERE id = $1`, [orderId]);
+  if (!rows.length) return res.status(404).json({ error: 'Order not found' });
+
+  const order = rows[0];
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    if (order.task_id) {
+      await client.query(`UPDATE tasks SET is_active = FALSE WHERE id = $1`, [order.task_id]);
+    }
+    await client.query(`DELETE FROM task_orders WHERE id = $1`, [orderId]);
+    await client.query('COMMIT');
+    res.json({ success: true });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: 'Delete failed' });
+  } finally {
+    client.release();
+  }
+});
+
 // ── Packages ──
 router.get('/packages', async (req, res) => {
   const { rows } = await pool.query(`SELECT * FROM power_packages ORDER BY power_amount ASC`);

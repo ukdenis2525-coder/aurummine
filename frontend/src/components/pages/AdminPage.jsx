@@ -715,6 +715,13 @@ function OrdersPanel() {
     setProcessing(null);
   };
 
+  const deleteOrder = async (id) => {
+    if (!window.confirm('Удалить заказ?')) return;
+    setProcessing(id);
+    try { await api.delete(`/admin/task-orders/${id}`); load(); } catch (e) { alert('Ошибка'); }
+    setProcessing(null);
+  };
+
   const typeLabels = { subscribe_channel: '📢 Подписка', start_bot: '🤖 Бот', link: '🔗 Ссылка' };
   const statusColors = { pending: 'var(--orange)', active: 'var(--green)', completed: 'var(--gold)', rejected: 'var(--red)' };
   const statusLabels = { pending: '⏳ Ожидает', active: '✅ Активен', completed: '🏁 Завершён', rejected: '❌ Отклонён' };
@@ -812,7 +819,7 @@ function OrdersPanel() {
             </div>
 
             {o.status === 'pending' && (
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
                 <button onClick={() => approve(o.id)} disabled={processing === o.id} style={{
                   flex: 1, padding: 10, borderRadius: 10, border: 'none', fontWeight: 700, fontSize: 12, cursor: 'pointer',
                   background: 'rgba(52,211,153,0.15)', color: 'var(--green)',
@@ -820,9 +827,13 @@ function OrdersPanel() {
                 <button onClick={() => reject(o.id)} disabled={processing === o.id} style={{
                   flex: 1, padding: 10, borderRadius: 10, border: 'none', fontWeight: 700, fontSize: 12, cursor: 'pointer',
                   background: 'rgba(248,113,113,0.15)', color: 'var(--red)',
-                }}>❌ Отклонить (возврат)</button>
+                }}>❌ Отклонить</button>
               </div>
             )}
+            <button onClick={() => deleteOrder(o.id)} disabled={processing === o.id} style={{
+              width: '100%', padding: 8, borderRadius: 8, border: '1px solid rgba(248,113,113,0.2)',
+              background: 'transparent', color: 'var(--text-muted)', fontWeight: 600, fontSize: 11, cursor: 'pointer',
+            }}>🗑 Удалить</button>
           </div>
         ))}
       </div>
