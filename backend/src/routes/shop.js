@@ -2,10 +2,14 @@ import { Router } from 'express';
 import { authMiddleware } from '../middleware/auth.js';
 import { pool } from '../db.js';
 import crypto from 'crypto';
+import { checkPendingPayments } from '../services/payment.js';
 
 const router = Router();
 
 const generateMemo = () => crypto.randomBytes(6).toString('hex').toUpperCase(); // e.g. A1B2C3D4E5F6
+
+// Per-user cooldown map for manual check (30s)
+const checkCooldowns = new Map();
 
 router.get('/packages', authMiddleware, async (req, res) => {
   const { rows } = await pool.query(
@@ -73,6 +77,39 @@ router.get('/order-status', authMiddleware, async (req, res) => {
     [req.user.id]
   );
   res.json(rows[0] || null);
+});
+
+// Manual payment check — user-facing, with 30s cooldown
+router.post('/check-payment', authMiddleware, async (req, res) => {
+  const userId = req.user.id;
+
+  // Cooldown check
+  const lastCheck = checkCooldowns.get(userId);
+  if (lastCheck && Date.now() - lastCheck < 30000) {
+    const wait = Math.ceil((30000 - (Date.now() - lastCheck)) / 1000);
+    return res.status(429).json({ error: 'cooldown', wait });
+  }
+  checkCooldowns.set(userId, Date.now());
+
+  try {
+    await checkPendingPayments();
+
+    // Return updated order status for this user
+    const { data: hist } = { data: null };
+    const { rows } = await pool.query(
+      `SELECT pp.status, pp.memo, pp.ton_amount, pkg.power_amount
+       FROM pending_purchases pp
+       JOIN power_packages pkg ON pkg.id = pp.package_id
+       WHERE pp.user_id = $1
+       ORDER BY pp.created_at DESC LIMIT 1`,
+      [userId]
+    );
+    const order = rows[0] || null;
+    res.json({ checked: true, status: order?.status || null });
+  } catch (e) {
+    console.error('Manual check error:', e.message);
+    res.status(500).json({ error: 'Check failed' });
+  }
 });
 
 // Cancel pending order

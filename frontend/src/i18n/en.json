@@ -50,7 +50,18 @@
     "copied": "✓ Copied",
     "no_memo_warning": "❗ Without MEMO the payment won't be credited",
     "checking_payment": "Checking payment every 5 minutes. Power will be credited automatically.",
-    "cancel_purchase": "✕ Cancel purchase"
+    "cancel_purchase": "✕ Cancel purchase",
+    "important_rules": "Important rules",
+    "rule_exact_amount": "Send the EXACT amount. If the amount differs by even 0.01 TON — the payment will NOT be credited automatically.",
+    "rule_memo_required": "MEMO (comment) is required. Without it we cannot find your payment and it won't be credited.",
+    "rule_time_limit": "You have 60 minutes to pay. After that the order will be cancelled. If you sent later — contact support.",
+    "exact_amount_warning": "⚠️ Send EXACTLY this amount, otherwise payment won't be credited!",
+    "check_manually": "Check payment manually",
+    "checking_now": "Checking...",
+    "check_again_in": "Check again in",
+    "check_not_found": "Payment not found yet. Make sure amount and MEMO are correct. Try again in 30 seconds.",
+    "check_success": "Payment found! Power credited!",
+    "check_error": "Check failed. Try again later."
   },
   "tasks": {
     "title": "📋 Tasks",

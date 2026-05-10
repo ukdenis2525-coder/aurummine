@@ -9,7 +9,11 @@ export default function PaymentPage({ order, pkg, wallet, expiresAt, onCancel, o
   const [timeLeft, setTimeLeft] = useState(0);
   const [status, setStatus] = useState('pending');
   const [copying, setCopying] = useState('');
+  const [checking, setChecking] = useState(false);
+  const [checkResult, setCheckResult] = useState(null); // 'not_found' | 'completed' | 'error' | 'cooldown'
+  const [cooldown, setCooldown] = useState(0);
   const pollRef = useRef(null);
+  const cooldownRef = useRef(null);
   const { t } = useTranslation();
 
   useEffect(() => {
@@ -39,10 +43,52 @@ export default function PaymentPage({ order, pkg, wallet, expiresAt, onCancel, o
     return () => clearInterval(pollRef.current);
   }, []);
 
+  // Cooldown timer
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    cooldownRef.current = setInterval(() => {
+      setCooldown(prev => {
+        if (prev <= 1) {
+          clearInterval(cooldownRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(cooldownRef.current);
+  }, [cooldown]);
+
   const copy = async (text, key) => {
     await navigator.clipboard.writeText(text);
     setCopying(key);
     setTimeout(() => setCopying(''), 1500);
+  };
+
+  const handleManualCheck = async () => {
+    if (checking || cooldown > 0) return;
+    setChecking(true);
+    setCheckResult(null);
+    try {
+      const { data } = await api.post('/shop/check-payment');
+      if (data.status === 'completed') {
+        setCheckResult('completed');
+        setStatus('completed');
+        setTimeout(onSuccess, 2000);
+      } else {
+        setCheckResult('not_found');
+        setCooldown(30);
+      }
+    } catch (e) {
+      if (e.response?.status === 429) {
+        setCheckResult('cooldown');
+        setCooldown(e.response.data?.wait || 30);
+      } else {
+        setCheckResult('error');
+        setCooldown(10);
+      }
+    } finally {
+      setChecking(false);
+    }
   };
 
   const handleCancel = async () => {
@@ -128,6 +174,52 @@ export default function PaymentPage({ order, pkg, wallet, expiresAt, onCancel, o
         </div>
       </div>
 
+      {/* ⚠️ Important Rules Warning */}
+      <div className="card" style={{
+        marginBottom: 14, padding: 16,
+        border: '1px solid rgba(251,191,36,0.3)',
+        background: 'linear-gradient(135deg, rgba(251,191,36,0.08), rgba(251,191,36,0.02))'
+      }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gold)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 18 }}>⚠️</span> {t('payment.important_rules')}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {/* Rule 1 — Exact amount */}
+          <div style={{
+            display: 'flex', gap: 10, alignItems: 'flex-start',
+            background: 'rgba(248,113,113,0.06)', borderRadius: 10, padding: '10px 12px',
+            border: '1px solid rgba(248,113,113,0.15)'
+          }}>
+            <span style={{ fontSize: 16, flexShrink: 0 }}>💎</span>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+              {t('payment.rule_exact_amount')}
+            </div>
+          </div>
+          {/* Rule 2 — MEMO required */}
+          <div style={{
+            display: 'flex', gap: 10, alignItems: 'flex-start',
+            background: 'rgba(248,113,113,0.06)', borderRadius: 10, padding: '10px 12px',
+            border: '1px solid rgba(248,113,113,0.15)'
+          }}>
+            <span style={{ fontSize: 16, flexShrink: 0 }}>🔖</span>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+              {t('payment.rule_memo_required')}
+            </div>
+          </div>
+          {/* Rule 3 — One hour */}
+          <div style={{
+            display: 'flex', gap: 10, alignItems: 'flex-start',
+            background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: '10px 12px',
+            border: '1px solid var(--border)'
+          }}>
+            <span style={{ fontSize: 16, flexShrink: 0 }}>⏱️</span>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+              {t('payment.rule_time_limit')}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Timer */}
       <div className="card" style={{ marginBottom: 14, padding: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
@@ -165,6 +257,9 @@ export default function PaymentPage({ order, pkg, wallet, expiresAt, onCancel, o
               <span style={{ fontSize: 14, color: 'var(--text-muted)', marginLeft: 6 }}>TON</span>
             </div>
             <CopyBtn value={String(pkg.price_ton)} id="amount" label={t('payment.copy')} />
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--red)', marginTop: 6, textAlign: 'center', fontWeight: 500 }}>
+            {t('payment.exact_amount_warning')}
           </div>
         </div>
 
@@ -216,6 +311,68 @@ export default function PaymentPage({ order, pkg, wallet, expiresAt, onCancel, o
           {t('payment.checking_payment')}
         </div>
       </div>
+
+      {/* Manual Check Button */}
+      <button
+        onClick={handleManualCheck}
+        disabled={checking || cooldown > 0}
+        style={{
+          width: '100%', padding: 14, borderRadius: 14, marginBottom: 10,
+          background: checking
+            ? 'rgba(212,175,55,0.15)'
+            : cooldown > 0
+              ? 'rgba(255,255,255,0.04)'
+              : 'linear-gradient(135deg, rgba(212,175,55,0.15), rgba(212,175,55,0.08))',
+          border: `1px solid ${cooldown > 0 ? 'var(--border)' : 'var(--border-gold)'}`,
+          color: cooldown > 0 ? 'var(--text-muted)' : 'var(--gold)',
+          fontSize: 14, fontWeight: 700, cursor: checking || cooldown > 0 ? 'not-allowed' : 'pointer',
+          transition: 'var(--transition)', display: 'flex', alignItems: 'center',
+          justifyContent: 'center', gap: 8
+        }}
+      >
+        {checking ? (
+          <>
+            <span style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}>🔄</span>
+            {t('payment.checking_now')}
+          </>
+        ) : cooldown > 0 ? (
+          `${t('payment.check_again_in')} ${cooldown}s`
+        ) : (
+          <>🔍 {t('payment.check_manually')}</>
+        )}
+      </button>
+
+      {/* Check result messages */}
+      {checkResult === 'not_found' && (
+        <div style={{
+          background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)',
+          borderRadius: 12, padding: '12px 16px', marginBottom: 10,
+          fontSize: 12, color: 'var(--text-secondary)', textAlign: 'center',
+          animation: 'fadeIn 0.3s ease'
+        }}>
+          {t('payment.check_not_found')}
+        </div>
+      )}
+      {checkResult === 'completed' && (
+        <div style={{
+          background: 'var(--green-bg)', border: '1px solid rgba(52,211,153,0.3)',
+          borderRadius: 12, padding: '12px 16px', marginBottom: 10,
+          fontSize: 13, color: 'var(--green)', fontWeight: 700, textAlign: 'center',
+          animation: 'fadeIn 0.3s ease'
+        }}>
+          ✅ {t('payment.check_success')}
+        </div>
+      )}
+      {checkResult === 'error' && (
+        <div style={{
+          background: 'var(--red-bg)', border: '1px solid rgba(248,113,113,0.2)',
+          borderRadius: 12, padding: '12px 16px', marginBottom: 10,
+          fontSize: 12, color: 'var(--red)', textAlign: 'center',
+          animation: 'fadeIn 0.3s ease'
+        }}>
+          {t('payment.check_error')}
+        </div>
+      )}
 
       {/* Cancel */}
       <button onClick={handleCancel} style={{
