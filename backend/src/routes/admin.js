@@ -238,8 +238,22 @@ router.post('/tasks/:id/visibility', async (req, res) => {
 });
 
 router.delete('/tasks/:id', async (req, res) => {
-  await pool.query(`DELETE FROM tasks WHERE id = $1`, [req.params.id]);
-  res.json({ success: true });
+  const taskId = req.params.id;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(`DELETE FROM user_tasks WHERE task_id = $1`, [taskId]);
+    await client.query(`UPDATE task_orders SET task_id = NULL WHERE task_id = $1`, [taskId]);
+    await client.query(`DELETE FROM tasks WHERE id = $1`, [taskId]);
+    await client.query('COMMIT');
+    res.json({ success: true });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('[Admin] Task delete error:', e.message);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
 });
 
 // ── Task Orders Management ──
