@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { pool } from '../db.js';
-import { notifyPurchase } from './notify.js';
+import { notifyPurchase, notifyTaskOrder } from './notify.js';
 
 const TONCENTER_API = 'https://toncenter.com/api/v2';
 const WALLET_ADDRESS = process.env.PAYMENT_WALLET;
@@ -177,14 +177,15 @@ const completePurchase = async (client, purchase, txHash) => {
           `SELECT tg_id, username, first_name FROM users WHERE id = $1`, [purchase.user_id]
         );
         const u = uRows[0] || {};
-        notifyPurchase({
+        notifyTaskOrder({
           userId: purchase.user_id,
           tgId: u.tg_id,
           username: u.username,
           firstName: u.first_name,
-          packageName: `📣 Заказ: ${od.type} x${od.count}`,
-          powerAmount: 0,
-          tonPaid: od.totalPrice,
+          type: od.type,
+          link: od.link,
+          count: od.count,
+          totalPaid: od.totalPrice,
           memo: purchase.memo,
         });
       } catch (ne) {

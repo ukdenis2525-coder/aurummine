@@ -55,3 +55,21 @@ export const notifyWithdrawal = async ({ userId, tgId, username, firstName, tonA
     `👛 Кошелёк: <code>${walletAddress}</code>`;
   await notifyAdmins(text);
 };
+
+/**
+ * Notify admins about a new task order (paid, pending moderation).
+ */
+export const notifyTaskOrder = async ({ userId, tgId, username, firstName, type, link, count, totalPaid, memo }) => {
+  const userLabel = username ? `@${username}` : (firstName || `User #${userId}`);
+  const typeLabels = { subscribe_channel: '📢 Подписка', start_bot: '🤖 Бот', link: '🔗 Ссылка' };
+  const text =
+    `📣 <b>Новый заказ рекламы!</b>\n\n` +
+    `👤 ${userLabel} (tg: <code>${tgId || userId}</code>)\n` +
+    `📋 Тип: <b>${typeLabels[type] || type}</b>\n` +
+    `🔗 Ссылка: ${link}\n` +
+    `👥 Кол-во: <b>${count}</b> выполнений\n` +
+    `💎 Оплата: ${totalPaid} TON\n` +
+    `🔖 Memo: <code>${memo}</code>\n\n` +
+    `⏳ Ожидает модерации в админке`;
+  await notifyAdmins(text);
+};
