@@ -154,6 +154,12 @@ const migrate = async () => {
       ALTER TABLE tasks ADD COLUMN IF NOT EXISTS order_id INTEGER;
     `);
 
+    // Add order_data to pending_purchases (for task order payments)
+    await client.query(`
+      ALTER TABLE pending_purchases ALTER COLUMN package_id DROP NOT NULL;
+      ALTER TABLE pending_purchases ADD COLUMN IF NOT EXISTS order_data JSONB;
+    `);
+
     // Seed packages
     await client.query(`
       INSERT INTO power_packages (name, power_amount, price_ton) VALUES

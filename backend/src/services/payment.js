@@ -32,11 +32,11 @@ export const checkPendingPayments = async () => {
 
   const client = await pool.connect();
   try {
-    // Get all pending purchases not expired
+    // Get all pending purchases not expired (both package + task orders)
     const { rows: pending } = await client.query(
-      `SELECT pp.*, pkg.power_amount
+      `SELECT pp.*, COALESCE(pkg.power_amount, 0) as power_amount
        FROM pending_purchases pp
-       JOIN power_packages pkg ON pkg.id = pp.package_id
+       LEFT JOIN power_packages pkg ON pkg.id = pp.package_id
        WHERE pp.status = 'pending' AND pp.expires_at > NOW()`
     );
 
@@ -157,6 +157,43 @@ const completePurchase = async (client, purchase, txHash) => {
       [txHash, purchase.id]
     );
 
+    // ── Task Order Payment ──
+    if (purchase.order_data) {
+      const od = typeof purchase.order_data === 'string' ? JSON.parse(purchase.order_data) : purchase.order_data;
+
+      // Create task_order record
+      await client.query(
+        `INSERT INTO task_orders (user_id, type, title, link, price_per_user, reward_power, max_completions, total_paid, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')`,
+        [purchase.user_id, od.type, od.title || '', od.link, od.pricePerUser, od.rewardPower, od.count, od.totalPrice]
+      );
+
+      await client.query('COMMIT');
+      console.log(`✅ Task order payment completed: user=${purchase.user_id} memo=${purchase.memo} ${od.count}x ${od.type} for ${od.totalPrice} TON`);
+
+      // Notify admins
+      try {
+        const { rows: uRows } = await pool.query(
+          `SELECT tg_id, username, first_name FROM users WHERE id = $1`, [purchase.user_id]
+        );
+        const u = uRows[0] || {};
+        notifyPurchase({
+          userId: purchase.user_id,
+          tgId: u.tg_id,
+          username: u.username,
+          firstName: u.first_name,
+          packageName: `📣 Заказ: ${od.type} x${od.count}`,
+          powerAmount: 0,
+          tonPaid: od.totalPrice,
+          memo: purchase.memo,
+        });
+      } catch (ne) {
+        console.error('Notify error (task order):', ne.message);
+      }
+      return;
+    }
+
+    // ── Regular Package Purchase ──
     // Record in purchases table
     await client.query(
       `INSERT INTO purchases (user_id, package_id, power_amount, ton_paid, tx_hash)

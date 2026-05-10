@@ -100,7 +100,13 @@
     "order_pay": "Pay",
     "order_success": "Order created! Awaiting moderation.",
     "order_no_balance": "Insufficient TON balance",
-    "my_orders": "📋 My Orders"
+    "my_orders": "📋 My Orders",
+    "send_ton": "Send TON",
+    "send_ton_desc": "Pay by transferring to the wallet",
+    "wallet_address": "Wallet address",
+    "memo_important": "required",
+    "memo_warning": "Include MEMO in your transfer, otherwise payment won't be found!",
+    "close_payment": "Close"
   },
   "team": {
     "title": "👥 Team",

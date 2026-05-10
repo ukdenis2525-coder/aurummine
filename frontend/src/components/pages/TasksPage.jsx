@@ -47,6 +47,7 @@ export default function TasksPage() {
   const [ordering, setOrdering] = useState(false);
   const [orderMsg, setOrderMsg] = useState(null);
   const [myOrders, setMyOrders] = useState([]);
+  const [orderPayment, setOrderPayment] = useState(null); // { memo, amount, wallet, expires_at }
 
   useEffect(() => { api.get('/tasks').then(r => setTasks(r.data)); }, []);
   useEffect(() => {
@@ -527,18 +528,14 @@ export default function TasksPage() {
                     setOrdering(true);
                     setOrderMsg(null);
                     try {
-                      await api.post('/tasks/order', orderForm);
-                      setOrderMsg(`✅ ${t('tasks.order_success')}`);
-                      setOrderForm({ ...orderForm, link: '', title: '' });
-                      await refreshUser();
-                      api.get('/tasks/my-orders').then(r => setMyOrders(r.data));
+                      const { data } = await api.post('/tasks/order', orderForm);
+                      if (data.payment) {
+                        setOrderPayment(data.payment);
+                        setShowOrder(false);
+                      }
                     } catch (e) {
                       const err = e.response?.data?.error;
-                      if (err === 'insufficient_balance') {
-                        setOrderMsg(`❌ ${t('tasks.order_no_balance')}`);
-                      } else {
-                        setOrderMsg(`❌ ${err || t('tasks.task_error')}`);
-                      }
+                      setOrderMsg(`❌ ${err || t('tasks.task_error')}`);
                     } finally { setOrdering(false); setTimeout(() => setOrderMsg(null), 4000); }
                   }} disabled={ordering || !orderForm.link} style={{
                     width: '100%', padding: 12, borderRadius: 12, border: 'none', fontWeight: 700, fontSize: 13, cursor: 'pointer',
@@ -552,6 +549,70 @@ export default function TasksPage() {
             })()}
           </div>
 
+          {/* Payment info card */}
+          {orderPayment && (
+            <div className="card" style={{
+              padding: '16px 18px', marginTop: 12,
+              border: '1px solid rgba(52,211,153,0.4)',
+              background: 'linear-gradient(135deg, rgba(52,211,153,0.08), rgba(16,185,129,0.03))',
+              animation: 'fadeIn 0.3s ease'
+            }}>
+              <div style={{ textAlign: 'center', marginBottom: 12 }}>
+                <div style={{ fontSize: 28, marginBottom: 4 }}>💎</div>
+                <div style={{ fontSize: 15, fontWeight: 700 }}>{t('tasks.send_ton')}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('tasks.send_ton_desc')}</div>
+              </div>
+
+              {/* Amount */}
+              <div style={{
+                textAlign: 'center', padding: 12, background: 'rgba(255,255,255,0.03)',
+                borderRadius: 12, marginBottom: 10
+              }}>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 2 }}>{t('tasks.order_total')}</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--gold)' }}>{orderPayment.amount} TON</div>
+              </div>
+
+              {/* Wallet */}
+              <div style={{ marginBottom: 8 }}>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>{t('tasks.wallet_address')}</div>
+                <div onClick={() => { navigator.clipboard.writeText(orderPayment.wallet); }} style={{
+                  padding: '10px 12px', background: 'rgba(255,255,255,0.04)', borderRadius: 10,
+                  fontSize: 11, fontFamily: 'monospace', wordBreak: 'break-all', cursor: 'pointer',
+                  border: '1px solid var(--border)'
+                }}>
+                  {orderPayment.wallet}
+                  <span style={{ float: 'right', color: 'var(--gold)' }}>📋</span>
+                </div>
+              </div>
+
+              {/* Memo */}
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>MEMO ({t('tasks.memo_important')})</div>
+                <div onClick={() => { navigator.clipboard.writeText(orderPayment.memo); }} style={{
+                  padding: '10px 12px', background: 'rgba(212,175,55,0.08)', borderRadius: 10,
+                  fontSize: 16, fontWeight: 800, fontFamily: 'monospace', textAlign: 'center', cursor: 'pointer',
+                  border: '1px solid var(--border-gold)', color: 'var(--gold)', letterSpacing: 2
+                }}>
+                  {orderPayment.memo}
+                  <span style={{ float: 'right', fontSize: 12 }}>📋</span>
+                </div>
+              </div>
+
+              <div style={{ fontSize: 10, color: 'var(--orange)', textAlign: 'center', marginBottom: 10 }}>
+                ⚠️ {t('tasks.memo_warning')}
+              </div>
+
+              <button onClick={() => {
+                setOrderPayment(null);
+                api.get('/tasks/my-orders').then(r => setMyOrders(r.data));
+              }} style={{
+                width: '100%', padding: 10, borderRadius: 10, border: '1px solid var(--border)',
+                background: 'transparent', color: 'var(--text-muted)', fontWeight: 600, fontSize: 12, cursor: 'pointer'
+              }}>
+                ✕ {t('tasks.close_payment')}
+              </button>
+            </div>
+          )}
           {/* My orders */}
           {myOrders.length > 0 && (
             <div style={{ marginTop: 12 }}>

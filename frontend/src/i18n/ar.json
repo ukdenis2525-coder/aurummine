@@ -100,7 +100,13 @@
     "order_pay": "ادفع",
     "order_success": "تم إنشاء الطلب! في انتظار المراجعة.",
     "order_no_balance": "رصيد TON غير كافٍ",
-    "my_orders": "📋 طلباتي"
+    "my_orders": "📋 طلباتي",
+    "send_ton": "أرسل TON",
+    "send_ton_desc": "ادفع بالتحويل إلى المحفظة",
+    "wallet_address": "عنوان المحفظة",
+    "memo_important": "مطلوب",
+    "memo_warning": "أدخل MEMO في التحويل، وإلا لن يتم العثور على الدفع!",
+    "close_payment": "إغلاق"
   },
   "team": {
     "title": "👥 الفريق",

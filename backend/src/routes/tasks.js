@@ -386,7 +386,7 @@ router.get('/order-config', authMiddleware, async (req, res) => {
   });
 });
 
-// Create a task order (user pays from TON balance)
+// Create a task order (pay via TON wallet)
 router.post('/order', authMiddleware, async (req, res) => {
   const { type, link, count, title } = req.body;
   if (!type || !link || !count) return res.status(400).json({ error: 'type, link, count required' });
@@ -415,35 +415,43 @@ router.post('/order', authMiddleware, async (req, res) => {
   const rewardPower = rewardMap[type];
   const totalPrice = parseFloat((pricePerUser * count).toFixed(4));
 
-  // Check balance
-  const { rows: userRows } = await pool.query(`SELECT ton_balance FROM users WHERE id = $1`, [req.user.id]);
-  const balance = parseFloat(userRows[0].ton_balance);
-  if (balance < totalPrice) return res.status(400).json({ error: 'insufficient_balance', needed: totalPrice, have: balance });
+  // Cancel any existing pending order for this user
+  await pool.query(
+    `UPDATE pending_purchases SET status = 'cancelled'
+     WHERE user_id = $1 AND status = 'pending' AND order_data IS NOT NULL`,
+    [req.user.id]
+  );
 
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
+  // Generate unique memo
+  const crypto = await import('crypto');
+  let memo, attempts = 0;
+  do {
+    memo = crypto.default.randomBytes(6).toString('hex').toUpperCase();
+    const { rows } = await pool.query(`SELECT id FROM pending_purchases WHERE memo = $1`, [memo]);
+    if (!rows.length) break;
+    attempts++;
+  } while (attempts < 10);
 
-    // Deduct balance
-    await client.query(`UPDATE users SET ton_balance = ton_balance - $1 WHERE id = $2`, [totalPrice, req.user.id]);
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
-    // Create order (pending admin approval)
-    const { rows: orderRows } = await client.query(
-      `INSERT INTO task_orders (user_id, type, title, link, price_per_user, reward_power, max_completions, total_paid, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending') RETURNING *`,
-      [req.user.id, type, title || '', link, pricePerUser, rewardPower, count, totalPrice]
-    );
+  const orderData = JSON.stringify({ type, link, title: title || '', count, pricePerUser, rewardPower, totalPrice });
 
-    await client.query('COMMIT');
-    console.log(`[TaskOrder] User ${req.user.id} ordered ${count}x ${type} for ${totalPrice} TON`);
-    res.json({ success: true, order: orderRows[0] });
-  } catch (e) {
-    await client.query('ROLLBACK');
-    console.error('[TaskOrder] Error:', e);
-    res.status(500).json({ error: 'Order failed' });
-  } finally {
-    client.release();
-  }
+  const { rows } = await pool.query(
+    `INSERT INTO pending_purchases (user_id, package_id, memo, ton_amount, expires_at, order_data)
+     VALUES ($1, NULL, $2, $3, $4, $5) RETURNING *`,
+    [req.user.id, memo, totalPrice, expiresAt, orderData]
+  );
+
+  console.log(`[TaskOrder] User ${req.user.id} created payment: ${totalPrice} TON memo=${memo} for ${count}x ${type}`);
+  res.json({
+    success: true,
+    payment: {
+      memo,
+      amount: totalPrice,
+      wallet: process.env.PAYMENT_WALLET,
+      expires_at: expiresAt,
+    }
+  });
 });
 
 // Get user's own orders
