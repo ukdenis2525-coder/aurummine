@@ -106,7 +106,9 @@
     "wallet_address": "Адреса гаманця",
     "memo_important": "обов'язково",
     "memo_warning": "Вкажіть MEMO при переказі, інакше оплату не буде знайдено!",
-    "close_payment": "Закрити"
+    "close_payment": "Закрити",
+    "bot_admin_hint": "Додайте бота @aurummine_bot адміном у канал для перевірки підписки. Використовуйте публічне посилання (t.me/channel).",
+    "bot_not_admin_error": "Бот не є адміном каналу. Додайте @aurummine_bot адміністратором!"
   },
   "team": {
     "title": "👥 Команда",

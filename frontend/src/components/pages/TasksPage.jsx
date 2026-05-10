@@ -483,7 +483,17 @@ export default function TasksPage() {
                   {/* Link */}
                   <input type="text" value={orderForm.link} onChange={e => setOrderForm({ ...orderForm, link: e.target.value })}
                     placeholder={selectedType.placeholder}
-                    style={{ marginBottom: 10, fontSize: 13, padding: '10px 14px' }} />
+                    style={{ marginBottom: 6, fontSize: 13, padding: '10px 14px' }} />
+
+                  {/* Bot admin hint for subscribe_channel */}
+                  {orderForm.type === 'subscribe_channel' && (
+                    <div style={{
+                      fontSize: 10, color: 'var(--orange)', marginBottom: 10, padding: '6px 10px',
+                      background: 'rgba(251,191,36,0.08)', borderRadius: 8, lineHeight: 1.4
+                    }}>
+                      ⚠️ {t('tasks.bot_admin_hint')}
+                    </div>
+                  )}
 
                   {/* Count */}
                   <div style={{ marginBottom: 10 }}>
@@ -535,8 +545,13 @@ export default function TasksPage() {
                       }
                     } catch (e) {
                       const err = e.response?.data?.error;
-                      setOrderMsg(`❌ ${err || t('tasks.task_error')}`);
-                    } finally { setOrdering(false); setTimeout(() => setOrderMsg(null), 4000); }
+                      const msg = e.response?.data?.message;
+                      if (err === 'bot_not_admin') {
+                        setOrderMsg(`❌ ${t('tasks.bot_not_admin_error')}`);
+                      } else {
+                        setOrderMsg(`❌ ${msg || err || t('tasks.task_error')}`);
+                      }
+                    } finally { setOrdering(false); setTimeout(() => setOrderMsg(null), 5000); }
                   }} disabled={ordering || !orderForm.link} style={{
                     width: '100%', padding: 12, borderRadius: 12, border: 'none', fontWeight: 700, fontSize: 13, cursor: 'pointer',
                     background: !orderForm.link ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg, #2563eb, #3b82f6)',

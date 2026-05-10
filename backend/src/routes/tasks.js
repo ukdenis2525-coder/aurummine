@@ -418,7 +418,38 @@ router.post('/order', authMiddleware, async (req, res) => {
   if (!['subscribe_channel', 'start_bot', 'link'].includes(type)) return res.status(400).json({ error: 'Invalid type' });
   if (count < 10 || count > 10000) return res.status(400).json({ error: 'Count must be 10-10000' });
 
-  // Get pricing
+  // For subscribe_channel — verify bot is admin in the channel
+  if (type === 'subscribe_channel') {
+    const chatId = extractChatId(link);
+    if (!chatId) {
+      return res.status(400).json({ error: 'bot_not_admin', message: 'Invite links not supported. Use channel username (e.g. https://t.me/channelname)' });
+    }
+
+    const token = process.env.BOT_TOKEN;
+    if (token) {
+      try {
+        const botInfo = await axios.get(`https://api.telegram.org/bot${token}/getMe`);
+        const botId = botInfo.data?.result?.id;
+        if (botId) {
+          const { data } = await axios.get(
+            `https://api.telegram.org/bot${token}/getChatMember`,
+            { params: { chat_id: chatId, user_id: botId } }
+          );
+          const status = data?.result?.status;
+          if (!['administrator', 'creator'].includes(status)) {
+            return res.status(400).json({ error: 'bot_not_admin', message: 'Bot must be added as admin to the channel' });
+          }
+          console.log(`[TaskOrder] Bot is admin in ${chatId} ✅`);
+        }
+      } catch (e) {
+        const desc = e.response?.data?.description || e.message;
+        console.error(`[TaskOrder] Bot admin check failed for ${chatId}: ${desc}`);
+        return res.status(400).json({ error: 'bot_not_admin', message: `Cannot access channel: ${desc}` });
+      }
+    }
+  }
+
+
   const { rows: settingsRows } = await pool.query(
     `SELECT key, value FROM app_settings WHERE key LIKE 'order_%'`
   );
