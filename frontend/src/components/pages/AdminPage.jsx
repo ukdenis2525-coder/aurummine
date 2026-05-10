@@ -971,32 +971,48 @@ function ReferralsPanel() {
 // ═══════════════════ ADS SETTINGS ═══════════════════
 function AdsPanel() {
   const [settings, setSettings] = useState([]);
+  const [monetagSettings, setMonetagSettings] = useState([]);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState(null);
 
   useEffect(() => {
     api.get('/admin/ad-settings').then(r => {
-      const defaults = [
-        { key: 'ad_reward_power', value: '500', label: 'Power за просмотр рекламы' },
+      // Adsgram defaults
+      const adsgramDefaults = [
+        { key: 'ad_reward_power', value: '500', label: 'Power за просмотр (Adsgram)' },
         { key: 'ad_cooldown_seconds', value: '60', label: 'Кулдаун между рекламами (сек)' },
         { key: 'ad_daily_limit', value: '50', label: 'Лимит просмотров в день' },
       ];
-      const merged = defaults.map(d => {
-        const existing = r.data.find(s => s.key === d.key);
+      // Monetag defaults
+      const monetagDefaults = [
+        { key: 'monetag_reward_power', value: '5', label: 'Power за просмотр (Monetag)' },
+      ];
+
+      const allData = r.data;
+      const mergedAdsgram = adsgramDefaults.map(d => {
+        const existing = allData.find(s => s.key === d.key);
         return existing || d;
       });
-      setSettings(merged);
+      const mergedMonetag = monetagDefaults.map(d => {
+        const existing = allData.find(s => s.key === d.key);
+        return existing || d;
+      });
+
+      setSettings(mergedAdsgram);
+      setMonetagSettings(mergedMonetag);
     });
   }, []);
 
   const updateVal = (key, value) => {
     setSettings(prev => prev.map(s => s.key === key ? { ...s, value } : s));
+    setMonetagSettings(prev => prev.map(s => s.key === key ? { ...s, value } : s));
   };
 
   const save = async () => {
     setSaving(true);
     try {
-      await api.put('/admin/ad-settings', { settings });
+      const allSettings = [...settings, ...monetagSettings];
+      await api.put('/admin/ad-settings', { settings: allSettings });
       setMsg('✅ Настройки рекламы сохранены');
     } catch (e) {
       setMsg('❌ Ошибка сохранения');
@@ -1005,11 +1021,38 @@ function AdsPanel() {
     setTimeout(() => setMsg(null), 2500);
   };
 
-  const fieldMeta = {
-    ad_reward_power: { icon: '⚡', unit: 'POWER', desc: 'Сколько Power юзер получает за один просмотр' },
-    ad_cooldown_seconds: { icon: '⏱️', unit: 'сек', desc: 'Минимальное время между просмотрами' },
-    ad_daily_limit: { icon: '📊', unit: 'раз', desc: 'Макс. просмотров рекламы в день на юзера' },
+  const adsgramFieldMeta = {
+    ad_reward_power: { icon: '⚡', unit: 'POWER', desc: 'Сколько Power юзер получает за один просмотр Adsgram' },
+    ad_cooldown_seconds: { icon: '⏱️', unit: 'сек', desc: 'Минимальное время между просмотрами (общее)' },
+    ad_daily_limit: { icon: '📊', unit: 'раз', desc: 'Макс. просмотров рекламы в день (общее)' },
   };
+
+  const monetagFieldMeta = {
+    monetag_reward_power: { icon: '💎', unit: 'POWER', desc: 'Сколько Power юзер получает за один просмотр Monetag' },
+  };
+
+  const renderSettingCard = (s, meta) => (
+    <div key={s.key} className="card" style={{ padding: '14px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <span style={{ fontSize: 18 }}>{meta.icon}</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 700 }}>{s.label}</div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{meta.desc}</div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <input
+          type="number"
+          value={s.value}
+          onChange={e => updateVal(s.key, e.target.value)}
+          style={{ flex: 1, padding: '10px 12px', fontSize: 16, fontWeight: 700, textAlign: 'center' }}
+        />
+        <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, minWidth: 50 }}>
+          {meta.unit}
+        </span>
+      </div>
+    </div>
+  );
 
   return (
     <div>
@@ -1022,41 +1065,36 @@ function AdsPanel() {
         }}>{msg}</div>
       )}
 
+      {/* Adsgram Section */}
       <div style={{ fontSize: 12, color: 'var(--text-muted)', letterSpacing: 1, marginBottom: 12, fontWeight: 600 }}>
-        ⚙️ НАСТРОЙКИ ADSGRAM (WATCH & EARN)
+        🎬 НАСТРОЙКИ ADSGRAM
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+        {settings.map(s => {
+          const meta = adsgramFieldMeta[s.key] || { icon: '📝', unit: '', desc: '' };
+          return renderSettingCard(s, meta);
+        })}
+      </div>
+
+      {/* Monetag Section */}
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', letterSpacing: 1, marginBottom: 12, fontWeight: 600 }}>
+        💎 НАСТРОЙКИ MONETAG
+      </div>
+      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 10 }}>
+        Кулдаун и дневной лимит — общие для Adsgram и Monetag
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
-        {settings.map(s => {
-          const meta = fieldMeta[s.key] || { icon: '📝', unit: '', desc: '' };
-          return (
-            <div key={s.key} className="card" style={{ padding: '14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <span style={{ fontSize: 18 }}>{meta.icon}</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700 }}>{s.label}</div>
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{meta.desc}</div>
-                </div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <input
-                  type="number"
-                  value={s.value}
-                  onChange={e => updateVal(s.key, e.target.value)}
-                  style={{ flex: 1, padding: '10px 12px', fontSize: 16, fontWeight: 700, textAlign: 'center' }}
-                />
-                <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, minWidth: 50 }}>
-                  {meta.unit}
-                </span>
-              </div>
-            </div>
-          );
+        {monetagSettings.map(s => {
+          const meta = monetagFieldMeta[s.key] || { icon: '📝', unit: '', desc: '' };
+          return renderSettingCard(s, meta);
         })}
       </div>
 
       <button className="btn-gold" onClick={save} disabled={saving}
         style={{ padding: 14, fontSize: 14 }}>
-        {saving ? '⏳ Сохраняю...' : '💾 Сохранить настройки'}
+        {saving ? '⏳ Сохраняю...' : '💾 Сохранить все настройки'}
       </button>
 
       <div className="card" style={{ marginTop: 16, padding: 14 }}>
@@ -1067,7 +1105,7 @@ function AdsPanel() {
           {[
             { name: 'Adsgram Reward', id: '29776', status: 'Watch & Earn' },
             { name: 'Adsgram Task', id: 'task-29788', status: 'Sponsored Tasks' },
-            { name: 'Monetag', id: '10984603', status: 'Обменять / Вывести' },
+            { name: 'Monetag', id: '10984603', status: 'Watch & Earn' },
             { name: 'Publishers/RichAds', id: '7369', status: 'Авто (Push/Video)' },
           ].map(p => (
             <div key={p.id} style={{

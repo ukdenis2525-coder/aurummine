@@ -283,7 +283,7 @@ router.delete('/packages/:id', async (req, res) => {
 // ── Ad Settings ──
 router.get('/ad-settings', async (req, res) => {
   const { rows } = await pool.query(
-    `SELECT key, value, label FROM app_settings WHERE key LIKE 'ad_%' ORDER BY key`
+    `SELECT key, value, label FROM app_settings WHERE key LIKE 'ad_%' OR key LIKE 'monetag_%' ORDER BY key`
   );
   res.json(rows);
 });
