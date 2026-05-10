@@ -242,6 +242,78 @@ router.delete('/tasks/:id', async (req, res) => {
   res.json({ success: true });
 });
 
+// ── Task Orders Management ──
+router.get('/task-orders', async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT o.*, u.username, u.first_name, u.tg_id
+     FROM task_orders o
+     JOIN users u ON u.id = o.user_id
+     ORDER BY o.created_at DESC`
+  );
+  res.json(rows);
+});
+
+router.post('/task-orders/:id/approve', async (req, res) => {
+  const orderId = req.params.id;
+  const { rows: orders } = await pool.query(`SELECT * FROM task_orders WHERE id = $1 AND status = 'pending'`, [orderId]);
+  if (!orders.length) return res.status(404).json({ error: 'Order not found or already processed' });
+
+  const order = orders[0];
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Create task from order
+    const typeLabels = { subscribe_channel: '📢 Подписка', start_bot: '🤖 Запуск бота', link: '🔗 Переход' };
+    const taskTitle = order.title || `${typeLabels[order.type] || order.type}`;
+
+    const { rows: taskRows } = await client.query(
+      `INSERT INTO tasks (title, description, reward_power, type, link, is_active, visibility, creator_id, max_completions, completed_count, order_id)
+       VALUES ($1, $2, $3, $4, $5, TRUE, 'all', $6, $7, 0, $8) RETURNING id`,
+      [taskTitle, `${order.max_completions} users`, order.reward_power, order.type, order.link, order.user_id, order.max_completions, orderId]
+    );
+
+    // Update order status
+    await client.query(
+      `UPDATE task_orders SET status = 'active', task_id = $1 WHERE id = $2`,
+      [taskRows[0].id, orderId]
+    );
+
+    await client.query('COMMIT');
+    res.json({ success: true, task_id: taskRows[0].id });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('[TaskOrder] Approve error:', e);
+    res.status(500).json({ error: 'Approval failed' });
+  } finally {
+    client.release();
+  }
+});
+
+router.post('/task-orders/:id/reject', async (req, res) => {
+  const orderId = req.params.id;
+  const { rows: orders } = await pool.query(`SELECT * FROM task_orders WHERE id = $1 AND status = 'pending'`, [orderId]);
+  if (!orders.length) return res.status(404).json({ error: 'Order not found or already processed' });
+
+  const order = orders[0];
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Refund user
+    await client.query(`UPDATE users SET ton_balance = ton_balance + $1 WHERE id = $2`, [order.total_paid, order.user_id]);
+    await client.query(`UPDATE task_orders SET status = 'rejected' WHERE id = $1`, [orderId]);
+
+    await client.query('COMMIT');
+    res.json({ success: true });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: 'Rejection failed' });
+  } finally {
+    client.release();
+  }
+});
+
 // ── Packages ──
 router.get('/packages', async (req, res) => {
   const { rows } = await pool.query(`SELECT * FROM power_packages ORDER BY power_amount ASC`);

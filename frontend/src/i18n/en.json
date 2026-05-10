@@ -88,7 +88,19 @@
     "check": "✓ Check",
     "not_subscribed": "❌ You haven't subscribed yet! Subscribe and tap Check.",
     "subscribe_hint": "Subscribe to the channel and tap ✓ Check",
-    "task_error": "Error completing task. Try again later."
+    "task_error": "Error completing task. Try again later.",
+    "order_section": "ADVERTISING",
+    "order_title": "Order Promotion",
+    "order_desc": "Promote your channel, bot or link",
+    "order_btn": "Order",
+    "order_name_placeholder": "Name (optional)",
+    "order_count": "Number of users",
+    "order_price_per": "Price per user",
+    "order_total": "Total",
+    "order_pay": "Pay",
+    "order_success": "Order created! Awaiting moderation.",
+    "order_no_balance": "Insufficient TON balance",
+    "my_orders": "📋 My Orders"
   },
   "team": {
     "title": "👥 Team",

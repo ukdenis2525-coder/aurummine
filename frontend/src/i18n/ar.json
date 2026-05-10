@@ -88,7 +88,19 @@
     "check": "✓ تحقق",
     "not_subscribed": "❌ لم تشترك بعد! اشترك واضغط تحقق.",
     "subscribe_hint": "اشترك في القناة واضغط ✓ تحقق",
-    "task_error": "خطأ في إكمال المهمة. حاول لاحقاً."
+    "task_error": "خطأ في إكمال المهمة. حاول لاحقاً.",
+    "order_section": "الإعلانات",
+    "order_title": "طلب إعلان",
+    "order_desc": "روّج قناتك أو بوتك أو رابطك",
+    "order_btn": "طلب",
+    "order_name_placeholder": "الاسم (اختياري)",
+    "order_count": "عدد المستخدمين",
+    "order_price_per": "السعر لكل مستخدم",
+    "order_total": "المجموع",
+    "order_pay": "ادفع",
+    "order_success": "تم إنشاء الطلب! في انتظار المراجعة.",
+    "order_no_balance": "رصيد TON غير كافٍ",
+    "my_orders": "📋 طلباتي"
   },
   "team": {
     "title": "👥 الفريق",

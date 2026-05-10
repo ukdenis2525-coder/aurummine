@@ -8,6 +8,7 @@ const TABS = [
   { id: 'users', icon: '👥', label: 'Юзеры' },
   { id: 'withdrawals', icon: '💸', label: 'Выводы' },
   { id: 'tasks', icon: '📋', label: 'Задания' },
+  { id: 'orders', icon: '🛒', label: 'Заказы' },
   { id: 'packages', icon: '📦', label: 'Пакеты' },
   { id: 'ads', icon: '🎬', label: 'Реклама' },
   { id: 'referrals', icon: '🤝', label: 'Рефералы' },
@@ -53,6 +54,7 @@ export default function AdminPage() {
       {tab === 'users' && <UsersPanel />}
       {tab === 'withdrawals' && <WithdrawalsPanel />}
       {tab === 'tasks' && <TasksPanel />}
+      {tab === 'orders' && <OrdersPanel />}
       {tab === 'packages' && <PackagesPanel />}
       {tab === 'ads' && <AdsPanel />}
       {tab === 'referrals' && <ReferralsPanel />}
@@ -589,12 +591,9 @@ function TasksPanel() {
                 padding: '10px', borderRadius: 16, background: 'rgba(255,255,255,0.04)',
                 border: '1px solid var(--border)', color: '#fff', fontSize: 13
               }}>
-              <option value="other">⚡ Другое</option>
               <option value="subscribe_channel">📢 Подписка (проверка)</option>
               <option value="start_bot">🤖 Запуск бота</option>
               <option value="link">🔗 Ссылка</option>
-              <option value="invite_friends">👥 Инвайт</option>
-              <option value="daily">📅 Ежедневное</option>
             </select>
           </div>
           <input type="text" value={form.link} onChange={e => setForm({...form, link: e.target.value})}
@@ -652,6 +651,107 @@ function TasksPanel() {
               background: 'var(--red-bg)', border: 'none', borderRadius: 8,
               padding: '4px 8px', color: 'var(--red)', fontSize: 11, cursor: 'pointer'
             }}>🗑</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════ TASK ORDERS ═══════════════════
+function OrdersPanel() {
+  const [orders, setOrders] = useState([]);
+  const [processing, setProcessing] = useState(null);
+
+  const load = async () => {
+    const { data } = await api.get('/admin/task-orders');
+    setOrders(data);
+  };
+  useEffect(() => { load(); }, []);
+
+  const approve = async (id) => {
+    setProcessing(id);
+    try { await api.post(`/admin/task-orders/${id}/approve`); load(); } catch (e) { alert('Ошибка'); }
+    setProcessing(null);
+  };
+
+  const reject = async (id) => {
+    setProcessing(id);
+    try { await api.post(`/admin/task-orders/${id}/reject`); load(); } catch (e) { alert('Ошибка'); }
+    setProcessing(null);
+  };
+
+  const typeLabels = { subscribe_channel: '📢 Подписка', start_bot: '🤖 Бот', link: '🔗 Ссылка' };
+  const statusColors = { pending: 'var(--orange)', active: 'var(--green)', completed: 'var(--gold)', rejected: 'var(--red)' };
+  const statusLabels = { pending: '⏳ Ожидает', active: '✅ Активен', completed: '🏁 Завершён', rejected: '❌ Отклонён' };
+
+  return (
+    <div>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', letterSpacing: 1, marginBottom: 12, fontWeight: 600 }}>
+        🛒 ЗАКАЗЫ ПОЛЬЗОВАТЕЛЕЙ ({orders.filter(o => o.status === 'pending').length} ожидают)
+      </div>
+
+      {orders.length === 0 && (
+        <div className="card" style={{ textAlign: 'center', padding: 30 }}>
+          <div style={{ fontSize: 30, marginBottom: 8 }}>📭</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Заказов пока нет</div>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {orders.map((o, i) => (
+          <div key={o.id} className="card" style={{
+            padding: '14px', animation: `fadeIn 0.3s ease ${i * 0.04}s both`,
+            border: o.status === 'pending' ? '1px solid rgba(251,191,36,0.3)' : undefined
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <span style={{ fontSize: 20 }}>{typeLabels[o.type]?.slice(0, 2) || '📋'}</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>
+                  {typeLabels[o.type] || o.type}
+                  {o.title ? ` — ${o.title}` : ''}
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                  {o.username || o.first_name || `ID:${o.user_id}`} (TG:{o.tg_id})
+                </div>
+              </div>
+              <span style={{
+                fontSize: 10, padding: '3px 8px', borderRadius: 6, fontWeight: 700,
+                background: `${statusColors[o.status]}22`, color: statusColors[o.status],
+              }}>{statusLabels[o.status] || o.status}</span>
+            </div>
+
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, wordBreak: 'break-all' }}>
+              🔗 {o.link}
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginBottom: 8 }}>
+              <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: '6px 8px', textAlign: 'center' }}>
+                <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--gold)' }}>{fmt(o.total_paid, 4)}</div>
+                <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>TON оплата</div>
+              </div>
+              <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: '6px 8px', textAlign: 'center' }}>
+                <div style={{ fontSize: 14, fontWeight: 800 }}>{o.max_completions}</div>
+                <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>Юзеров</div>
+              </div>
+              <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: '6px 8px', textAlign: 'center' }}>
+                <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--green)' }}>{o.completed_count || 0}</div>
+                <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>Выполн.</div>
+              </div>
+            </div>
+
+            {o.status === 'pending' && (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => approve(o.id)} disabled={processing === o.id} style={{
+                  flex: 1, padding: 10, borderRadius: 10, border: 'none', fontWeight: 700, fontSize: 12, cursor: 'pointer',
+                  background: 'rgba(52,211,153,0.15)', color: 'var(--green)',
+                }}>✅ Одобрить</button>
+                <button onClick={() => reject(o.id)} disabled={processing === o.id} style={{
+                  flex: 1, padding: 10, borderRadius: 10, border: 'none', fontWeight: 700, fontSize: 12, cursor: 'pointer',
+                  background: 'rgba(248,113,113,0.15)', color: 'var(--red)',
+                }}>❌ Отклонить (возврат)</button>
+              </div>
+            )}
           </div>
         ))}
       </div>

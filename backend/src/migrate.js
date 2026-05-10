@@ -83,6 +83,22 @@ const migrate = async () => {
         UNIQUE(user_id, task_id)
       );
 
+      CREATE TABLE IF NOT EXISTS task_orders (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id),
+        type VARCHAR(50) NOT NULL,
+        title VARCHAR(255),
+        link VARCHAR(500) NOT NULL,
+        price_per_user NUMERIC(10,4) NOT NULL,
+        reward_power NUMERIC(20,2) NOT NULL,
+        max_completions INTEGER NOT NULL,
+        completed_count INTEGER DEFAULT 0,
+        total_paid NUMERIC(10,4) NOT NULL,
+        status VARCHAR(20) DEFAULT 'pending',
+        task_id INTEGER REFERENCES tasks(id),
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
       CREATE TABLE IF NOT EXISTS mining_log (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id),
@@ -117,6 +133,7 @@ const migrate = async () => {
       CREATE INDEX IF NOT EXISTS idx_users_power ON users(power DESC) WHERE power > 0;
       CREATE INDEX IF NOT EXISTS idx_withdrawals_status ON withdrawals(status);
       CREATE INDEX IF NOT EXISTS idx_mining_log_user ON mining_log(user_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_task_orders_status ON task_orders(status);
     `);
 
     // Add is_blocked column if not exists (for existing DBs)
@@ -127,6 +144,14 @@ const migrate = async () => {
     // Add visibility column to tasks (admin = only admins see, all = everyone)
     await client.query(`
       ALTER TABLE tasks ADD COLUMN IF NOT EXISTS visibility VARCHAR(20) DEFAULT 'all';
+    `);
+
+    // Add advertiser fields to tasks
+    await client.query(`
+      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS creator_id INTEGER REFERENCES users(id);
+      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS max_completions INTEGER;
+      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS completed_count INTEGER DEFAULT 0;
+      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS order_id INTEGER;
     `);
 
     // Seed packages
@@ -148,7 +173,13 @@ const migrate = async () => {
         ('ad_reward_power',   '500',  'Power за просмотр рекламы'),
         ('ad_cooldown_seconds', '60', 'Кулдаун между рекламами (сек)'),
         ('ad_daily_limit',    '50',   'Лимит просмотров в день'),
-        ('monetag_reward_power', '5', 'Power за просмотр Monetag')
+        ('monetag_reward_power', '5', 'Power за просмотр Monetag'),
+        ('order_price_subscribe', '0.01', 'Цена за 1 подписку (TON)'),
+        ('order_price_start_bot', '0.008', 'Цена за 1 запуск бота (TON)'),
+        ('order_price_link',   '0.005', 'Цена за 1 переход (TON)'),
+        ('order_reward_subscribe', '500', 'Награда юзеру за подписку (POWER)'),
+        ('order_reward_start_bot', '300', 'Награда юзеру за запуск бота (POWER)'),
+        ('order_reward_link',   '200', 'Награда юзеру за переход (POWER)')
       ON CONFLICT (key) DO NOTHING;
     `);
 

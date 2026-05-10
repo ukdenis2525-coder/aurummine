@@ -83,6 +83,16 @@ router.post('/:id/complete', authMiddleware, async (req, res) => {
     }
   }
 
+  // Prevent users from completing their own ordered tasks
+  if (task.creator_id && task.creator_id === user.id) {
+    return res.status(400).json({ error: 'Cannot complete your own task' });
+  }
+
+  // Check if task has reached max completions
+  if (task.max_completions && task.completed_count >= task.max_completions) {
+    return res.status(400).json({ error: 'Task limit reached' });
+  }
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -96,6 +106,29 @@ router.post('/:id/complete', authMiddleware, async (req, res) => {
       `UPDATE users SET power = power + $1 WHERE id = $2`,
       [task.reward_power, user.id]
     );
+
+    // Track completed count
+    await client.query(
+      `UPDATE tasks SET completed_count = COALESCE(completed_count, 0) + 1 WHERE id = $1`,
+      [taskId]
+    );
+
+    // Auto-deactivate if max reached
+    if (task.max_completions && (task.completed_count || 0) + 1 >= task.max_completions) {
+      await client.query(`UPDATE tasks SET is_active = FALSE WHERE id = $1`, [taskId]);
+      // Also update order status
+      if (task.order_id) {
+        await client.query(
+          `UPDATE task_orders SET status = 'completed', completed_count = max_completions WHERE id = $1`,
+          [task.order_id]
+        );
+      }
+    } else if (task.order_id) {
+      await client.query(
+        `UPDATE task_orders SET completed_count = completed_count + 1 WHERE id = $1`,
+        [task.order_id]
+      );
+    }
 
     await client.query('COMMIT');
     res.json({ success: true, power_earned: task.reward_power });
@@ -313,6 +346,111 @@ router.get('/monetag-status', authMiddleware, async (req, res) => {
   const dailyCount = (daily && daily.date === today) ? daily.count : 0;
 
   res.json({ cooldown, daily_count: dailyCount, daily_limit: dailyLimit });
+});
+
+// ═══════════════ TASK ORDERS (Advertising) ═══════════════
+
+// Get pricing config for ordering tasks
+router.get('/order-config', authMiddleware, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT key, value FROM app_settings WHERE key LIKE 'order_%'`
+  );
+  const config = {};
+  for (const r of rows) config[r.key] = parseFloat(r.value);
+  res.json({
+    types: [
+      {
+        type: 'subscribe_channel',
+        label: '📢 Подписка на канал',
+        price_per_user: config.order_price_subscribe || 0.01,
+        reward_power: config.order_reward_subscribe || 500,
+        placeholder: 'https://t.me/yourchannel',
+      },
+      {
+        type: 'start_bot',
+        label: '🤖 Запуск бота',
+        price_per_user: config.order_price_start_bot || 0.008,
+        reward_power: config.order_reward_start_bot || 300,
+        placeholder: 'https://t.me/yourbot?start=ref',
+      },
+      {
+        type: 'link',
+        label: '🔗 Переход по ссылке',
+        price_per_user: config.order_price_link || 0.005,
+        reward_power: config.order_reward_link || 200,
+        placeholder: 'https://example.com',
+      },
+    ]
+  });
+});
+
+// Create a task order (user pays from TON balance)
+router.post('/order', authMiddleware, async (req, res) => {
+  const { type, link, count, title } = req.body;
+  if (!type || !link || !count) return res.status(400).json({ error: 'type, link, count required' });
+  if (!['subscribe_channel', 'start_bot', 'link'].includes(type)) return res.status(400).json({ error: 'Invalid type' });
+  if (count < 10 || count > 10000) return res.status(400).json({ error: 'Count must be 10-10000' });
+
+  // Get pricing
+  const { rows: settingsRows } = await pool.query(
+    `SELECT key, value FROM app_settings WHERE key LIKE 'order_%'`
+  );
+  const config = {};
+  for (const r of settingsRows) config[r.key] = parseFloat(r.value);
+
+  const priceMap = {
+    subscribe_channel: config.order_price_subscribe || 0.01,
+    start_bot: config.order_price_start_bot || 0.008,
+    link: config.order_price_link || 0.005,
+  };
+  const rewardMap = {
+    subscribe_channel: config.order_reward_subscribe || 500,
+    start_bot: config.order_reward_start_bot || 300,
+    link: config.order_reward_link || 200,
+  };
+
+  const pricePerUser = priceMap[type];
+  const rewardPower = rewardMap[type];
+  const totalPrice = parseFloat((pricePerUser * count).toFixed(4));
+
+  // Check balance
+  const { rows: userRows } = await pool.query(`SELECT ton_balance FROM users WHERE id = $1`, [req.user.id]);
+  const balance = parseFloat(userRows[0].ton_balance);
+  if (balance < totalPrice) return res.status(400).json({ error: 'insufficient_balance', needed: totalPrice, have: balance });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Deduct balance
+    await client.query(`UPDATE users SET ton_balance = ton_balance - $1 WHERE id = $2`, [totalPrice, req.user.id]);
+
+    // Create order (pending admin approval)
+    const { rows: orderRows } = await client.query(
+      `INSERT INTO task_orders (user_id, type, title, link, price_per_user, reward_power, max_completions, total_paid, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending') RETURNING *`,
+      [req.user.id, type, title || '', link, pricePerUser, rewardPower, count, totalPrice]
+    );
+
+    await client.query('COMMIT');
+    console.log(`[TaskOrder] User ${req.user.id} ordered ${count}x ${type} for ${totalPrice} TON`);
+    res.json({ success: true, order: orderRows[0] });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('[TaskOrder] Error:', e);
+    res.status(500).json({ error: 'Order failed' });
+  } finally {
+    client.release();
+  }
+});
+
+// Get user's own orders
+router.get('/my-orders', authMiddleware, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT * FROM task_orders WHERE user_id = $1 ORDER BY created_at DESC`,
+    [req.user.id]
+  );
+  res.json(rows);
 });
 
 export default router;

@@ -36,11 +36,23 @@ export default function TasksPage() {
   const [monetagAvailable, setMonetagAvailable] = useState(false);
   const monetagHandlerRef = useRef(null);
 
-  const { refreshUser } = useStore();
+  const { refreshUser, user } = useStore();
   const { t } = useTranslation();
   const adControllerRef = useRef(null);
 
+  // Order state
+  const [showOrder, setShowOrder] = useState(false);
+  const [orderConfig, setOrderConfig] = useState(null);
+  const [orderForm, setOrderForm] = useState({ type: 'subscribe_channel', link: '', count: 100, title: '' });
+  const [ordering, setOrdering] = useState(false);
+  const [orderMsg, setOrderMsg] = useState(null);
+  const [myOrders, setMyOrders] = useState([]);
+
   useEffect(() => { api.get('/tasks').then(r => setTasks(r.data)); }, []);
+  useEffect(() => {
+    api.get('/tasks/order-config').then(r => setOrderConfig(r.data)).catch(() => {});
+    api.get('/tasks/my-orders').then(r => setMyOrders(r.data)).catch(() => {});
+  }, []);
 
   // Initialize Adsgram
   useEffect(() => {
@@ -395,7 +407,7 @@ export default function TasksPage() {
 
       {/* Completed tasks */}
       {done.length > 0 && (
-        <div>
+        <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', letterSpacing: 1, marginBottom: 10, fontWeight: 600 }}>
             {t('tasks.completed', { count: done.length })}
           </div>
@@ -416,6 +428,158 @@ export default function TasksPage() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* ═══ ORDER ADVERTISING ═══ */}
+      {orderConfig && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', letterSpacing: 1, marginBottom: 10, fontWeight: 600 }}>
+            📣 {t('tasks.order_section')}
+          </div>
+
+          <div className="card" style={{
+            padding: '16px 18px',
+            border: '1px solid rgba(59,130,246,0.3)',
+            background: 'linear-gradient(135deg, rgba(59,130,246,0.06), rgba(37,99,235,0.03))',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700 }}>{t('tasks.order_title')}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('tasks.order_desc')}</div>
+              </div>
+              <button onClick={() => setShowOrder(!showOrder)} style={{
+                padding: '8px 16px', borderRadius: 10, border: 'none', fontWeight: 700, fontSize: 12, cursor: 'pointer',
+                background: showOrder ? 'rgba(248,113,113,0.15)' : 'linear-gradient(135deg, #2563eb, #3b82f6)',
+                color: showOrder ? 'var(--red)' : '#fff',
+              }}>
+                {showOrder ? '✕' : `+ ${t('tasks.order_btn')}`}
+              </button>
+            </div>
+
+            {showOrder && (() => {
+              const selectedType = orderConfig.types.find(t => t.type === orderForm.type) || orderConfig.types[0];
+              const totalPrice = (selectedType.price_per_user * orderForm.count).toFixed(4);
+
+              return (
+                <div style={{ animation: 'fadeIn 0.3s ease' }}>
+                  {/* Type selector */}
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+                    {orderConfig.types.map(tp => (
+                      <button key={tp.type} onClick={() => setOrderForm({ ...orderForm, type: tp.type })} style={{
+                        flex: 1, padding: '10px 6px', borderRadius: 10, border: 'none', fontWeight: 700, fontSize: 11, cursor: 'pointer',
+                        background: orderForm.type === tp.type ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.04)',
+                        color: orderForm.type === tp.type ? '#3b82f6' : 'var(--text-muted)',
+                      }}>{tp.label}</button>
+                    ))}
+                  </div>
+
+                  {/* Title */}
+                  <input type="text" value={orderForm.title} onChange={e => setOrderForm({ ...orderForm, title: e.target.value })}
+                    placeholder={t('tasks.order_name_placeholder')}
+                    style={{ marginBottom: 8, fontSize: 13, padding: '10px 14px' }} />
+
+                  {/* Link */}
+                  <input type="text" value={orderForm.link} onChange={e => setOrderForm({ ...orderForm, link: e.target.value })}
+                    placeholder={selectedType.placeholder}
+                    style={{ marginBottom: 10, fontSize: 13, padding: '10px 14px' }} />
+
+                  {/* Count */}
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
+                      <span style={{ color: 'var(--text-muted)' }}>{t('tasks.order_count')}</span>
+                      <span style={{ fontWeight: 700 }}>{orderForm.count}</span>
+                    </div>
+                    <input type="range" min="10" max="1000" step="10" value={orderForm.count}
+                      onChange={e => setOrderForm({ ...orderForm, count: parseInt(e.target.value) })}
+                      style={{ width: '100%', accentColor: '#3b82f6' }} />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-muted)' }}>
+                      <span>10</span><span>1000</span>
+                    </div>
+                  </div>
+
+                  {/* Price summary */}
+                  <div style={{
+                    display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12,
+                    padding: 12, background: 'rgba(255,255,255,0.03)', borderRadius: 12
+                  }}>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 2 }}>{t('tasks.order_price_per')}</div>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--gold)' }}>{selectedType.price_per_user} TON</div>
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 2 }}>{t('tasks.order_total')}</div>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--orange)' }}>{totalPrice} TON</div>
+                    </div>
+                  </div>
+
+                  {orderMsg && (
+                    <div style={{
+                      marginBottom: 10, padding: '8px 12px', borderRadius: 10, fontSize: 12, fontWeight: 600, textAlign: 'center',
+                      background: orderMsg.startsWith('✅') ? 'rgba(52,211,153,0.1)' : 'rgba(248,113,113,0.1)',
+                      color: orderMsg.startsWith('✅') ? 'var(--green)' : 'var(--red)',
+                      animation: 'fadeIn 0.2s ease'
+                    }}>{orderMsg}</div>
+                  )}
+
+                  <button onClick={async () => {
+                    if (!orderForm.link || ordering) return;
+                    setOrdering(true);
+                    setOrderMsg(null);
+                    try {
+                      await api.post('/tasks/order', orderForm);
+                      setOrderMsg(`✅ ${t('tasks.order_success')}`);
+                      setOrderForm({ ...orderForm, link: '', title: '' });
+                      await refreshUser();
+                      api.get('/tasks/my-orders').then(r => setMyOrders(r.data));
+                    } catch (e) {
+                      const err = e.response?.data?.error;
+                      if (err === 'insufficient_balance') {
+                        setOrderMsg(`❌ ${t('tasks.order_no_balance')}`);
+                      } else {
+                        setOrderMsg(`❌ ${err || t('tasks.task_error')}`);
+                      }
+                    } finally { setOrdering(false); setTimeout(() => setOrderMsg(null), 4000); }
+                  }} disabled={ordering || !orderForm.link} style={{
+                    width: '100%', padding: 12, borderRadius: 12, border: 'none', fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                    background: !orderForm.link ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg, #2563eb, #3b82f6)',
+                    color: !orderForm.link ? 'var(--text-muted)' : '#fff',
+                  }}>
+                    {ordering ? '⏳...' : `💳 ${t('tasks.order_pay')} ${totalPrice} TON`}
+                  </button>
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* My orders */}
+          {myOrders.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8, fontWeight: 600 }}>
+                {t('tasks.my_orders')}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {myOrders.map(o => {
+                  const statusMap = { pending: '⏳', active: '✅', completed: '🏁', rejected: '❌' };
+                  const colorMap = { pending: 'var(--orange)', active: 'var(--green)', completed: 'var(--gold)', rejected: 'var(--red)' };
+                  return (
+                    <div key={o.id} className="card" style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{ fontSize: 18 }}>{statusMap[o.status] || '📋'}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {o.title || o.link}
+                        </div>
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                          {o.completed_count || 0}/{o.max_completions} • {parseFloat(o.total_paid).toFixed(4)} TON
+                        </div>
+                      </div>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: colorMap[o.status] }}>{o.status}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
