@@ -9,12 +9,18 @@ const adCooldowns = new Map();
 const adDailyCounts = new Map(); // userId -> { date, count }
 
 router.get('/', authMiddleware, async (req, res) => {
+  // Check if user is admin
+  const adminIds = (process.env.ADMIN_TG_IDS || process.env.ADMIN_TG_ID || '').split(',').map(s => s.trim());
+  const isAdmin = adminIds.includes(String(req.user.tg_id));
+
+  const visibilityFilter = isAdmin ? '' : `AND (t.visibility = 'all' OR t.visibility IS NULL)`;
+
   const { rows } = await pool.query(
     `SELECT t.*, 
       CASE WHEN ut.id IS NOT NULL THEN TRUE ELSE FALSE END as completed
      FROM tasks t
      LEFT JOIN user_tasks ut ON ut.task_id = t.id AND ut.user_id = $1
-     WHERE t.is_active = TRUE
+     WHERE t.is_active = TRUE ${visibilityFilter}
      ORDER BY t.id ASC`,
     [req.user.id]
   );

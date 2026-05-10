@@ -544,7 +544,7 @@ function WithdrawalsPanel() {
 function TasksPanel() {
   const [tasks, setTasks] = useState([]);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ title: '', description: '', reward_power: '', type: 'other', link: '' });
+  const [form, setForm] = useState({ title: '', description: '', reward_power: '', type: 'other', link: '', visibility: 'admin' });
 
   const load = async () => {
     const { data } = await api.get('/admin/tasks');
@@ -555,13 +555,19 @@ function TasksPanel() {
   const create = async () => {
     if (!form.title || !form.reward_power) return;
     await api.post('/admin/tasks', { ...form, reward_power: parseFloat(form.reward_power) });
-    setForm({ title: '', description: '', reward_power: '', type: 'other', link: '' });
+    setForm({ title: '', description: '', reward_power: '', type: 'other', link: '', visibility: 'admin' });
     setShowForm(false);
     load();
   };
 
   const toggle = async (id) => { await api.post(`/admin/tasks/${id}/toggle`); load(); };
   const del = async (id) => { await api.delete(`/admin/tasks/${id}`); load(); };
+
+  const toggleVisibility = async (id, current) => {
+    const next = current === 'all' ? 'admin' : 'all';
+    await api.post(`/admin/tasks/${id}/visibility`, { visibility: next });
+    load();
+  };
 
   return (
     <div>
@@ -590,7 +596,22 @@ function TasksPanel() {
             </select>
           </div>
           <input type="text" value={form.link} onChange={e => setForm({...form, link: e.target.value})}
-            placeholder="Ссылка (опц.)" style={{ marginBottom: 10, fontSize: 13 }} />
+            placeholder="Ссылка (опц.)" style={{ marginBottom: 8, fontSize: 13 }} />
+
+          {/* Visibility selector */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+            <button onClick={() => setForm({...form, visibility: 'admin'})} style={{
+              flex: 1, padding: 10, borderRadius: 10, border: 'none', fontWeight: 700, fontSize: 12, cursor: 'pointer',
+              background: form.visibility === 'admin' ? 'rgba(248,113,113,0.15)' : 'rgba(255,255,255,0.04)',
+              color: form.visibility === 'admin' ? 'var(--red)' : 'var(--text-muted)',
+            }}>🔒 Только я</button>
+            <button onClick={() => setForm({...form, visibility: 'all'})} style={{
+              flex: 1, padding: 10, borderRadius: 10, border: 'none', fontWeight: 700, fontSize: 12, cursor: 'pointer',
+              background: form.visibility === 'all' ? 'rgba(52,211,153,0.15)' : 'rgba(255,255,255,0.04)',
+              color: form.visibility === 'all' ? 'var(--green)' : 'var(--text-muted)',
+            }}>🌍 Все юзеры</button>
+          </div>
+
           <button className="btn-gold" onClick={create} style={{ padding: 10, fontSize: 13 }}>💾 Создать</button>
         </div>
       )}
@@ -599,12 +620,26 @@ function TasksPanel() {
         {tasks.map(t => (
           <div key={t.id} className="card" style={{
             padding: '12px 14px', opacity: t.is_active ? 1 : 0.5,
-            display: 'flex', alignItems: 'center', gap: 12
+            display: 'flex', alignItems: 'center', gap: 10,
+            border: t.visibility === 'admin' ? '1px solid rgba(248,113,113,0.2)' : undefined
           }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>{t.title}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>{t.title}</span>
+                <span style={{
+                  fontSize: 9, padding: '2px 6px', borderRadius: 6, fontWeight: 700,
+                  background: t.visibility === 'admin' ? 'rgba(248,113,113,0.15)' : 'rgba(52,211,153,0.15)',
+                  color: t.visibility === 'admin' ? 'var(--red)' : 'var(--green)',
+                }}>{t.visibility === 'admin' ? '🔒 СКРЫТ' : '🌍 ПУБЛ'}</span>
+              </div>
               <div style={{ fontSize: 11, color: 'var(--gold)' }}>+{fmtK(t.reward_power)} POWER</div>
             </div>
+            <button onClick={() => toggleVisibility(t.id, t.visibility)} title="Видимость" style={{
+              background: t.visibility === 'admin' ? 'rgba(248,113,113,0.1)' : 'rgba(52,211,153,0.1)',
+              border: 'none', borderRadius: 8, padding: '4px 8px',
+              color: t.visibility === 'admin' ? 'var(--red)' : 'var(--green)',
+              fontSize: 11, fontWeight: 600, cursor: 'pointer'
+            }}>{t.visibility === 'admin' ? '🔒' : '🌍'}</button>
             <button onClick={() => toggle(t.id)} style={{
               background: t.is_active ? 'var(--green-bg)' : 'var(--red-bg)',
               border: 'none', borderRadius: 8, padding: '4px 10px',

@@ -216,17 +216,24 @@ router.get('/tasks', async (req, res) => {
 });
 
 router.post('/tasks', async (req, res) => {
-  const { title, description, reward_power, type, link } = req.body;
+  const { title, description, reward_power, type, link, visibility } = req.body;
   if (!title || !reward_power) return res.status(400).json({ error: 'title and reward_power required' });
   const { rows } = await pool.query(
-    `INSERT INTO tasks (title, description, reward_power, type, link) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-    [title, description || '', reward_power, type || 'other', link || '']
+    `INSERT INTO tasks (title, description, reward_power, type, link, visibility) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [title, description || '', reward_power, type || 'other', link || '', visibility || 'admin']
   );
   res.json(rows[0]);
 });
 
 router.post('/tasks/:id/toggle', async (req, res) => {
   await pool.query(`UPDATE tasks SET is_active = NOT is_active WHERE id = $1`, [req.params.id]);
+  res.json({ success: true });
+});
+
+router.post('/tasks/:id/visibility', async (req, res) => {
+  const { visibility } = req.body; // 'all' or 'admin'
+  if (!['all', 'admin'].includes(visibility)) return res.status(400).json({ error: 'Invalid visibility' });
+  await pool.query(`UPDATE tasks SET visibility = $1 WHERE id = $2`, [visibility, req.params.id]);
   res.json({ success: true });
 });
 

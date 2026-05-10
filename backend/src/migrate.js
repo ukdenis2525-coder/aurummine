@@ -124,6 +124,11 @@ const migrate = async () => {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS is_blocked BOOLEAN DEFAULT FALSE;
     `);
 
+    // Add visibility column to tasks (admin = only admins see, all = everyone)
+    await client.query(`
+      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS visibility VARCHAR(20) DEFAULT 'all';
+    `);
+
     // Seed packages
     await client.query(`
       INSERT INTO power_packages (name, power_amount, price_ton) VALUES
@@ -142,7 +147,8 @@ const migrate = async () => {
         ('ref_commission_pct', '15',  'Комиссия с покупок (%)'),
         ('ad_reward_power',   '500',  'Power за просмотр рекламы'),
         ('ad_cooldown_seconds', '60', 'Кулдаун между рекламами (сек)'),
-        ('ad_daily_limit',    '50',   'Лимит просмотров в день')
+        ('ad_daily_limit',    '50',   'Лимит просмотров в день'),
+        ('monetag_reward_power', '5', 'Power за просмотр Monetag')
       ON CONFLICT (key) DO NOTHING;
     `);
 
