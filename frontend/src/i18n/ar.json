@@ -78,7 +78,12 @@
     "watch_btn": "شاهد",
     "sponsored": "مهام برعاية",
     "ad_reward_msg": "✅ +{{reward}} POWER!",
-    "daily_limit_msg": "تم الوصول للحد اليومي"
+    "daily_limit_msg": "تم الوصول للحد اليومي",
+    "watch_full_ad": "⚡ شاهد الإعلان كاملاً للحصول على المكافأة",
+    "monetag_section": "إعلانات MONETAG",
+    "monetag_title": "مشاهدة Monetag",
+    "monetag_desc": "شاهد إعلان Monetag واحصل على POWER",
+    "monetag_reward": "+POWER مكافأة"
   },
   "team": {
     "title": "👥 الفريق",

@@ -78,7 +78,12 @@
     "watch_btn": "Watch",
     "sponsored": "SPONSORED TASKS",
     "ad_reward_msg": "✅ +{{reward}} POWER!",
-    "daily_limit_msg": "Daily limit reached"
+    "daily_limit_msg": "Daily limit reached",
+    "watch_full_ad": "⚡ Watch the full ad to get a reward",
+    "monetag_section": "MONETAG ADS",
+    "monetag_title": "Watch Monetag",
+    "monetag_desc": "Watch a Monetag ad and earn POWER",
+    "monetag_reward": "+POWER reward"
   },
   "team": {
     "title": "👥 Team",

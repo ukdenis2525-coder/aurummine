@@ -78,7 +78,12 @@
     "watch_btn": "Смотреть",
     "sponsored": "СПОНСОРСКИЕ ЗАДАНИЯ",
     "ad_reward_msg": "✅ +{{reward}} POWER!",
-    "daily_limit_msg": "Дневной лимит достигнут"
+    "daily_limit_msg": "Дневной лимит достигнут",
+    "watch_full_ad": "⚡ Досмотри рекламу до конца для награды",
+    "monetag_section": "MONETAG РЕКЛАМА",
+    "monetag_title": "Смотреть Monetag",
+    "monetag_desc": "Посмотри рекламу Monetag и получи POWER",
+    "monetag_reward": "+POWER награда"
   },
   "team": {
     "title": "👥 Команда",
