@@ -66,7 +66,8 @@ router.get('/users', async (req, res) => {
     `SELECT id, tg_id, username, first_name, power, hashes, ton_balance, is_premium, is_blocked, created_at
      FROM users ${where} ORDER BY id DESC LIMIT $1 OFFSET $2`, params
   );
-  const { rows: count } = await pool.query(`SELECT COUNT(*) FROM users ${where}`, search ? [`%${search}%`] : []);
+  const countWhere = search ? `WHERE username ILIKE $1 OR first_name ILIKE $1 OR CAST(tg_id AS TEXT) LIKE $1` : '';
+  const { rows: count } = await pool.query(`SELECT COUNT(*) FROM users ${countWhere}`, search ? [`%${search}%`] : []);
   res.json({ users: rows, total: parseInt(count[0].count), page });
 });
 
