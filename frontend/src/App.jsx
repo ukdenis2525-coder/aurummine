@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { useStore } from './store/index.js';
+import { useTranslation } from 'react-i18next';
 import BottomNav from './components/layout/BottomNav.jsx';
 import PowerPage from './components/pages/PowerPage.jsx';
 import ShopPage from './components/pages/ShopPage.jsx';
@@ -11,8 +12,11 @@ import AdminPage from './components/pages/AdminPage.jsx';
 import ErrorBoundary from './components/ui/ErrorBoundary.jsx';
 import Loader from './components/ui/Loader.jsx';
 
+const ADMIN_ID = import.meta.env.VITE_ADMIN_ID;
+
 export default function App() {
   const { init, loading, blocked, activeTab } = useStore();
+  const { t } = useTranslation();
 
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
@@ -46,6 +50,49 @@ export default function App() {
         </div>
         <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.15)', textAlign: 'center' }}>
           Please try again later
+        </div>
+      </div>
+    );
+  }
+
+  // === PC BLOCK — only mobile Telegram allowed (admin bypasses) ===
+  const tg = window.Telegram?.WebApp;
+  const tgPlatform = tg?.platform || '';
+  const isMobileTg = ['android', 'ios', 'android_x'].includes(tgPlatform);
+  const isMobileUA = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+  const hasTgData = !!tg?.initData;
+  const tgUserId = tg?.initDataUnsafe?.user?.id;
+  const isAdminUser = ADMIN_ID && String(tgUserId) === String(ADMIN_ID);
+
+  // Block if: not mobile Telegram AND not admin
+  const isPcBlocked = !isAdminUser && !(isMobileTg || (isMobileUA && hasTgData));
+
+  if (isPcBlocked) {
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', background: '#08080C',
+        padding: 32, textAlign: 'center', gap: 16
+      }}>
+        <div style={{
+          fontSize: 56, filter: 'drop-shadow(0 0 20px rgba(212,175,55,0.4))',
+          animation: 'pulse 3s ease-in-out infinite'
+        }}>📱</div>
+        <div style={{
+          fontSize: 16, fontWeight: 800, color: 'var(--gold)',
+          letterSpacing: 1.5
+        }}>
+          {t('block.mobileOnly', 'MOBILE ONLY')}
+        </div>
+        <div style={{
+          fontSize: 13, color: 'rgba(255,255,255,0.4)', lineHeight: 1.7, maxWidth: 300
+        }}>
+          {t('block.mobileOnlyDesc', 'AurumMine is only available via Telegram mobile app.')}
+        </div>
+        <div style={{
+          fontSize: 11, color: 'rgba(255,255,255,0.2)', marginTop: 8
+        }}>
+          {t('block.openBot', 'Open @AurumMineBot on your phone')}
         </div>
       </div>
     );
