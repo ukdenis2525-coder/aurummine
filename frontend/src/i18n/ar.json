@@ -107,8 +107,8 @@
     "memo_important": "مطلوب",
     "memo_warning": "أدخل MEMO في التحويل، وإلا لن يتم العثور على الدفع!",
     "close_payment": "إغلاق",
-    "bot_admin_hint": "أضف البوت @aurummine_bot كمشرف في القناة للتحقق. استخدم رابط عام (t.me/channel).",
-    "bot_not_admin_error": "البوت ليس مشرفاً. أضف @aurummine_bot كمشرف!"
+    "bot_admin_hint": "أضف البوت @AurumMiBot كمشرف في القناة للتحقق. استخدم رابط عام (t.me/channel).",
+    "bot_not_admin_error": "البوت ليس مشرفاً. أضف @AurumMiBot كمشرف!"
   },
   "team": {
     "title": "👥 الفريق",
