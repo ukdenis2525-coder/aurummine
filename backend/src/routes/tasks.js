@@ -416,7 +416,7 @@ router.post('/order', authMiddleware, async (req, res) => {
   const { type, link, count, title } = req.body;
   if (!type || !link || !count) return res.status(400).json({ error: 'type, link, count required' });
   if (!['subscribe_channel', 'start_bot', 'link'].includes(type)) return res.status(400).json({ error: 'Invalid type' });
-  if (count < 10 || count > 10000) return res.status(400).json({ error: 'Count must be 10-10000' });
+  if (count < 50 || count > 10000) return res.status(400).json({ error: 'Count must be 50-10000' });
 
   // For subscribe_channel — verify bot is admin in the channel
   if (type === 'subscribe_channel') {

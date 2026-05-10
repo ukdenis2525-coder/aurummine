@@ -501,11 +501,11 @@ export default function TasksPage() {
                       <span style={{ color: 'var(--text-muted)' }}>{t('tasks.order_count')}</span>
                       <span style={{ fontWeight: 700 }}>{orderForm.count}</span>
                     </div>
-                    <input type="range" min="10" max="1000" step="10" value={orderForm.count}
+                    <input type="range" min="50" max="1000" step="10" value={orderForm.count}
                       onChange={e => setOrderForm({ ...orderForm, count: parseInt(e.target.value) })}
                       style={{ width: '100%', accentColor: '#3b82f6' }} />
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-muted)' }}>
-                      <span>10</span><span>1000</span>
+                      <span>50</span><span>1000</span>
                     </div>
                   </div>
 
