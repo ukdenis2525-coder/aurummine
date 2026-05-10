@@ -32,18 +32,47 @@ router.get('/', authMiddleware, async (req, res) => {
 async function checkTgSubscription(chatId, userId) {
   try {
     const token = process.env.BOT_TOKEN;
-    if (!token) return false;
+    if (!token) { console.error('[SubCheck] BOT_TOKEN not set!'); return false; }
+    console.log(`[SubCheck] Checking user ${userId} in chat "${chatId}"`);
     const { data } = await axios.get(
       `https://api.telegram.org/bot${token}/getChatMember`,
       { params: { chat_id: chatId, user_id: userId } }
     );
     const status = data?.result?.status;
-    // member, administrator, creator = subscribed; left, kicked = not
+    console.log(`[SubCheck] Result: status="${status}" for user ${userId} in "${chatId}"`);
+    // member, administrator, creator = subscribed; left, kicked, restricted = not
     return ['member', 'administrator', 'creator'].includes(status);
   } catch (e) {
-    console.error('[Tasks] Subscription check failed:', e.response?.data?.description || e.message);
+    const desc = e.response?.data?.description || e.message;
+    console.error(`[SubCheck] FAILED: chat="${chatId}" user=${userId} => ${desc}`);
     return false;
   }
+}
+
+// Extract chat identifier from various link formats
+function extractChatId(link) {
+  let chatId = link.trim();
+  
+  // Remove query parameters and trailing slashes
+  chatId = chatId.split('?')[0].replace(/\/+$/, '');
+  
+  // https://t.me/+INVITE or https://t.me/joinchat/INVITE — can't verify these
+  if (chatId.includes('/+') || chatId.includes('/joinchat/')) {
+    console.warn(`[SubCheck] Invite link detected, cannot verify: ${link}`);
+    return null; // Cannot verify via getChatMember with invite links
+  }
+  
+  // https://t.me/channelname
+  if (chatId.includes('t.me/')) {
+    chatId = chatId.split('t.me/').pop();
+  }
+  
+  // Add @ prefix if needed
+  if (!chatId.startsWith('@') && !chatId.startsWith('-')) {
+    chatId = '@' + chatId;
+  }
+  
+  return chatId;
 }
 
 router.post('/:id/complete', authMiddleware, async (req, res) => {
@@ -66,20 +95,16 @@ router.post('/:id/complete', authMiddleware, async (req, res) => {
 
   // ── Verify subscription for subscribe_channel tasks ──
   if (task.type === 'subscribe_channel' && task.link) {
-    // Extract channel username or chat_id from link
-    // Supports: https://t.me/channelname, @channelname, -100xxxx
-    let chatId = task.link.trim();
-    if (chatId.startsWith('https://t.me/')) {
-      chatId = '@' + chatId.replace('https://t.me/', '').replace(/\/$/, '');
-    } else if (chatId.startsWith('t.me/')) {
-      chatId = '@' + chatId.replace('t.me/', '').replace(/\/$/, '');
-    } else if (!chatId.startsWith('@') && !chatId.startsWith('-')) {
-      chatId = '@' + chatId;
-    }
-
-    const isSubscribed = await checkTgSubscription(chatId, user.tg_id);
-    if (!isSubscribed) {
-      return res.status(400).json({ error: 'not_subscribed', message: 'You must subscribe first' });
+    const chatId = extractChatId(task.link);
+    
+    if (!chatId) {
+      // Invite link — can't verify, allow completion (trust-based)
+      console.log(`[SubCheck] Invite link — skipping verification for task ${taskId}, user ${user.tg_id}`);
+    } else {
+      const isSubscribed = await checkTgSubscription(chatId, user.tg_id);
+      if (!isSubscribed) {
+        return res.status(400).json({ error: 'not_subscribed', message: 'You must subscribe first' });
+      }
     }
   }
 
