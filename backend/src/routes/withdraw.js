@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authMiddleware } from '../middleware/auth.js';
 import { pool } from '../db.js';
 import { MIN_WITHDRAW } from '../services/mining.js';
+import { notifyWithdrawal } from '../services/notify.js';
 
 const router = Router();
 
@@ -48,6 +49,16 @@ router.post('/', authMiddleware, async (req, res) => {
 
     await client.query('COMMIT');
     res.json({ success: true, withdrawal: rows[0] });
+
+    // Notify admins about the withdrawal request
+    notifyWithdrawal({
+      userId: user.id,
+      tgId: user.tg_id,
+      username: user.username,
+      firstName: user.first_name,
+      tonAmount: ton_amount,
+      walletAddress: wallet_address,
+    }).catch(e => console.error('Notify error (withdrawal):', e.message));
   } catch (e) {
     await client.query('ROLLBACK');
     res.status(500).json({ error: 'Withdrawal failed' });

@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { pool } from '../db.js';
+import { notifyPurchase } from './notify.js';
 
 const TONCENTER_API = 'https://toncenter.com/api/v2';
 const WALLET_ADDRESS = process.env.PAYMENT_WALLET;
@@ -224,6 +225,29 @@ const completePurchase = async (client, purchase, txHash) => {
 
     await client.query('COMMIT');
     console.log(`✅ Purchase completed: user=${purchase.user_id} memo=${purchase.memo} power=+${purchase.power_amount}`);
+
+    // Notify admins about the purchase
+    try {
+      const { rows: uRows } = await pool.query(
+        `SELECT tg_id, username, first_name FROM users WHERE id = $1`, [purchase.user_id]
+      );
+      const { rows: pkgRows } = await pool.query(
+        `SELECT name FROM power_packages WHERE id = $1`, [purchase.package_id]
+      );
+      const u = uRows[0] || {};
+      notifyPurchase({
+        userId: purchase.user_id,
+        tgId: u.tg_id,
+        username: u.username,
+        firstName: u.first_name,
+        packageName: pkgRows[0]?.name,
+        powerAmount: purchase.power_amount,
+        tonPaid: purchase.ton_amount,
+        memo: purchase.memo,
+      });
+    } catch (ne) {
+      console.error('Notify error (purchase):', ne.message);
+    }
   } catch (e) {
     await client.query('ROLLBACK');
     console.error('completePurchase error:', e.message);
