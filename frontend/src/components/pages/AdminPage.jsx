@@ -32,20 +32,25 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {/* Tab bar */}
+      {/* Tab grid */}
       <div style={{
-        display: 'flex', gap: 4, marginBottom: 20, overflowX: 'auto',
-        padding: '4px', background: 'var(--bg-card)', borderRadius: 14
+        display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 20,
       }}>
         {TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
-            padding: '8px 12px', borderRadius: 10, border: 'none',
-            background: tab === t.id ? 'var(--gold)' : 'transparent',
+            padding: '14px 6px', borderRadius: 14, border: 'none',
+            background: tab === t.id
+              ? 'linear-gradient(135deg, var(--gold-dark), var(--gold))'
+              : 'var(--bg-card)',
             color: tab === t.id ? '#000' : 'var(--text-muted)',
-            fontWeight: 700, fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap',
-            transition: 'var(--transition)', flexShrink: 0
+            fontWeight: 700, fontSize: 10, cursor: 'pointer',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+            transition: 'all 0.2s ease',
+            boxShadow: tab === t.id ? '0 4px 12px rgba(212,175,55,0.3)' : 'none',
+            border: tab === t.id ? 'none' : '1px solid var(--border)',
           }}>
-            {t.icon} {t.label}
+            <span style={{ fontSize: 22 }}>{t.icon}</span>
+            <span>{t.label}</span>
           </button>
         ))}
       </div>
