@@ -38,15 +38,15 @@ export const useStore = create((set, get) => ({
 
   collect: async () => {
     const { data } = await api.post('/mining/collect');
-    await get().fetchMining();
-    const { data: user } = await api.post('/auth/init');
-    set({ user: user.user });
+    // Refresh user + mining in one call
+    const { data: initData } = await api.post('/auth/init');
+    set({ user: initData.user, mining: initData.mining || null });
     return data;
   },
 
   refreshUser: async () => {
     const { data } = await api.post('/auth/init');
-    set({ user: data.user });
+    set({ user: data.user, mining: data.mining || null });
   }
 }));
 
