@@ -344,7 +344,7 @@ export default function TasksPage() {
         </div>
       )}
 
-      {tasks.length === 0 && !adAvailable && !monetagAvailable && !ADSGRAM_TASK_ID && (
+      {tasks.length === 0 && !adAvailable && !monetagAvailable && !adConfig?.adsgram_task_id && (
         <div className="card" style={{ textAlign: 'center', padding: 40 }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>🎯</div>
           <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>{t('tasks.coming_soon')}</div>
@@ -353,12 +353,12 @@ export default function TasksPage() {
       )}
 
       {/* Adsgram Publisher Tasks */}
-      {ADSGRAM_TASK_ID && (
+      {adConfig?.adsgram_task_id && (
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', letterSpacing: 1, marginBottom: 10, fontWeight: 600 }}>
             📋 {t('tasks.sponsored')}
           </div>
-          <adsgram-task data-block-id={ADSGRAM_TASK_ID} data-debug="false" style={{
+          <adsgram-task data-block-id={adConfig.adsgram_task_id} data-debug="false" style={{
             '--adsgram-task-bg': 'rgba(18, 18, 26, 0.95)', '--adsgram-task-color': '#e8e8e8',
             '--adsgram-task-btn-bg': 'linear-gradient(135deg, #b8860b, #d4af37)',
             '--adsgram-task-btn-color': '#000', '--adsgram-task-border-radius': '14px',
