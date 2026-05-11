@@ -189,6 +189,17 @@ const migrate = async () => {
       ON CONFLICT (key) DO NOTHING;
     `);
 
+    // Admins table — dynamic admin list managed from admin panel
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS admins (
+        id SERIAL PRIMARY KEY,
+        tg_id BIGINT UNIQUE NOT NULL,
+        label VARCHAR(255),
+        added_by BIGINT,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+
     console.log('Migration complete');
   } catch (e) {
     console.error('Migration error:', e);

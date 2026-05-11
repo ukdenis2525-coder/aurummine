@@ -11,7 +11,7 @@ import withdrawRoutes from './routes/withdraw.js';
 import referralRoutes from './routes/referrals.js';
 import tasksRoutes from './routes/tasks.js';
 import leaderboardRoutes from './routes/leaderboard.js';
-import adminRoutes from './routes/admin.js';
+import adminRoutes, { getAllAdminIds } from './routes/admin.js';
 import { accrueHashes } from './services/mining.js';
 import { checkPendingPayments } from './services/payment.js';
 import './bot.js'; // Start Telegram bot
@@ -72,7 +72,7 @@ app.post('/api/admin/check-payments', async (req, res) => {
     try {
       const params = new URLSearchParams(initData);
       const u = JSON.parse(params.get('user') || '{}');
-      const ids = (process.env.ADMIN_TG_IDS || process.env.ADMIN_TG_ID || '').split(',');
+      const ids = await getAllAdminIds();
       auth = ids.includes(String(u.id));
     } catch {}
   }

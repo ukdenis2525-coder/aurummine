@@ -3,7 +3,25 @@ import { pool } from '../db.js';
 
 const router = Router();
 
-// Admin auth: either x-admin-key header OR Telegram user with matching tg_id
+// Helper: get ALL admin TG IDs (env + DB)
+const getAllAdminIds = async () => {
+  // Env-based admins (super admins, cannot be removed via panel)
+  const envIds = (process.env.ADMIN_TG_IDS || process.env.ADMIN_TG_ID || '')
+    .split(',').map(s => s.trim()).filter(Boolean);
+
+  // DB-based admins
+  try {
+    const { rows } = await pool.query(`SELECT tg_id FROM admins`);
+    const dbIds = rows.map(r => String(r.tg_id));
+    // Merge unique
+    return [...new Set([...envIds, ...dbIds])];
+  } catch (e) {
+    // Table may not exist yet
+    return envIds;
+  }
+};
+
+// Admin auth: either x-admin-key header OR Telegram user with matching tg_id (env + DB)
 const adminMiddleware = async (req, res, next) => {
   const key = req.headers['x-admin-key'];
   if (key && key === process.env.ADMIN_KEY) return next();
@@ -16,7 +34,7 @@ const adminMiddleware = async (req, res, next) => {
       const userParam = params.get('user');
       if (userParam) {
         const tgUser = JSON.parse(userParam);
-        const adminIds = (process.env.ADMIN_TG_IDS || process.env.ADMIN_TG_ID || '').split(',').map(s => s.trim());
+        const adminIds = await getAllAdminIds();
         if (adminIds.includes(String(tgUser.id))) return next();
       }
     } catch (e) {}
@@ -489,4 +507,117 @@ router.get('/ref-stats', async (req, res) => {
   });
 });
 
+// ── Admin Management ──
+router.get('/admins', async (req, res) => {
+  // Env-based super admins
+  const envIds = (process.env.ADMIN_TG_IDS || process.env.ADMIN_TG_ID || '')
+    .split(',').map(s => s.trim()).filter(Boolean);
+
+  // DB-based admins
+  let dbAdmins = [];
+  try {
+    const { rows } = await pool.query(`SELECT * FROM admins ORDER BY created_at DESC`);
+    dbAdmins = rows;
+  } catch (e) {}
+
+  // Enrich with user info from users table
+  const allIds = [...new Set([...envIds, ...dbAdmins.map(a => String(a.tg_id))])];
+  let usersMap = {};
+  if (allIds.length) {
+    try {
+      const { rows } = await pool.query(
+        `SELECT tg_id, username, first_name FROM users WHERE tg_id = ANY($1::BIGINT[])`,
+        [allIds]
+      );
+      rows.forEach(u => { usersMap[String(u.tg_id)] = u; });
+    } catch (e) {}
+  }
+
+  // Build response
+  const admins = allIds.map(tgId => {
+    const dbEntry = dbAdmins.find(a => String(a.tg_id) === tgId);
+    const userInfo = usersMap[tgId];
+    return {
+      tg_id: tgId,
+      label: dbEntry?.label || null,
+      username: userInfo?.username || null,
+      first_name: userInfo?.first_name || null,
+      is_env: envIds.includes(tgId),
+      added_by: dbEntry?.added_by ? String(dbEntry.added_by) : null,
+      created_at: dbEntry?.created_at || null,
+    };
+  });
+
+  res.json(admins);
+});
+
+router.post('/admins', async (req, res) => {
+  const { tg_id, label } = req.body;
+  if (!tg_id) return res.status(400).json({ error: 'tg_id required' });
+
+  // Get the requester's tg_id for added_by
+  let addedBy = null;
+  const initData = req.headers['x-init-data'];
+  if (initData) {
+    try {
+      const params = new URLSearchParams(initData);
+      const userParam = params.get('user');
+      if (userParam) addedBy = JSON.parse(userParam).id;
+    } catch (e) {}
+  }
+
+  try {
+    await pool.query(
+      `INSERT INTO admins (tg_id, label, added_by) VALUES ($1, $2, $3)
+       ON CONFLICT (tg_id) DO UPDATE SET label = $2`,
+      [String(tg_id), label || null, addedBy]
+    );
+    res.json({ success: true });
+  } catch (e) {
+    console.error('[Admin] Add admin error:', e.message);
+    res.status(500).json({ error: 'Failed to add admin' });
+  }
+});
+
+router.delete('/admins/:tg_id', async (req, res) => {
+  const targetId = req.params.tg_id;
+
+  // Cannot remove env-based super admins
+  const envIds = (process.env.ADMIN_TG_IDS || process.env.ADMIN_TG_ID || '')
+    .split(',').map(s => s.trim()).filter(Boolean);
+  if (envIds.includes(targetId)) {
+    return res.status(400).json({ error: 'Cannot remove env-based super admin' });
+  }
+
+  // Prevent removing yourself
+  const initData = req.headers['x-init-data'];
+  if (initData) {
+    try {
+      const params = new URLSearchParams(initData);
+      const userParam = params.get('user');
+      if (userParam) {
+        const reqUser = JSON.parse(userParam);
+        if (String(reqUser.id) === targetId) {
+          return res.status(400).json({ error: 'Cannot remove yourself' });
+        }
+      }
+    } catch (e) {}
+  }
+
+  try {
+    await pool.query(`DELETE FROM admins WHERE tg_id = $1`, [targetId]);
+    res.json({ success: true });
+  } catch (e) {
+    console.error('[Admin] Remove admin error:', e.message);
+    res.status(500).json({ error: 'Failed to remove admin' });
+  }
+});
+
+// Check if current user is admin (used by frontend for multi-admin support)
+router.get('/check-admin', async (req, res) => {
+  // If we got here, middleware already passed — user IS admin
+  res.json({ isAdmin: true });
+});
+
+export { getAllAdminIds };
 export default router;

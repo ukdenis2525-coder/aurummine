@@ -1,20 +1,30 @@
 import { Api } from 'grammy';
 import dotenv from 'dotenv';
+import { pool } from '../db.js';
 dotenv.config();
 
 // Lightweight Telegram API client (no polling, just sendMessage)
 const api = process.env.BOT_TOKEN ? new Api(process.env.BOT_TOKEN) : null;
 
-const ADMIN_IDS = (process.env.ADMIN_TG_IDS || process.env.ADMIN_TG_ID || '')
-  .split(',')
-  .map(s => s.trim())
-  .filter(Boolean);
+// Dynamic admin IDs: env + DB admins table
+const getAdminIds = async () => {
+  const envIds = (process.env.ADMIN_TG_IDS || process.env.ADMIN_TG_ID || '')
+    .split(',').map(s => s.trim()).filter(Boolean);
+  try {
+    const { rows } = await pool.query(`SELECT tg_id FROM admins`);
+    const dbIds = rows.map(r => String(r.tg_id));
+    return [...new Set([...envIds, ...dbIds])];
+  } catch (e) {
+    return envIds;
+  }
+};
 
 /**
  * Send a message to all admin Telegram accounts.
  * Silently fails — never throws to avoid breaking business logic.
  */
 export const notifyAdmins = async (text) => {
+  const ADMIN_IDS = await getAdminIds();
   if (!api || !ADMIN_IDS.length) {
     console.warn('[Notify] No BOT_TOKEN or ADMIN_TG_IDS configured, skipping notification');
     return;

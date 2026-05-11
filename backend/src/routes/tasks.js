@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authMiddleware } from '../middleware/auth.js';
 import { pool } from '../db.js';
 import axios from 'axios';
+import { getAllAdminIds } from './admin.js';
 
 const router = Router();
 
@@ -10,8 +11,8 @@ const adCooldowns = new Map();
 const adDailyCounts = new Map(); // userId -> { date, count }
 
 router.get('/', authMiddleware, async (req, res) => {
-  // Check if user is admin
-  const adminIds = (process.env.ADMIN_TG_IDS || process.env.ADMIN_TG_ID || '').split(',').map(s => s.trim());
+  // Check if user is admin (env + DB)
+  const adminIds = await getAllAdminIds();
   const isAdmin = adminIds.includes(String(req.user.tg_id));
 
   const visibilityFilter = isAdmin ? '' : `AND (t.visibility = 'all' OR t.visibility IS NULL)`;

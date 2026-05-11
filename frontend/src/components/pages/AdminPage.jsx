@@ -12,6 +12,7 @@ const TABS = [
   { id: 'packages', icon: '📦', label: 'Пакеты' },
   { id: 'ads', icon: '🎬', label: 'Реклама' },
   { id: 'referrals', icon: '🤝', label: 'Рефералы' },
+  { id: 'admins', icon: '🛡️', label: 'Админы' },
 ];
 
 export default function AdminPage() {
@@ -34,7 +35,7 @@ export default function AdminPage() {
 
       {/* Tab grid */}
       <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 20,
+        display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 20,
       }}>
         {TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
@@ -63,6 +64,7 @@ export default function AdminPage() {
       {tab === 'packages' && <PackagesPanel />}
       {tab === 'ads' && <AdsPanel />}
       {tab === 'referrals' && <ReferralsPanel />}
+      {tab === 'admins' && <AdminsPanel />}
     </div>
   );
 }
@@ -1345,6 +1347,204 @@ function AdsPanel() {
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ═══════════════════ ADMINS ═══════════════════
+function AdminsPanel() {
+  const [admins, setAdmins] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ tg_id: '', label: '' });
+  const [msg, setMsg] = useState(null);
+  const [confirmRemove, setConfirmRemove] = useState(null);
+
+  const load = async () => {
+    try {
+      const { data } = await api.get('/admin/admins');
+      setAdmins(data);
+    } catch (e) {
+      setMsg('❌ Ошибка загрузки');
+    }
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, []);
+
+  const showMsg = (text) => { setMsg(text); setTimeout(() => setMsg(null), 3000); };
+
+  const addAdmin = async () => {
+    if (!form.tg_id) return;
+    try {
+      await api.post('/admin/admins', { tg_id: form.tg_id.trim(), label: form.label.trim() || null });
+      showMsg('✅ Админ добавлен');
+      setForm({ tg_id: '', label: '' });
+      setShowForm(false);
+      load();
+    } catch (e) {
+      showMsg(`❌ ${e.response?.data?.error || 'Ошибка'}`);
+    }
+  };
+
+  const removeAdmin = async (tgId) => {
+    try {
+      await api.delete(`/admin/admins/${tgId}`);
+      showMsg('🗑️ Админ удалён');
+      setConfirmRemove(null);
+      load();
+    } catch (e) {
+      showMsg(`❌ ${e.response?.data?.error || 'Ошибка'}`);
+    }
+  };
+
+  if (loading) return <Loading />;
+
+  return (
+    <div>
+      {/* Status message */}
+      {msg && (
+        <div style={{
+          padding: '10px 14px', borderRadius: 10, marginBottom: 12,
+          background: msg.startsWith('✅') || msg.startsWith('🗑') ? 'rgba(52,211,153,0.1)' : 'var(--red-bg)',
+          color: msg.startsWith('✅') || msg.startsWith('🗑') ? 'var(--green)' : 'var(--red)',
+          fontSize: 12, fontWeight: 600, textAlign: 'center',
+          animation: 'fadeIn 0.3s ease'
+        }}>{msg}</div>
+      )}
+
+      {/* Header info */}
+      <div className="card" style={{ padding: 14, marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          <span style={{ fontSize: 24 }}>🛡️</span>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 800 }}>Управление админами</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Всего: {admins.length}</div>
+          </div>
+        </div>
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+          🔒 Суперадмины (env) не могут быть удалены через панель.
+          Добавленные через панель админы имеют полный доступ к админке.
+        </div>
+      </div>
+
+      {/* Add button */}
+      <button onClick={() => setShowForm(!showForm)}
+        className="btn-gold" style={{ marginBottom: 14, padding: 10, fontSize: 13 }}>
+        {showForm ? '✕ Отмена' : '+ Добавить админа'}
+      </button>
+
+      {/* Add form */}
+      {showForm && (
+        <div className="card" style={{ marginBottom: 14, animation: 'fadeIn 0.3s ease' }}>
+          <div style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 700, marginBottom: 10, letterSpacing: 1 }}>
+            ➕ НОВЫЙ АДМИН
+          </div>
+          <input type="text" value={form.tg_id} onChange={e => setForm({...form, tg_id: e.target.value})}
+            placeholder="Telegram ID (числовой)" style={{ marginBottom: 8, fontSize: 13 }} />
+          <input type="text" value={form.label} onChange={e => setForm({...form, label: e.target.value})}
+            placeholder="Имя / метка (опционально)" style={{ marginBottom: 10, fontSize: 13 }} />
+          <button className="btn-gold" onClick={addAdmin} style={{ padding: 10, fontSize: 13 }}>
+            🛡️ Добавить
+          </button>
+        </div>
+      )}
+
+      {/* Admins list */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {admins.map((a, i) => (
+          <div key={a.tg_id} className="card" style={{
+            padding: '14px', animation: `fadeIn 0.3s ease ${i * 0.04}s both`,
+            border: a.is_env ? '1px solid rgba(212,175,55,0.3)' : '1px solid var(--border)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
+                <div style={{
+                  width: 38, height: 38, borderRadius: '50%',
+                  background: a.is_env
+                    ? 'linear-gradient(135deg, var(--gold-dark), var(--gold))'
+                    : 'rgba(255,255,255,0.06)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 16, fontWeight: 800,
+                  color: a.is_env ? '#000' : 'var(--text-muted)',
+                  flexShrink: 0,
+                }}>
+                  {a.is_env ? '👑' : '🛡️'}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 14, fontWeight: 700 }}>
+                      {a.first_name || a.username || a.label || 'Admin'}
+                    </span>
+                    {a.is_env && (
+                      <span style={{
+                        fontSize: 8, padding: '2px 6px', borderRadius: 4, fontWeight: 800,
+                        background: 'linear-gradient(135deg, var(--gold-dark), var(--gold))',
+                        color: '#000', letterSpacing: 0.5
+                      }}>SUPER</span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                    TG: {a.tg_id}
+                    {a.username ? ` • @${a.username}` : ''}
+                  </div>
+                  {a.label && a.label !== (a.first_name || a.username) && (
+                    <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 2 }}>
+                      📝 {a.label}
+                    </div>
+                  )}
+                  {a.created_at && (
+                    <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>
+                      Добавлен: {new Date(a.created_at).toLocaleDateString()}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Actions */}
+              {!a.is_env && (
+                <button onClick={() => setConfirmRemove(a.tg_id)} style={{
+                  background: 'var(--red-bg)', border: 'none', borderRadius: 10,
+                  padding: '8px 12px', color: 'var(--red)',
+                  fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                  flexShrink: 0,
+                }}>🗑 Удалить</button>
+              )}
+            </div>
+
+            {/* Remove confirmation */}
+            {confirmRemove === a.tg_id && (
+              <div style={{
+                marginTop: 10, padding: 12, background: 'var(--red-bg)', borderRadius: 12,
+                border: '1px solid rgba(248,113,113,0.3)', textAlign: 'center',
+                animation: 'fadeIn 0.2s ease'
+              }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--red)', marginBottom: 10 }}>
+                  ⚠️ Удалить админа {a.first_name || a.username || a.tg_id}?
+                </div>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+                  <button onClick={() => removeAdmin(a.tg_id)} style={{
+                    padding: '8px 20px', borderRadius: 10, border: 'none',
+                    background: 'var(--red)', color: '#fff',
+                    fontWeight: 700, fontSize: 12, cursor: 'pointer'
+                  }}>Да, удалить</button>
+                  <button onClick={() => setConfirmRemove(null)} style={{
+                    padding: '8px 20px', borderRadius: 10, border: '1px solid var(--border)',
+                    background: 'transparent', color: 'var(--text-muted)',
+                    fontWeight: 700, fontSize: 12, cursor: 'pointer'
+                  }}>Отмена</button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {admins.length === 0 && (
+        <div className="card" style={{ textAlign: 'center', padding: 30 }}>
+          <div style={{ fontSize: 30, marginBottom: 8 }}>🛡️</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Нет админов</div>
+        </div>
+      )}
     </div>
   );
 }

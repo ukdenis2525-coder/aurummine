@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import api from '../utils/api.js';
 
-const ADMIN_ID = import.meta.env.VITE_ADMIN_ID;
+const ADMIN_IDS = (import.meta.env.VITE_ADMIN_IDS || import.meta.env.VITE_ADMIN_ID || '')
+  .split(',').map(s => s.trim()).filter(Boolean);
 
 export const useStore = create((set, get) => ({
   user: null,
@@ -18,7 +19,21 @@ export const useStore = create((set, get) => ({
       const { data } = await api.post('/auth/init');
       const user = data.user;
       const tgId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
-      const isAdmin = ADMIN_ID && String(tgId || user.tg_id) === String(ADMIN_ID);
+      const currentId = String(tgId || user.tg_id);
+
+      // Check env-based admin IDs first
+      let isAdmin = ADMIN_IDS.length > 0 && ADMIN_IDS.includes(currentId);
+
+      // If not in env, try dynamic API check (DB-based admins)
+      if (!isAdmin) {
+        try {
+          const { data: adminCheck } = await api.get('/admin/check-admin');
+          isAdmin = !!adminCheck?.isAdmin;
+        } catch (e) {
+          // 403 = not admin, that's fine
+        }
+      }
+
       set({ user, isAdmin, mining: data.mining || null });
     } catch (e) {
       // 403 = blocked user (silent block)

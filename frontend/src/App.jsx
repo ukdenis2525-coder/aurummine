@@ -12,10 +12,11 @@ import AdminPage from './components/pages/AdminPage.jsx';
 import ErrorBoundary from './components/ui/ErrorBoundary.jsx';
 import Loader from './components/ui/Loader.jsx';
 
-const ADMIN_ID = import.meta.env.VITE_ADMIN_ID;
+const ADMIN_IDS = (import.meta.env.VITE_ADMIN_IDS || import.meta.env.VITE_ADMIN_ID || '')
+  .split(',').map(s => s.trim()).filter(Boolean);
 
 export default function App() {
-  const { init, loading, blocked, activeTab } = useStore();
+  const { init, loading, blocked, activeTab, isAdmin } = useStore();
   const { t } = useTranslation();
 
   useEffect(() => {
@@ -62,7 +63,8 @@ export default function App() {
   const isMobileUA = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
   const hasTgData = !!tg?.initData;
   const tgUserId = tg?.initDataUnsafe?.user?.id;
-  const isAdminUser = ADMIN_ID && String(tgUserId) === String(ADMIN_ID);
+  // Admin bypasses PC block (env-based IDs + dynamic isAdmin from store)
+  const isAdminUser = isAdmin || (ADMIN_IDS.length > 0 && ADMIN_IDS.includes(String(tgUserId)));
 
   // Block if: not mobile Telegram AND not admin
   const isPcBlocked = !isAdminUser && !(isMobileTg || (isMobileUA && hasTgData));
