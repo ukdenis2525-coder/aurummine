@@ -58,6 +58,18 @@ router.get('/stats', async (req, res) => {
     pool.query(`SELECT COUNT(*) as total, COALESCE(SUM(ton_paid), 0) as sum FROM purchases`),
     pool.query(`SELECT COUNT(*) as total FROM users WHERE created_at > NOW() - INTERVAL '24 hours'`),
   ]);
+
+  // Online counts (graceful if column doesn't exist)
+  let online5 = 0, online60 = 0;
+  try {
+    const [r5, r60] = await Promise.all([
+      pool.query(`SELECT COUNT(*) as c FROM users WHERE last_seen_at > NOW() - INTERVAL '5 minutes'`),
+      pool.query(`SELECT COUNT(*) as c FROM users WHERE last_seen_at > NOW() - INTERVAL '1 hour'`),
+    ]);
+    online5 = parseInt(r5.rows[0].c);
+    online60 = parseInt(r60.rows[0].c);
+  } catch (e) {}
+
   res.json({
     total_users: parseInt(users.rows[0].total),
     total_power: parseFloat(power.rows[0].total),
@@ -66,6 +78,8 @@ router.get('/stats', async (req, res) => {
     total_purchases: parseInt(completed.rows[0].total),
     total_revenue: parseFloat(completed.rows[0].sum),
     new_users_24h: parseInt(revenue.rows[0].total),
+    online_5min: online5,
+    online_1h: online60,
   });
 });
 

@@ -106,8 +106,11 @@ export const authMiddleware = async (req, res, next) => {
 
     req.user = rows[0];
 
-    // ── Track IP for multi-account detection ──
+    // ── Track activity + IP for multi-account detection ──
     try {
+      // Always update last_seen
+      try { await pool.query(`UPDATE users SET last_seen_at = NOW() WHERE id = $1`, [req.user.id]); } catch (e) {}
+
       const ip = (
         req.ip ||
         req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
@@ -119,10 +122,8 @@ export const authMiddleware = async (req, res, next) => {
       const uaHash = crypto.createHash('sha256').update(req.headers['user-agent'] || '').digest('hex').slice(0, 16);
 
       if (ip && ip !== '127.0.0.1' && ip !== '::1') {
-        // Update last_ip (may fail if column not yet added)
         try { await pool.query(`UPDATE users SET last_ip = $1 WHERE id = $2`, [ip, req.user.id]); } catch (e) {}
 
-        // Log to user_ips table (may fail if table not yet created)
         try {
           await pool.query(
             `INSERT INTO user_ips (user_id, ip, user_agent_hash)

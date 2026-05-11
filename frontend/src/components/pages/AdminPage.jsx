@@ -101,6 +101,8 @@ function Dashboard() {
   const cards = [
     { icon: '👥', label: 'Пользователи', val: stats.total_users, color: 'var(--gold)' },
     { icon: '🆕', label: 'За 24ч', val: stats.new_users_24h, color: 'var(--green)' },
+    { icon: '🟢', label: 'Онлайн (5м)', val: stats.online_5min || 0, color: '#22c55e' },
+    { icon: '🔵', label: 'Онлайн (1ч)', val: stats.online_1h || 0, color: '#3b82f6' },
     { icon: '⚡', label: 'Power (всего)', val: fmtK(stats.total_power), color: 'var(--gold-light)' },
     { icon: '💰', label: 'TON баланс', val: fmt(stats.total_ton_balance, 2), color: 'var(--orange)' },
     { icon: '🛒', label: 'Покупок', val: stats.total_purchases, color: 'var(--green)' },

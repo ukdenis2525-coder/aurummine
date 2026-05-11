@@ -224,6 +224,11 @@ const migrate = async () => {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS last_ip VARCHAR(45);
     `);
 
+    // Add last_seen_at for online tracking
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMP;
+    `);
+
     console.log('Migration complete');
   } catch (e) {
     console.error('Migration error:', e);
