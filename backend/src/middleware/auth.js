@@ -105,6 +105,32 @@ export const authMiddleware = async (req, res, next) => {
     }
 
     req.user = rows[0];
+
+    // ── Track IP for multi-account detection ──
+    try {
+      const ip = (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').split(',')[0].trim();
+      const uaHash = crypto.createHash('sha256').update(req.headers['user-agent'] || '').digest('hex').slice(0, 16);
+
+      if (ip) {
+        // Update last_ip on user
+        await pool.query(`UPDATE users SET last_ip = $1 WHERE id = $2`, [ip, req.user.id]);
+
+        // Log unique IP per user (max 1 per IP per user per day)
+        await pool.query(
+          `INSERT INTO user_ips (user_id, ip, user_agent_hash)
+           SELECT $1, $2, $3
+           WHERE NOT EXISTS (
+             SELECT 1 FROM user_ips
+             WHERE user_id = $1 AND ip = $2 AND created_at > NOW() - INTERVAL '1 day'
+           )`,
+          [req.user.id, ip, uaHash]
+        );
+      }
+    } catch (e) {
+      // Non-critical, don't block auth
+      console.error('[Auth] IP tracking error:', e.message);
+    }
+
     next();
   } catch (e) {
     console.error('Auth error:', e);

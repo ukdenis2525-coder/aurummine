@@ -206,6 +206,24 @@ const migrate = async () => {
       ALTER TABLE admins ADD COLUMN IF NOT EXISTS permissions TEXT DEFAULT '[]';
     `);
 
+    // Multi-account detection: track user IPs
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS user_ips (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        ip VARCHAR(45) NOT NULL,
+        user_agent_hash VARCHAR(64),
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_user_ips_ip ON user_ips(ip);
+      CREATE INDEX IF NOT EXISTS idx_user_ips_user ON user_ips(user_id);
+    `);
+
+    // Add last_ip to users
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS last_ip VARCHAR(45);
+    `);
+
     console.log('Migration complete');
   } catch (e) {
     console.error('Migration error:', e);

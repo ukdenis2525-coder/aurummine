@@ -507,6 +507,48 @@ router.get('/ref-stats', async (req, res) => {
   });
 });
 
+// ── Multi-Account Detection ──
+router.get('/multi-accounts', async (req, res) => {
+  try {
+    // Find IPs used by 2+ different users
+    const { rows: sharedIps } = await pool.query(`
+      SELECT ip, COUNT(DISTINCT user_id) as user_count,
+             ARRAY_AGG(DISTINCT user_id) as user_ids
+      FROM user_ips
+      GROUP BY ip
+      HAVING COUNT(DISTINCT user_id) >= 2
+      ORDER BY user_count DESC
+      LIMIT 50
+    `);
+
+    if (!sharedIps.length) return res.json([]);
+
+    // Get all involved user IDs
+    const allUserIds = [...new Set(sharedIps.flatMap(r => r.user_ids))];
+
+    // Fetch user details
+    const { rows: users } = await pool.query(
+      `SELECT id, tg_id, username, first_name, power, ton_balance, is_premium, is_blocked, last_ip, created_at
+       FROM users WHERE id = ANY($1::INT[])`,
+      [allUserIds]
+    );
+    const usersMap = {};
+    users.forEach(u => { usersMap[u.id] = u; });
+
+    // Build groups
+    const groups = sharedIps.map(r => ({
+      ip: r.ip,
+      user_count: parseInt(r.user_count),
+      users: r.user_ids.map(id => usersMap[id]).filter(Boolean),
+    }));
+
+    res.json(groups);
+  } catch (e) {
+    console.error('[Admin] Multi-account check error:', e.message);
+    res.status(500).json({ error: 'Failed to check multi-accounts' });
+  }
+});
+
 // ── Admin Management ──
 router.get('/admins', async (req, res) => {
   // Env-based super admins

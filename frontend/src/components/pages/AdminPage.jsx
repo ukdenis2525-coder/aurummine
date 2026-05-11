@@ -12,6 +12,7 @@ const ALL_TABS = [
   { id: 'packages', icon: '📦', label: 'Пакеты' },
   { id: 'ads', icon: '🎬', label: 'Реклама' },
   { id: 'referrals', icon: '🤝', label: 'Рефералы' },
+  { id: 'multi', icon: '👁', label: 'Мульти' },
   { id: 'admins', icon: '🛡️', label: 'Админы' },
 ];
 
@@ -22,8 +23,8 @@ export default function AdminPage() {
   const visibleTabs = adminPerms === '*'
     ? ALL_TABS
     : ALL_TABS.filter(t => {
-        // 'admins' tab only for super admins
-        if (t.id === 'admins') return false;
+        // 'admins' and 'multi' tabs only for super admins
+        if (t.id === 'admins' || t.id === 'multi') return false;
         // Dashboard always visible
         if (t.id === 'dashboard') return true;
         return Array.isArray(adminPerms) && adminPerms.includes(t.id);
@@ -79,6 +80,7 @@ export default function AdminPage() {
       {tab === 'packages' && <PackagesPanel />}
       {tab === 'ads' && <AdsPanel />}
       {tab === 'referrals' && <ReferralsPanel />}
+      {tab === 'multi' && <MultiAccountPanel />}
       {tab === 'admins' && <AdminsPanel />}
     </div>
   );
@@ -1361,6 +1363,153 @@ function AdsPanel() {
             </div>
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+// ═══════════════════ MULTI-ACCOUNT DETECTION ═══════════════════
+function MultiAccountPanel() {
+  const [groups, setGroups] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [msg, setMsg] = useState(null);
+  const [expanded, setExpanded] = useState(null);
+
+  const load = async () => {
+    try {
+      const { data } = await api.get('/admin/multi-accounts');
+      setGroups(data);
+    } catch (e) { setMsg('❌ Ошибка загрузки'); }
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, []);
+
+  const showMsg = (t) => { setMsg(t); setTimeout(() => setMsg(null), 3000); };
+
+  const blockUser = async (userId) => {
+    try {
+      await api.post(`/admin/users/${userId}/block`);
+      showMsg('🚫 Пользователь заблокирован');
+      load();
+    } catch (e) { showMsg(`❌ ${e.response?.data?.error || 'Ошибка'}`); }
+  };
+
+  if (loading) return <Loading />;
+
+  const totalSuspects = groups.reduce((s, g) => s + g.users.length, 0);
+
+  return (
+    <div>
+      {msg && (
+        <div style={{
+          padding: '10px 14px', borderRadius: 10, marginBottom: 12,
+          background: msg.startsWith('✅') || msg.startsWith('🚫') ? 'rgba(52,211,153,0.1)' : 'var(--red-bg)',
+          color: msg.startsWith('✅') || msg.startsWith('🚫') ? 'var(--green)' : 'var(--red)',
+          fontSize: 12, fontWeight: 600, textAlign: 'center', animation: 'fadeIn 0.3s ease'
+        }}>{msg}</div>
+      )}
+
+      <div className="card" style={{ padding: 14, marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          <span style={{ fontSize: 24 }}>👁</span>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 800 }}>Мульти-аккаунты</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              {groups.length ? `${groups.length} IP • ${totalSuspects} юзеров` : 'Подозрительных не найдено'}
+            </div>
+          </div>
+        </div>
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+          Показаны IP-адреса, с которых заходили 2+ разных аккаунта.
+          Данные собираются автоматически при каждом входе.
+        </div>
+      </div>
+
+      <button onClick={() => { setLoading(true); load(); }}
+        className="btn-gold" style={{ marginBottom: 14, padding: 10, fontSize: 13 }}>
+        🔄 Обновить
+      </button>
+
+      {groups.length === 0 && (
+        <div className="card" style={{ textAlign: 'center', padding: 30 }}>
+          <div style={{ fontSize: 30, marginBottom: 8 }}>✅</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Мульти-аккаунтов не обнаружено</div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
+            IP-данные начнут собираться после деплоя
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {groups.map((g, gi) => (
+          <div key={g.ip} className="card" style={{
+            animation: `fadeIn 0.3s ease ${gi * 0.05}s both`,
+            border: g.user_count >= 3 ? '1px solid rgba(248,113,113,0.4)' : '1px solid var(--border)',
+          }}>
+            {/* Group header */}
+            <div onClick={() => setExpanded(expanded === g.ip ? null : g.ip)}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', padding: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: '50%',
+                  background: g.user_count >= 3 ? 'rgba(248,113,113,0.15)' : 'rgba(251,191,36,0.15)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 16, flexShrink: 0,
+                }}>
+                  {g.user_count >= 3 ? '🚨' : '⚠️'}
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, fontFamily: 'monospace' }}>{g.ip}</div>
+                  <div style={{ fontSize: 11, color: g.user_count >= 3 ? 'var(--red)' : 'var(--gold)', fontWeight: 700 }}>
+                    {g.user_count} аккаунтов
+                  </div>
+                </div>
+              </div>
+              <span style={{ fontSize: 14, color: 'var(--text-muted)', transition: 'transform 0.2s',
+                transform: expanded === g.ip ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
+            </div>
+
+            {/* Expanded user list */}
+            {expanded === g.ip && (
+              <div style={{ padding: '0 14px 14px', display: 'flex', flexDirection: 'column', gap: 6, animation: 'fadeIn 0.2s ease' }}>
+                {g.users.map(u => (
+                  <div key={u.id} style={{
+                    padding: 10, borderRadius: 10,
+                    background: u.is_blocked ? 'rgba(248,113,113,0.08)' : 'rgba(255,255,255,0.03)',
+                    border: u.is_blocked ? '1px solid rgba(248,113,113,0.2)' : '1px solid var(--border)',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700 }}>
+                          {u.first_name || u.username || 'Noname'}
+                          {u.is_premium && <span style={{ fontSize: 9, marginLeft: 4 }}>⭐</span>}
+                          {u.is_blocked && <span style={{ fontSize: 8, marginLeft: 6, padding: '1px 5px', borderRadius: 4, background: 'var(--red-bg)', color: 'var(--red)', fontWeight: 700 }}>BLOCKED</span>}
+                        </div>
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                          ID: {u.id} • TG: {u.tg_id}
+                          {u.username ? ` • @${u.username}` : ''}
+                        </div>
+                        <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+                          <span style={{ fontSize: 10, color: 'var(--gold)' }}>⚡ {fmtK(u.power)}</span>
+                          <span style={{ fontSize: 10, color: 'var(--green)' }}>💎 {parseFloat(u.ton_balance || 0).toFixed(4)}</span>
+                        </div>
+                        <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>
+                          Рег: {new Date(u.created_at).toLocaleDateString()}
+                        </div>
+                      </div>
+                      {!u.is_blocked && (
+                        <button onClick={() => blockUser(u.id)} style={{
+                          background: 'var(--red-bg)', border: 'none', borderRadius: 8,
+                          padding: '6px 10px', color: 'var(--red)', fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                          flexShrink: 0,
+                        }}>🚫 Бан</button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );
