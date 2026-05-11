@@ -21,6 +21,9 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Trust reverse proxy (nginx) — needed for correct IP detection
+app.set('trust proxy', true);
+
 // CORS — configurable via env, defaults to * for Telegram WebApp compatibility
 app.use(cors({
   origin: process.env.CORS_ORIGIN || '*',

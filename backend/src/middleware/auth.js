@@ -108,10 +108,17 @@ export const authMiddleware = async (req, res, next) => {
 
     // ── Track IP for multi-account detection ──
     try {
-      const ip = (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').split(',')[0].trim();
+      const ip = (
+        req.ip ||
+        req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+        req.headers['x-real-ip'] ||
+        req.socket?.remoteAddress ||
+        ''
+      ).replace(/^::ffff:/, ''); // Strip IPv6 prefix from IPv4
+
       const uaHash = crypto.createHash('sha256').update(req.headers['user-agent'] || '').digest('hex').slice(0, 16);
 
-      if (ip) {
+      if (ip && ip !== '127.0.0.1' && ip !== '::1') {
         // Update last_ip on user
         await pool.query(`UPDATE users SET last_ip = $1 WHERE id = $2`, [ip, req.user.id]);
 
