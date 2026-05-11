@@ -1459,8 +1459,15 @@ function MultiAccountPanel() {
                 </div>
                 <div>
                   <div style={{ fontSize: 12, fontWeight: 700, fontFamily: 'monospace' }}>{g.ip}</div>
-                  <div style={{ fontSize: 11, color: g.user_count >= 3 ? 'var(--red)' : 'var(--gold)', fontWeight: 700 }}>
-                    {g.user_count} аккаунтов
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 11, color: g.user_count >= 3 ? 'var(--red)' : 'var(--gold)', fontWeight: 700 }}>
+                      {g.user_count} аккаунтов
+                    </span>
+                    {g.has_admin && (
+                      <span style={{ fontSize: 8, padding: '1px 5px', borderRadius: 4, background: 'rgba(212,175,55,0.15)', color: 'var(--gold)', fontWeight: 700 }}>
+                        👑 ADMIN
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1472,16 +1479,17 @@ function MultiAccountPanel() {
             {expanded === g.ip && (
               <div style={{ padding: '0 14px 14px', display: 'flex', flexDirection: 'column', gap: 6, animation: 'fadeIn 0.2s ease' }}>
                 {g.users.map(u => (
-                  <div key={u.id} style={{
+                    <div key={u.id} style={{
                     padding: 10, borderRadius: 10,
-                    background: u.is_blocked ? 'rgba(248,113,113,0.08)' : 'rgba(255,255,255,0.03)',
-                    border: u.is_blocked ? '1px solid rgba(248,113,113,0.2)' : '1px solid var(--border)',
+                    background: u.is_admin ? 'rgba(212,175,55,0.06)' : u.is_blocked ? 'rgba(248,113,113,0.08)' : 'rgba(255,255,255,0.03)',
+                    border: u.is_admin ? '1px solid rgba(212,175,55,0.25)' : u.is_blocked ? '1px solid rgba(248,113,113,0.2)' : '1px solid var(--border)',
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 700 }}>
                           {u.first_name || u.username || 'Noname'}
                           {u.is_premium && <span style={{ fontSize: 9, marginLeft: 4 }}>⭐</span>}
+                          {u.is_admin && <span style={{ fontSize: 8, marginLeft: 6, padding: '1px 5px', borderRadius: 4, background: 'rgba(212,175,55,0.15)', color: 'var(--gold)', fontWeight: 700 }}>👑 ADMIN</span>}
                           {u.is_blocked && <span style={{ fontSize: 8, marginLeft: 6, padding: '1px 5px', borderRadius: 4, background: 'var(--red-bg)', color: 'var(--red)', fontWeight: 700 }}>BLOCKED</span>}
                         </div>
                         <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
@@ -1496,7 +1504,7 @@ function MultiAccountPanel() {
                           Рег: {new Date(u.created_at).toLocaleDateString()}
                         </div>
                       </div>
-                      {!u.is_blocked && (
+                      {!u.is_blocked && !u.is_admin && (
                         <button onClick={() => blockUser(u.id)} style={{
                           background: 'var(--red-bg)', border: 'none', borderRadius: 8,
                           padding: '6px 10px', color: 'var(--red)', fontSize: 10, fontWeight: 700, cursor: 'pointer',
