@@ -1401,6 +1401,7 @@ function ReferralsPanel() {
 function AdsPanel() {
   const [settings, setSettings] = useState([]);
   const [monetagSettings, setMonetagSettings] = useState([]);
+  const [richadsSettings, setRichadsSettings] = useState([]);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState(null);
 
@@ -1419,6 +1420,11 @@ function AdsPanel() {
         { key: 'monetag_zone_id', value: '10984603', label: 'Monetag Zone ID' },
         { key: 'monetag_reward_power', value: '5', label: 'Power за просмотр (Monetag)' },
       ];
+      // RichAds defaults
+      const richadsDefaults = [
+        { key: 'richads_pub_id', value: '1007971', label: 'RichAds Publisher ID' },
+        { key: 'richads_app_id', value: '7369', label: 'RichAds App ID' },
+      ];
 
       const allData = r.data;
       const mergedAdsgram = adsgramDefaults.map(d => {
@@ -1429,21 +1435,27 @@ function AdsPanel() {
         const existing = allData.find(s => s.key === d.key);
         return existing || d;
       });
+      const mergedRichads = richadsDefaults.map(d => {
+        const existing = allData.find(s => s.key === d.key);
+        return existing || d;
+      });
 
       setSettings(mergedAdsgram);
       setMonetagSettings(mergedMonetag);
+      setRichadsSettings(mergedRichads);
     });
   }, []);
 
   const updateVal = (key, value) => {
     setSettings(prev => prev.map(s => s.key === key ? { ...s, value } : s));
     setMonetagSettings(prev => prev.map(s => s.key === key ? { ...s, value } : s));
+    setRichadsSettings(prev => prev.map(s => s.key === key ? { ...s, value } : s));
   };
 
   const save = async () => {
     setSaving(true);
     try {
-      const allSettings = [...settings, ...monetagSettings];
+      const allSettings = [...settings, ...monetagSettings, ...richadsSettings];
       await api.put('/admin/ad-settings', { settings: allSettings });
       setMsg('✅ Настройки рекламы сохранены');
     } catch (e) {
@@ -1464,6 +1476,11 @@ function AdsPanel() {
   const monetagFieldMeta = {
     monetag_zone_id: { icon: '🌐', unit: 'ID', desc: 'Zone ID из личного кабинета Monetag' },
     monetag_reward_power: { icon: '💎', unit: 'POWER', desc: 'Сколько Power юзер получает за один просмотр Monetag' },
+  };
+
+  const richadsFieldMeta = {
+    richads_pub_id: { icon: '📎', unit: 'ID', desc: 'Publisher ID из publishers.richads.com' },
+    richads_app_id: { icon: '📱', unit: 'ID', desc: 'App ID из publishers.richads.com' },
   };
 
   const renderSettingCard = (s, meta) => (
@@ -1523,6 +1540,21 @@ function AdsPanel() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
         {monetagSettings.map(s => {
           const meta = monetagFieldMeta[s.key] || { icon: '📝', unit: '', desc: '' };
+          return renderSettingCard(s, meta);
+        })}
+      </div>
+
+      {/* RichAds Section */}
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', letterSpacing: 1, marginBottom: 12, fontWeight: 600 }}>
+        📎 НАСТРОЙКИ RICHADS
+      </div>
+      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 10 }}>
+        publishers.richads.com — Push/Video реклама
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+        {richadsSettings.map(s => {
+          const meta = richadsFieldMeta[s.key] || { icon: '📝', unit: '', desc: '' };
           return renderSettingCard(s, meta);
         })}
       </div>
