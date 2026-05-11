@@ -510,6 +510,9 @@ router.get('/ref-stats', async (req, res) => {
 // ── Multi-Account Detection ──
 router.get('/multi-accounts', async (req, res) => {
   try {
+    // Get all admin tg_ids to exclude
+    const adminIds = await getAllAdminIds();
+
     // Find IPs used by 2+ different users
     const { rows: sharedIps } = await pool.query(`
       SELECT ip, COUNT(DISTINCT user_id) as user_count,
@@ -535,12 +538,18 @@ router.get('/multi-accounts', async (req, res) => {
     const usersMap = {};
     users.forEach(u => { usersMap[u.id] = u; });
 
-    // Build groups
-    const groups = sharedIps.map(r => ({
-      ip: r.ip,
-      user_count: parseInt(r.user_count),
-      users: r.user_ids.map(id => usersMap[id]).filter(Boolean),
-    }));
+    // Build groups, excluding admin users
+    const groups = sharedIps.map(r => {
+      const groupUsers = r.user_ids
+        .map(id => usersMap[id])
+        .filter(Boolean)
+        .filter(u => !adminIds.includes(String(u.tg_id)));
+      return {
+        ip: r.ip,
+        user_count: groupUsers.length,
+        users: groupUsers,
+      };
+    }).filter(g => g.user_count >= 2); // Only keep groups with 2+ non-admin users
 
     res.json(groups);
   } catch (e) {
