@@ -5,10 +5,6 @@ import { fmtK } from '../../utils/format.js';
 import { useTranslation } from 'react-i18next';
 import createAdHandler from 'monetag-tg-sdk';
 
-const ADSGRAM_BLOCK_ID = import.meta.env.VITE_ADSGRAM_BLOCK_ID || '29776';
-const ADSGRAM_TASK_ID = import.meta.env.VITE_ADSGRAM_TASK_ID || 'task-29788';
-const MONETAG_ZONE_ID = import.meta.env.VITE_MONETAG_ZONE_ID || '10984603';
-
 const typeIcons = {
   subscribe_channel: '📢',
   start_bot: '🤖',
@@ -35,6 +31,9 @@ export default function TasksPage() {
   const [monetagMsg, setMonetagMsg] = useState(null);
   const [monetagAvailable, setMonetagAvailable] = useState(false);
   const monetagHandlerRef = useRef(null);
+
+  // Ad config from API
+  const [adConfig, setAdConfig] = useState(null);
 
   const { refreshUser, user } = useStore();
   const { t } = useTranslation();
@@ -63,6 +62,13 @@ export default function TasksPage() {
     }).catch(() => {});
   }, []);
 
+  // Fetch ad config from API
+  useEffect(() => {
+    api.get('/tasks/ad-config').then(r => setAdConfig(r.data)).catch(() => {
+      setAdConfig({ adsgram_block_id: '29776', adsgram_task_id: 'task-29788', monetag_zone_id: '10984603' });
+    });
+  }, []);
+
   // Payment timer
   useEffect(() => {
     if (!orderPayment?.expires_at) return;
@@ -83,12 +89,14 @@ export default function TasksPage() {
     return () => clearInterval(t);
   }, [checkCooldown]);
 
-  // Initialize Adsgram
+  // Initialize Adsgram (wait for config)
   useEffect(() => {
+    if (!adConfig?.adsgram_block_id) return;
+    const blockId = adConfig.adsgram_block_id;
     const tryInit = () => {
-      if (ADSGRAM_BLOCK_ID && window.Adsgram) {
+      if (blockId && window.Adsgram) {
         try {
-          adControllerRef.current = window.Adsgram.init({ blockId: ADSGRAM_BLOCK_ID });
+          adControllerRef.current = window.Adsgram.init({ blockId });
           setAdAvailable(true);
         } catch (e) { console.error('[Adsgram] Init error:', e); }
         return true;
@@ -100,16 +108,16 @@ export default function TasksPage() {
       const timeout = setTimeout(() => clearInterval(interval), 5000);
       return () => { clearInterval(interval); clearTimeout(timeout); };
     }
-  }, []);
+  }, [adConfig]);
 
-  // Initialize Monetag
+  // Initialize Monetag (wait for config)
   useEffect(() => {
-    if (!MONETAG_ZONE_ID) return;
+    if (!adConfig?.monetag_zone_id) return;
     try {
-      monetagHandlerRef.current = createAdHandler(MONETAG_ZONE_ID);
+      monetagHandlerRef.current = createAdHandler(adConfig.monetag_zone_id);
       setMonetagAvailable(true);
     } catch (e) { console.error('[Monetag] Init error:', e); }
-  }, []);
+  }, [adConfig]);
 
   // Adsgram cooldown timer
   useEffect(() => {

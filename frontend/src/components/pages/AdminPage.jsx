@@ -1408,6 +1408,7 @@ function AdsPanel() {
     api.get('/admin/ad-settings').then(r => {
       // Adsgram defaults
       const adsgramDefaults = [
+        { key: 'adsgram_block_id', value: '29776', label: 'Adsgram Block ID' },
         { key: 'ad_reward_power', value: '500', label: 'Power за просмотр (Adsgram)' },
         { key: 'ad_cooldown_seconds', value: '60', label: 'Кулдаун между рекламами (сек)' },
         { key: 'ad_daily_limit', value: '50', label: 'Лимит просмотров в день' },
@@ -1451,6 +1452,7 @@ function AdsPanel() {
   };
 
   const adsgramFieldMeta = {
+    adsgram_block_id: { icon: '🎯', unit: 'ID', desc: 'Block ID из личного кабинета Adsgram' },
     ad_reward_power: { icon: '⚡', unit: 'POWER', desc: 'Сколько Power юзер получает за один просмотр Adsgram' },
     ad_cooldown_seconds: { icon: '⏱️', unit: 'сек', desc: 'Минимальное время между просмотрами (общее)' },
     ad_daily_limit: { icon: '📊', unit: 'раз', desc: 'Макс. просмотров рекламы в день (общее)' },

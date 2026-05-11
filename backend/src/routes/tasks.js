@@ -10,6 +10,24 @@ const router = Router();
 const adCooldowns = new Map();
 const adDailyCounts = new Map(); // userId -> { date, count }
 
+// Public: get ad config (block IDs from DB)
+router.get('/ad-config', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT key, value FROM app_settings WHERE key IN ('adsgram_block_id', 'adsgram_task_id', 'monetag_zone_id')`
+    );
+    const config = {};
+    rows.forEach(r => config[r.key] = r.value);
+    res.json({
+      adsgram_block_id: config.adsgram_block_id || '29776',
+      adsgram_task_id: config.adsgram_task_id || 'task-29788',
+      monetag_zone_id: config.monetag_zone_id || '10984603',
+    });
+  } catch (e) {
+    res.json({ adsgram_block_id: '29776', adsgram_task_id: 'task-29788', monetag_zone_id: '10984603' });
+  }
+});
+
 router.get('/', authMiddleware, async (req, res) => {
   // Check if user is admin (env + DB)
   const adminIds = await getAllAdminIds();
