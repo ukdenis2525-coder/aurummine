@@ -23,8 +23,8 @@ export default function AdminPage() {
   const visibleTabs = adminPerms === '*'
     ? ALL_TABS
     : ALL_TABS.filter(t => {
-        // 'admins' and 'multi' tabs only for super admins
-        if (t.id === 'admins' || t.id === 'multi') return false;
+        // 'admins' tab only for super admins
+        if (t.id === 'admins') return false;
         // Dashboard always visible
         if (t.id === 'dashboard') return true;
         return Array.isArray(adminPerms) && adminPerms.includes(t.id);
@@ -1532,6 +1532,7 @@ const PERM_TABS = [
   { id: 'packages', icon: '📦', label: 'Пакеты' },
   { id: 'ads', icon: '🎬', label: 'Реклама' },
   { id: 'referrals', icon: '🤝', label: 'Рефералы' },
+  { id: 'multi', icon: '👁', label: 'Мульти' },
 ];
 
 function AdminsPanel() {
