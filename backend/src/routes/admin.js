@@ -83,6 +83,81 @@ router.get('/stats', async (req, res) => {
   });
 });
 
+// ── Charts: hourly data for 24h ──
+router.get('/stats/charts', async (req, res) => {
+  try {
+    // Generate 24-hour labels
+    const hours = [];
+    for (let i = 23; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 3600000);
+      hours.push({ hour: d.getHours(), start: new Date(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours()), end: new Date(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours() + 1) });
+    }
+    const labels = hours.map(h => `${String(h.hour).padStart(2, '0')}:00`);
+
+    // New users per hour
+    let newUsers = new Array(24).fill(0);
+    try {
+      const { rows } = await pool.query(`
+        SELECT DATE_TRUNC('hour', created_at) as h, COUNT(*) as c
+        FROM users WHERE created_at > NOW() - INTERVAL '24 hours'
+        GROUP BY h ORDER BY h
+      `);
+      rows.forEach(r => {
+        const rh = new Date(r.h).getHours();
+        const idx = hours.findIndex(h => h.hour === rh);
+        if (idx >= 0) newUsers[idx] = parseInt(r.c);
+      });
+    } catch (e) {}
+
+    // Active users per hour (from last_seen_at)
+    let activeUsers = new Array(24).fill(0);
+    try {
+      const { rows } = await pool.query(`
+        SELECT DATE_TRUNC('hour', last_seen_at) as h, COUNT(DISTINCT id) as c
+        FROM users WHERE last_seen_at > NOW() - INTERVAL '24 hours'
+        GROUP BY h ORDER BY h
+      `);
+      rows.forEach(r => {
+        const rh = new Date(r.h).getHours();
+        const idx = hours.findIndex(h => h.hour === rh);
+        if (idx >= 0) activeUsers[idx] = parseInt(r.c);
+      });
+    } catch (e) {}
+
+    // Online per hour snapshot (users seen in that hour window)
+    let onlineUsers = new Array(24).fill(0);
+    try {
+      for (let i = 0; i < 24; i++) {
+        const { rows } = await pool.query(
+          `SELECT COUNT(*) as c FROM users WHERE last_seen_at >= $1 AND last_seen_at < $2`,
+          [hours[i].start, hours[i].end]
+        );
+        onlineUsers[i] = parseInt(rows[0].c);
+      }
+    } catch (e) {}
+
+    // Purchases per hour
+    let purchases = new Array(24).fill(0);
+    try {
+      const { rows } = await pool.query(`
+        SELECT DATE_TRUNC('hour', created_at) as h, COUNT(*) as c
+        FROM purchases WHERE created_at > NOW() - INTERVAL '24 hours'
+        GROUP BY h ORDER BY h
+      `);
+      rows.forEach(r => {
+        const rh = new Date(r.h).getHours();
+        const idx = hours.findIndex(h => h.hour === rh);
+        if (idx >= 0) purchases[idx] = parseInt(r.c);
+      });
+    } catch (e) {}
+
+    res.json({ labels, newUsers, activeUsers, onlineUsers, purchases });
+  } catch (e) {
+    console.error('[Admin] Charts error:', e.message);
+    res.status(500).json({ error: 'Charts failed' });
+  }
+});
+
 // ── Top users by stat ──
 router.get('/stats/top', async (req, res) => {
   const field = req.query.field || 'ton_balance';

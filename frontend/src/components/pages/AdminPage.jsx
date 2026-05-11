@@ -267,6 +267,84 @@ function Dashboard() {
           )}
         </div>
       )}
+
+      {/* Charts */}
+      <DashboardCharts />
+    </div>
+  );
+}
+
+function MiniChart({ data, labels, color, title, icon }) {
+  if (!data || !data.length) return null;
+  const max = Math.max(...data, 1);
+  const w = 300, h = 100, px = 30, py = 10;
+  const cw = w - px, ch = h - py * 2;
+  const points = data.map((v, i) => `${px + (i / (data.length - 1)) * cw},${py + ch - (v / max) * ch}`).join(' ');
+  const areaPoints = `${px},${py + ch} ${points} ${px + cw},${py + ch}`;
+  const gradId = `g_${title.replace(/\s/g, '')}`;
+
+  return (
+    <div className="card" style={{ padding: 14, marginBottom: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <div style={{ fontSize: 12, fontWeight: 800 }}>{icon} {title}</div>
+        <div style={{ fontSize: 11, color, fontWeight: 700 }}>
+          макс: {max} • сейчас: {data[data.length - 1]}
+        </div>
+      </div>
+      <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', height: 100 }}>
+        <defs>
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.3" />
+            <stop offset="100%" stopColor={color} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {/* Grid lines */}
+        {[0, 0.25, 0.5, 0.75, 1].map(f => (
+          <line key={f} x1={px} y1={py + ch * (1 - f)} x2={px + cw} y2={py + ch * (1 - f)}
+            stroke="rgba(255,255,255,0.06)" strokeWidth="0.5" />
+        ))}
+        {/* Y labels */}
+        {[0, 0.5, 1].map(f => (
+          <text key={f} x={px - 4} y={py + ch * (1 - f) + 3} fill="rgba(255,255,255,0.3)" fontSize="7" textAnchor="end">
+            {Math.round(max * f)}
+          </text>
+        ))}
+        {/* X labels (every 4h) */}
+        {labels && labels.filter((_, i) => i % 4 === 0).map((l, li) => {
+          const idx = li * 4;
+          return (
+            <text key={l} x={px + (idx / (data.length - 1)) * cw} y={h - 1} fill="rgba(255,255,255,0.3)" fontSize="7" textAnchor="middle">{l}</text>
+          );
+        })}
+        <polygon points={areaPoints} fill={`url(#${gradId})`} />
+        <polyline points={points} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        {/* Current value dot */}
+        {data.length > 0 && (
+          <circle cx={px + cw} cy={py + ch - (data[data.length - 1] / max) * ch} r="3" fill={color} />
+        )}
+      </svg>
+    </div>
+  );
+}
+
+function DashboardCharts() {
+  const [charts, setCharts] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.get('/admin/stats/charts').then(r => setCharts(r.data)).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div style={{ textAlign: 'center', padding: 20, fontSize: 11, color: 'var(--text-muted)' }}>📊 Загрузка графиков...</div>;
+  if (!charts) return null;
+
+  return (
+    <div style={{ marginTop: 8 }}>
+      <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 10 }}>📊 Графики за 24ч</div>
+      <MiniChart data={charts.onlineUsers} labels={charts.labels} color="#22c55e" title="Онлайн" icon="🟢" />
+      <MiniChart data={charts.newUsers} labels={charts.labels} color="#3b82f6" title="Новые юзеры" icon="🆕" />
+      <MiniChart data={charts.activeUsers} labels={charts.labels} color="#a855f7" title="Активные юзеры" icon="👥" />
+      <MiniChart data={charts.purchases} labels={charts.labels} color="#f59e0b" title="Покупки" icon="🛒" />
     </div>
   );
 }
