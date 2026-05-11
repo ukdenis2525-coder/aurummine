@@ -1,5 +1,8 @@
 import { Router } from 'express';
+import { Api } from 'grammy';
 import { pool } from '../db.js';
+
+const tgApi = process.env.BOT_TOKEN ? new Api(process.env.BOT_TOKEN) : null;
 
 const router = Router();
 
@@ -505,6 +508,40 @@ router.get('/ref-stats', async (req, res) => {
     total_ton_given: parseFloat(totalTonGiven.rows[0].total),
     top_referrers: topReferrers,
   });
+});
+
+// ── Broadcast to Users ──
+router.post('/broadcast', async (req, res) => {
+  const { message, parse_mode } = req.body;
+  if (!message || !message.trim()) return res.status(400).json({ error: 'Message required' });
+  if (!tgApi) return res.status(500).json({ error: 'BOT_TOKEN not configured' });
+
+  try {
+    // Get all non-blocked user tg_ids
+    const { rows } = await pool.query(`SELECT tg_id FROM users WHERE is_blocked = false`);
+    const tgIds = rows.map(r => String(r.tg_id));
+
+    let sent = 0, failed = 0;
+
+    for (let i = 0; i < tgIds.length; i++) {
+      try {
+        await tgApi.sendMessage(tgIds[i], message.trim(), {
+          parse_mode: parse_mode || 'HTML',
+          disable_web_page_preview: true,
+        });
+        sent++;
+      } catch (e) {
+        failed++;
+      }
+      // Telegram rate limit: max ~30 msgs/sec
+      if ((i + 1) % 25 === 0) await new Promise(r => setTimeout(r, 1000));
+    }
+
+    res.json({ success: true, total: tgIds.length, sent, failed });
+  } catch (e) {
+    console.error('[Admin] Broadcast error:', e.message);
+    res.status(500).json({ error: 'Broadcast failed' });
+  }
 });
 
 // ── Multi-Account Detection ──

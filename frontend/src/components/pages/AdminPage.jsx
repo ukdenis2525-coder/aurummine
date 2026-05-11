@@ -12,6 +12,7 @@ const ALL_TABS = [
   { id: 'packages', icon: '📦', label: 'Пакеты' },
   { id: 'ads', icon: '🎬', label: 'Реклама' },
   { id: 'referrals', icon: '🤝', label: 'Рефералы' },
+  { id: 'broadcast', icon: '📢', label: 'Рассылка' },
   { id: 'multi', icon: '👁', label: 'Мульти' },
   { id: 'admins', icon: '🛡️', label: 'Админы' },
 ];
@@ -80,6 +81,7 @@ export default function AdminPage() {
       {tab === 'packages' && <PackagesPanel />}
       {tab === 'ads' && <AdsPanel />}
       {tab === 'referrals' && <ReferralsPanel />}
+      {tab === 'broadcast' && <BroadcastPanel />}
       {tab === 'multi' && <MultiAccountPanel />}
       {tab === 'admins' && <AdminsPanel />}
     </div>
@@ -1523,6 +1525,133 @@ function MultiAccountPanel() {
   );
 }
 
+// ═══════════════════ BROADCAST ═══════════════════
+function BroadcastPanel() {
+  const [message, setMessage] = useState('');
+  const [parseMode, setParseMode] = useState('HTML');
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState(null);
+  const [confirm, setConfirm] = useState(false);
+
+  const send = async () => {
+    setConfirm(false);
+    setSending(true);
+    setResult(null);
+    try {
+      const { data } = await api.post('/admin/broadcast', { message, parse_mode: parseMode });
+      setResult(data);
+      setMessage('');
+    } catch (e) {
+      setResult({ error: e.response?.data?.error || 'Ошибка отправки' });
+    }
+    setSending(false);
+  };
+
+  return (
+    <div>
+      <div className="card" style={{ padding: 14, marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          <span style={{ fontSize: 24 }}>📢</span>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 800 }}>Рассылка в Telegram</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Отправить сообщение всем юзерам</div>
+          </div>
+        </div>
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+          Сообщение придёт всем незаблокированным юзерам через бота.
+          Можно использовать HTML: &lt;b&gt;жирный&lt;/b&gt;, &lt;i&gt;курсив&lt;/i&gt;, &lt;code&gt;код&lt;/code&gt;
+        </div>
+      </div>
+
+      {/* Format toggle */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+        {['HTML', 'Markdown', 'Plain'].map(m => (
+          <button key={m} onClick={() => setParseMode(m === 'Plain' ? '' : m)} style={{
+            padding: '6px 14px', borderRadius: 8, border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+            background: (parseMode === m || (m === 'Plain' && !parseMode)) ? 'rgba(212,175,55,0.15)' : 'rgba(255,255,255,0.04)',
+            color: (parseMode === m || (m === 'Plain' && !parseMode)) ? 'var(--gold)' : 'var(--text-muted)',
+          }}>{m}</button>
+        ))}
+      </div>
+
+      {/* Message input */}
+      <textarea
+        value={message}
+        onChange={e => setMessage(e.target.value)}
+        placeholder="Введите сообщение для рассылки..."
+        style={{
+          width: '100%', minHeight: 120, padding: 12, borderRadius: 12,
+          background: 'var(--bg-card)', border: '1px solid var(--border)',
+          color: 'var(--text)', fontSize: 13, fontFamily: 'inherit',
+          resize: 'vertical', outline: 'none', boxSizing: 'border-box',
+        }}
+      />
+      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, marginBottom: 12, textAlign: 'right' }}>
+        {message.length} символов
+      </div>
+
+      {/* Send button */}
+      <button
+        onClick={() => setConfirm(true)}
+        disabled={!message.trim() || sending}
+        className="btn-gold"
+        style={{ padding: 12, fontSize: 14, opacity: !message.trim() ? 0.4 : 1 }}
+      >
+        {sending ? '✉️ Отправка...' : '📢 Отправить всем'}
+      </button>
+
+      {/* Confirmation */}
+      {confirm && (
+        <div className="card" style={{
+          marginTop: 12, padding: 14, border: '1px solid rgba(251,191,36,0.3)',
+          textAlign: 'center', animation: 'fadeIn 0.2s ease'
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gold)', marginBottom: 6 }}>
+            ⚠️ Подтвердите рассылку
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12 }}>
+            Сообщение будет отправлено всем пользователям!
+          </div>
+          <div style={{ padding: 10, background: 'rgba(255,255,255,0.03)', borderRadius: 8, marginBottom: 12,
+            fontSize: 12, color: 'var(--text)', textAlign: 'left', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+            {message}
+          </div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+            <button onClick={send} className="btn-gold" style={{ padding: '8px 24px', fontSize: 12 }}>
+              ✅ Да, отправить
+            </button>
+            <button onClick={() => setConfirm(false)} style={{
+              padding: '8px 24px', borderRadius: 10, border: '1px solid var(--border)',
+              background: 'transparent', color: 'var(--text-muted)', fontWeight: 700, fontSize: 12, cursor: 'pointer',
+            }}>Отмена</button>
+          </div>
+        </div>
+      )}
+
+      {/* Result */}
+      {result && (
+        <div className="card" style={{
+          marginTop: 12, padding: 14, animation: 'fadeIn 0.3s ease',
+          border: result.error ? '1px solid rgba(248,113,113,0.3)' : '1px solid rgba(52,211,153,0.3)',
+        }}>
+          {result.error ? (
+            <div style={{ fontSize: 13, color: 'var(--red)', fontWeight: 700 }}>❌ {result.error}</div>
+          ) : (
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--green)', marginBottom: 8 }}>✅ Рассылка завершена!</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                <MiniStat label="Всего" val={result.total} color="var(--text)" />
+                <MiniStat label="Доставлено" val={result.sent} color="var(--green)" />
+                <MiniStat label="Ошибки" val={result.failed} color="var(--red)" />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ═══════════════════ ADMINS ═══════════════════
 const PERM_TABS = [
   { id: 'users', icon: '👥', label: 'Юзеры' },
@@ -1532,6 +1661,7 @@ const PERM_TABS = [
   { id: 'packages', icon: '📦', label: 'Пакеты' },
   { id: 'ads', icon: '🎬', label: 'Реклама' },
   { id: 'referrals', icon: '🤝', label: 'Рефералы' },
+  { id: 'broadcast', icon: '📢', label: 'Рассылка' },
   { id: 'multi', icon: '👁', label: 'Мульти' },
 ];
 
