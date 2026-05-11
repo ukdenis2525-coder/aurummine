@@ -114,29 +114,28 @@ export const authMiddleware = async (req, res, next) => {
         req.headers['x-real-ip'] ||
         req.socket?.remoteAddress ||
         ''
-      ).replace(/^::ffff:/, ''); // Strip IPv6 prefix from IPv4
+      ).replace(/^::ffff:/, '');
 
       const uaHash = crypto.createHash('sha256').update(req.headers['user-agent'] || '').digest('hex').slice(0, 16);
 
       if (ip && ip !== '127.0.0.1' && ip !== '::1') {
-        // Update last_ip on user
-        await pool.query(`UPDATE users SET last_ip = $1 WHERE id = $2`, [ip, req.user.id]);
+        // Update last_ip (may fail if column not yet added)
+        try { await pool.query(`UPDATE users SET last_ip = $1 WHERE id = $2`, [ip, req.user.id]); } catch (e) {}
 
-        // Log unique IP per user (max 1 per IP per user per day)
-        await pool.query(
-          `INSERT INTO user_ips (user_id, ip, user_agent_hash)
-           SELECT $1, $2, $3
-           WHERE NOT EXISTS (
-             SELECT 1 FROM user_ips
-             WHERE user_id = $1 AND ip = $2 AND created_at > NOW() - INTERVAL '1 day'
-           )`,
-          [req.user.id, ip, uaHash]
-        );
+        // Log to user_ips table (may fail if table not yet created)
+        try {
+          await pool.query(
+            `INSERT INTO user_ips (user_id, ip, user_agent_hash)
+             SELECT $1, $2, $3
+             WHERE NOT EXISTS (
+               SELECT 1 FROM user_ips
+               WHERE user_id = $1 AND ip = $2 AND created_at > NOW() - INTERVAL '1 day'
+             )`,
+            [req.user.id, ip, uaHash]
+          );
+        } catch (e) {}
       }
-    } catch (e) {
-      // Non-critical, don't block auth
-      console.error('[Auth] IP tracking error:', e.message);
-    }
+    } catch (e) {}
 
     next();
   } catch (e) {

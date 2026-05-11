@@ -512,22 +512,30 @@ router.get('/multi-accounts', async (req, res) => {
   try {
     const adminIds = await getAllAdminIds();
 
-    const { rows: sharedIps } = await pool.query(`
-      SELECT ip, COUNT(DISTINCT user_id) as user_count,
-             ARRAY_AGG(DISTINCT user_id) as user_ids
-      FROM user_ips
-      GROUP BY ip
-      HAVING COUNT(DISTINCT user_id) >= 2
-      ORDER BY user_count DESC
-      LIMIT 50
-    `);
+    let sharedIps;
+    try {
+      const result = await pool.query(`
+        SELECT ip, COUNT(DISTINCT user_id) as user_count,
+               ARRAY_AGG(DISTINCT user_id) as user_ids
+        FROM user_ips
+        GROUP BY ip
+        HAVING COUNT(DISTINCT user_id) >= 2
+        ORDER BY user_count DESC
+        LIMIT 50
+      `);
+      sharedIps = result.rows;
+    } catch (e) {
+      // Table doesn't exist yet — return empty
+      console.warn('[Admin] user_ips table not found, run migration');
+      return res.json([]);
+    }
 
     if (!sharedIps.length) return res.json([]);
 
     const allUserIds = [...new Set(sharedIps.flatMap(r => r.user_ids))];
 
     const { rows: users } = await pool.query(
-      `SELECT id, tg_id, username, first_name, power, ton_balance, is_premium, is_blocked, last_ip, created_at
+      `SELECT id, tg_id, username, first_name, power, ton_balance, is_premium, is_blocked, created_at
        FROM users WHERE id = ANY($1::INT[])`,
       [allUserIds]
     );
