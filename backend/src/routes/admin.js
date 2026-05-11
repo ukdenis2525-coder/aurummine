@@ -511,29 +511,53 @@ router.get('/ref-stats', async (req, res) => {
 router.get('/multi-accounts', async (req, res) => {
   try {
     const adminIds = await getAllAdminIds();
+    const ipGroups = new Map(); // ip -> Set of user_ids
 
-    let sharedIps;
+    // Source 1: user_ips table (history)
     try {
-      const result = await pool.query(`
-        SELECT ip, COUNT(DISTINCT user_id) as user_count,
-               ARRAY_AGG(DISTINCT user_id) as user_ids
+      const { rows } = await pool.query(`
+        SELECT ip, ARRAY_AGG(DISTINCT user_id) as user_ids
         FROM user_ips
         GROUP BY ip
         HAVING COUNT(DISTINCT user_id) >= 2
-        ORDER BY user_count DESC
-        LIMIT 50
+        ORDER BY COUNT(DISTINCT user_id) DESC
+        LIMIT 100
       `);
-      sharedIps = result.rows;
-    } catch (e) {
-      // Table doesn't exist yet — return empty
-      console.warn('[Admin] user_ips table not found, run migration');
-      return res.json([]);
-    }
+      rows.forEach(r => {
+        const set = ipGroups.get(r.ip) || new Set();
+        r.user_ids.forEach(id => set.add(id));
+        ipGroups.set(r.ip, set);
+      });
+    } catch (e) {}
 
-    if (!sharedIps.length) return res.json([]);
+    // Source 2: users.last_ip (real-time, works even if user_ips is empty)
+    try {
+      const { rows } = await pool.query(`
+        SELECT last_ip, ARRAY_AGG(id) as user_ids
+        FROM users
+        WHERE last_ip IS NOT NULL AND last_ip != ''
+        GROUP BY last_ip
+        HAVING COUNT(*) >= 2
+        ORDER BY COUNT(*) DESC
+        LIMIT 100
+      `);
+      rows.forEach(r => {
+        const set = ipGroups.get(r.last_ip) || new Set();
+        r.user_ids.forEach(id => set.add(id));
+        ipGroups.set(r.last_ip, set);
+      });
+    } catch (e) {}
 
-    const allUserIds = [...new Set(sharedIps.flatMap(r => r.user_ids))];
+    // Filter: only groups with 2+ users
+    const filtered = [...ipGroups.entries()]
+      .filter(([, ids]) => ids.size >= 2)
+      .sort((a, b) => b[1].size - a[1].size)
+      .slice(0, 50);
 
+    if (!filtered.length) return res.json([]);
+
+    // Fetch all user details
+    const allUserIds = [...new Set(filtered.flatMap(([, ids]) => [...ids]))];
     const { rows: users } = await pool.query(
       `SELECT id, tg_id, username, first_name, power, ton_balance, is_premium, is_blocked, created_at
        FROM users WHERE id = ANY($1::INT[])`,
@@ -545,15 +569,10 @@ router.get('/multi-accounts', async (req, res) => {
       usersMap[u.id] = u;
     });
 
-    const groups = sharedIps.map(r => {
-      const groupUsers = r.user_ids.map(id => usersMap[id]).filter(Boolean);
+    const groups = filtered.map(([ip, ids]) => {
+      const groupUsers = [...ids].map(id => usersMap[id]).filter(Boolean);
       const hasAdmin = groupUsers.some(u => u.is_admin);
-      return {
-        ip: r.ip,
-        user_count: groupUsers.length,
-        has_admin: hasAdmin,
-        users: groupUsers,
-      };
+      return { ip, user_count: groupUsers.length, has_admin: hasAdmin, users: groupUsers };
     });
 
     res.json(groups);
