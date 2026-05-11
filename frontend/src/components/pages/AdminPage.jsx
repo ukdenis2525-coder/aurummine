@@ -1409,12 +1409,14 @@ function AdsPanel() {
       // Adsgram defaults
       const adsgramDefaults = [
         { key: 'adsgram_block_id', value: '29776', label: 'Adsgram Block ID' },
+        { key: 'adsgram_task_id', value: 'task-29788', label: 'Adsgram Task ID' },
         { key: 'ad_reward_power', value: '500', label: 'Power за просмотр (Adsgram)' },
         { key: 'ad_cooldown_seconds', value: '60', label: 'Кулдаун между рекламами (сек)' },
         { key: 'ad_daily_limit', value: '50', label: 'Лимит просмотров в день' },
       ];
       // Monetag defaults
       const monetagDefaults = [
+        { key: 'monetag_zone_id', value: '10984603', label: 'Monetag Zone ID' },
         { key: 'monetag_reward_power', value: '5', label: 'Power за просмотр (Monetag)' },
       ];
 
@@ -1453,12 +1455,14 @@ function AdsPanel() {
 
   const adsgramFieldMeta = {
     adsgram_block_id: { icon: '🎯', unit: 'ID', desc: 'Block ID из личного кабинета Adsgram' },
+    adsgram_task_id: { icon: '📋', unit: 'ID', desc: 'Task ID для спонсорских заданий Adsgram' },
     ad_reward_power: { icon: '⚡', unit: 'POWER', desc: 'Сколько Power юзер получает за один просмотр Adsgram' },
     ad_cooldown_seconds: { icon: '⏱️', unit: 'сек', desc: 'Минимальное время между просмотрами (общее)' },
     ad_daily_limit: { icon: '📊', unit: 'раз', desc: 'Макс. просмотров рекламы в день (общее)' },
   };
 
   const monetagFieldMeta = {
+    monetag_zone_id: { icon: '🌐', unit: 'ID', desc: 'Zone ID из личного кабинета Monetag' },
     monetag_reward_power: { icon: '💎', unit: 'POWER', desc: 'Сколько Power юзер получает за один просмотр Monetag' },
   };
 
