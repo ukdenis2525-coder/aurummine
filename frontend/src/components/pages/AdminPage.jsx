@@ -93,8 +93,19 @@ function Dashboard() {
   const [stats, setStats] = useState(null);
   const [checking, setChecking] = useState(false);
   const [checkResult, setCheckResult] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => { api.get('/admin/stats').then(r => setStats(r.data)).catch(() => {}); }, []);
+  const loadStats = async () => {
+    try { const { data } = await api.get('/admin/stats'); setStats(data); } catch (e) {}
+  };
+
+  useEffect(() => { loadStats(); }, []);
+
+  const refreshStats = async () => {
+    setRefreshing(true);
+    await loadStats();
+    setRefreshing(false);
+  };
 
   if (!stats) return <Loading />;
 
@@ -122,6 +133,17 @@ function Dashboard() {
 
   return (
     <div>
+      <button onClick={refreshStats} disabled={refreshing} style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+        width: '100%', padding: 10, marginBottom: 12, borderRadius: 10,
+        background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)',
+        color: 'var(--text-muted)', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+        transition: 'all 0.2s ease',
+      }}>
+        <span style={{ display: 'inline-block', transition: 'transform 0.5s', transform: refreshing ? 'rotate(360deg)' : 'none' }}>🔄</span>
+        {refreshing ? 'Обновляю...' : 'Обновить статистику'}
+      </button>
+
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
         {cards.map((c, i) => (
           <div key={c.label} className="card" style={{
