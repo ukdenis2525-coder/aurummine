@@ -213,9 +213,9 @@ router.post('/ad-reward', authMiddleware, async (req, res) => {
     return res.status(429).json({ error: 'Daily limit reached', daily_limit: dailyLimit });
   }
 
-  // Give ad reward to user
+  // Give ad reward to user + increment ads_watched
   await pool.query(
-    `UPDATE users SET power = power + $1 WHERE id = $2`,
+    `UPDATE users SET power = power + $1, ads_watched = COALESCE(ads_watched, 0) + 1 WHERE id = $2`,
     [rewardPower, userId]
   );
 
@@ -322,9 +322,9 @@ router.post('/monetag-reward', authMiddleware, async (req, res) => {
     return res.status(429).json({ error: 'Daily limit reached', daily_limit: dailyLimit });
   }
 
-  // Give reward
+  // Give reward + increment ads_watched
   await pool.query(
-    `UPDATE users SET power = power + $1 WHERE id = $2`,
+    `UPDATE users SET power = power + $1, ads_watched = COALESCE(ads_watched, 0) + 1 WHERE id = $2`,
     [rewardPower, userId]
   );
 

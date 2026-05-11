@@ -70,6 +70,17 @@ router.get('/stats', async (req, res) => {
     online60 = parseInt(r60.rows[0].c);
   } catch (e) {}
 
+  // Referral & ads totals (graceful)
+  let totalRefs = 0, totalAds = 0;
+  try {
+    const [refs, ads] = await Promise.all([
+      pool.query(`SELECT COUNT(*) as c FROM referrals`),
+      pool.query(`SELECT COALESCE(SUM(COALESCE(ads_watched, 0)), 0) as c FROM users`),
+    ]);
+    totalRefs = parseInt(refs.rows[0].c);
+    totalAds = parseInt(ads.rows[0].c);
+  } catch (e) {}
+
   res.json({
     total_users: parseInt(users.rows[0].total),
     total_power: parseFloat(power.rows[0].total),
@@ -80,6 +91,8 @@ router.get('/stats', async (req, res) => {
     new_users_24h: parseInt(revenue.rows[0].total),
     online_5min: online5,
     online_1h: online60,
+    total_referrals: totalRefs,
+    total_ads_watched: totalAds,
   });
 });
 
@@ -189,6 +202,29 @@ router.get('/stats/top', async (req, res) => {
         LIMIT $1
       `, [limit]);
       rows = result.rows.map(r => ({ ...r, sort_value: parseFloat(r.total_spent), extra: `${parseFloat(r.total_spent).toFixed(4)} TON` }));
+    } else if (field === 'referrals') {
+      // Users by referral count
+      const result = await pool.query(`
+        SELECT u.id, u.tg_id, u.username, u.first_name, u.power, u.ton_balance, u.is_premium,
+               COUNT(r.id) as ref_count,
+               COUNT(r.id) FILTER (WHERE r.is_confirmed = TRUE) as confirmed_refs
+        FROM users u
+        JOIN referrals r ON r.referrer_id = u.id
+        GROUP BY u.id
+        ORDER BY ref_count DESC
+        LIMIT $1
+      `, [limit]);
+      rows = result.rows.map(r => ({ ...r, sort_value: parseInt(r.ref_count), extra: `${r.ref_count} рефералов (${r.confirmed_refs} ✅)` }));
+    } else if (field === 'ads_watched') {
+      // Users by total ads watched
+      const result = await pool.query(`
+        SELECT id, tg_id, username, first_name, power, ton_balance, is_premium, COALESCE(ads_watched, 0) as ads_watched
+        FROM users
+        WHERE COALESCE(ads_watched, 0) > 0
+        ORDER BY ads_watched DESC
+        LIMIT $1
+      `, [limit]);
+      rows = result.rows.map(r => ({ ...r, sort_value: parseInt(r.ads_watched), extra: `${r.ads_watched} просмотров` }));
     } else {
       // Direct field sort (ton_balance, power)
       const allowed = ['ton_balance', 'power', 'hashes'];
@@ -564,7 +600,7 @@ router.delete('/packages/:id', async (req, res) => {
 // ── Ad Settings ──
 router.get('/ad-settings', async (req, res) => {
   const { rows } = await pool.query(
-    `SELECT key, value, label FROM app_settings WHERE key LIKE 'ad_%' OR key LIKE 'monetag_%' OR key LIKE 'order_%' ORDER BY key`
+    `SELECT key, value, label FROM app_settings WHERE key LIKE 'ad_%' OR key LIKE 'adsgram_%' OR key LIKE 'monetag_%' OR key LIKE 'richads_%' OR key LIKE 'order_%' ORDER BY key`
   );
   res.json(rows);
 });

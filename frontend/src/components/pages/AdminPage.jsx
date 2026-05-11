@@ -117,6 +117,8 @@ function Dashboard() {
     power: '⚡ Power',
     purchases: '🛒 Покупки',
     revenue: '💵 Выручка',
+    referrals: '👥 Рефералы',
+    ads_watched: '🎥 Просмотры реклам',
   };
 
   const openTop = async (field) => {
@@ -138,6 +140,8 @@ function Dashboard() {
     { icon: '💰', label: 'TON баланс', val: fmt(stats.total_ton_balance, 2), color: 'var(--orange)', field: 'ton_balance' },
     { icon: '🛒', label: 'Покупок', val: stats.total_purchases, color: 'var(--green)', field: 'purchases' },
     { icon: '💵', label: 'Выручка', val: `${fmt(stats.total_revenue, 2)} TON`, color: 'var(--gold)', field: 'revenue' },
+    { icon: '👥', label: 'Рефералы', val: stats.total_referrals || '▸', color: '#a855f7', field: 'referrals' },
+    { icon: '🎥', label: 'Ads просмотры', val: stats.total_ads_watched || '▸', color: '#f59e0b', field: 'ads_watched' },
     { icon: '⏳', label: 'Выводы (ожид)', val: stats.pending_withdrawals, color: stats.pending_withdrawals > 0 ? 'var(--red)' : 'var(--text-muted)' },
   ];
 
@@ -226,6 +230,8 @@ function Dashboard() {
                       {topField === 'power' && `${fmtK(u.power)} GH/s`}
                       {topField === 'purchases' && `${u.extra}`}
                       {topField === 'revenue' && `${u.extra}`}
+                      {topField === 'referrals' && `${u.extra}`}
+                      {topField === 'ads_watched' && `${u.extra}`}
                     </div>
                     <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>
                       {topField !== 'power' && `⚡ ${fmtK(u.power)}`}

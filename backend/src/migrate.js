@@ -229,6 +229,11 @@ const migrate = async () => {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMP;
     `);
 
+    // Add ads_watched counter
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS ads_watched INTEGER DEFAULT 0;
+    `);
+
     console.log('Migration complete');
   } catch (e) {
     console.error('Migration error:', e);
