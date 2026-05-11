@@ -83,6 +83,57 @@ router.get('/stats', async (req, res) => {
   });
 });
 
+// ── Top users by stat ──
+router.get('/stats/top', async (req, res) => {
+  const field = req.query.field || 'ton_balance';
+  const limit = Math.min(parseInt(req.query.limit) || 50, 100);
+
+  try {
+    let rows;
+    if (field === 'purchases') {
+      // Users by total purchase amount
+      const result = await pool.query(`
+        SELECT u.id, u.tg_id, u.username, u.first_name, u.power, u.ton_balance, u.is_premium,
+               COUNT(p.id) as purchase_count, COALESCE(SUM(p.ton_paid), 0) as total_spent
+        FROM users u
+        JOIN purchases p ON p.user_id = u.id
+        GROUP BY u.id
+        ORDER BY total_spent DESC
+        LIMIT $1
+      `, [limit]);
+      rows = result.rows.map(r => ({ ...r, sort_value: parseFloat(r.total_spent), extra: `${r.purchase_count} покупок` }));
+    } else if (field === 'revenue') {
+      // Same as purchases but labeled differently
+      const result = await pool.query(`
+        SELECT u.id, u.tg_id, u.username, u.first_name, u.power, u.ton_balance, u.is_premium,
+               COUNT(p.id) as purchase_count, COALESCE(SUM(p.ton_paid), 0) as total_spent
+        FROM users u
+        JOIN purchases p ON p.user_id = u.id
+        GROUP BY u.id
+        ORDER BY total_spent DESC
+        LIMIT $1
+      `, [limit]);
+      rows = result.rows.map(r => ({ ...r, sort_value: parseFloat(r.total_spent), extra: `${parseFloat(r.total_spent).toFixed(4)} TON` }));
+    } else {
+      // Direct field sort (ton_balance, power)
+      const allowed = ['ton_balance', 'power', 'hashes'];
+      const col = allowed.includes(field) ? field : 'ton_balance';
+      const result = await pool.query(`
+        SELECT id, tg_id, username, first_name, power, ton_balance, is_premium
+        FROM users
+        WHERE ${col} > 0
+        ORDER BY ${col} DESC
+        LIMIT $1
+      `, [limit]);
+      rows = result.rows.map(r => ({ ...r, sort_value: parseFloat(r[col]) }));
+    }
+    res.json(rows);
+  } catch (e) {
+    console.error('[Admin] Stats top error:', e.message);
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
 // ── Users ──
 router.get('/users', async (req, res) => {
   const page = parseInt(req.query.page) || 1;

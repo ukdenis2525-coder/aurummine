@@ -109,15 +109,36 @@ function Dashboard() {
 
   if (!stats) return <Loading />;
 
+  const [topField, setTopField] = useState(null);
+  const [topUsers, setTopUsers] = useState([]);
+  const [topLoading, setTopLoading] = useState(false);
+
+  const fieldLabels = {
+    ton_balance: '💰 TON баланс',
+    power: '⚡ Power',
+    purchases: '🛒 Покупки',
+    revenue: '💵 Выручка',
+  };
+
+  const openTop = async (field) => {
+    setTopField(field);
+    setTopLoading(true);
+    try {
+      const { data } = await api.get(`/admin/stats/top?field=${field}&limit=50`);
+      setTopUsers(data);
+    } catch (e) { setTopUsers([]); }
+    setTopLoading(false);
+  };
+
   const cards = [
     { icon: '👥', label: 'Пользователи', val: stats.total_users, color: 'var(--gold)' },
     { icon: '🆕', label: 'За 24ч', val: stats.new_users_24h, color: 'var(--green)' },
     { icon: '🟢', label: 'Онлайн (5м)', val: stats.online_5min || 0, color: '#22c55e' },
     { icon: '🔵', label: 'Онлайн (1ч)', val: stats.online_1h || 0, color: '#3b82f6' },
-    { icon: '⚡', label: 'Power (всего)', val: fmtK(stats.total_power), color: 'var(--gold-light)' },
-    { icon: '💰', label: 'TON баланс', val: fmt(stats.total_ton_balance, 2), color: 'var(--orange)' },
-    { icon: '🛒', label: 'Покупок', val: stats.total_purchases, color: 'var(--green)' },
-    { icon: '💵', label: 'Выручка', val: `${fmt(stats.total_revenue, 2)} TON`, color: 'var(--gold)' },
+    { icon: '⚡', label: 'Power (всего)', val: fmtK(stats.total_power), color: 'var(--gold-light)', field: 'power' },
+    { icon: '💰', label: 'TON баланс', val: fmt(stats.total_ton_balance, 2), color: 'var(--orange)', field: 'ton_balance' },
+    { icon: '🛒', label: 'Покупок', val: stats.total_purchases, color: 'var(--green)', field: 'purchases' },
+    { icon: '💵', label: 'Выручка', val: `${fmt(stats.total_revenue, 2)} TON`, color: 'var(--gold)', field: 'revenue' },
     { icon: '⏳', label: 'Выводы (ожид)', val: stats.pending_withdrawals, color: stats.pending_withdrawals > 0 ? 'var(--red)' : 'var(--text-muted)' },
   ];
 
@@ -146,16 +167,78 @@ function Dashboard() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
         {cards.map((c, i) => (
-          <div key={c.label} className="card" style={{
+          <div key={c.label} className="card" onClick={() => c.field && openTop(c.field)} style={{
             padding: 16, animation: `fadeIn 0.3s ease ${i * 0.05}s both`,
-            gridColumn: i === cards.length - 1 && cards.length % 2 !== 0 ? 'span 2' : undefined
+            gridColumn: i === cards.length - 1 && cards.length % 2 !== 0 ? 'span 2' : undefined,
+            cursor: c.field ? 'pointer' : 'default',
+            transition: 'transform 0.15s ease, border-color 0.15s ease',
+            border: c.field ? '1px solid var(--border)' : undefined,
           }}>
             <div style={{ fontSize: 18, marginBottom: 6 }}>{c.icon}</div>
             <div style={{ fontSize: 22, fontWeight: 900, color: c.color }}>{c.val}</div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.label}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              {c.label}
+              {c.field && <span style={{ fontSize: 9, marginLeft: 4, opacity: 0.5 }}>▸</span>}
+            </div>
           </div>
         ))}
       </div>
+
+      {/* Top users overlay */}
+      {topField && (
+        <div className="card" style={{ marginBottom: 16, animation: 'fadeIn 0.2s ease' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 14, borderBottom: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 14, fontWeight: 800 }}>{fieldLabels[topField] || topField}</div>
+            <button onClick={() => setTopField(null)} style={{
+              background: 'rgba(255,255,255,0.06)', border: 'none', borderRadius: 8,
+              padding: '4px 10px', color: 'var(--text-muted)', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+            }}>✕</button>
+          </div>
+          {topLoading ? <div style={{ padding: 20, textAlign: 'center' }}><Loading /></div> : (
+            <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+              {topUsers.length === 0 && (
+                <div style={{ padding: 20, textAlign: 'center', fontSize: 12, color: 'var(--text-muted)' }}>Нет данных</div>
+              )}
+              {topUsers.map((u, i) => (
+                <div key={u.id} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '10px 14px', borderBottom: '1px solid var(--border)',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{
+                      width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
+                      background: i < 3 ? 'rgba(212,175,55,0.15)' : 'rgba(255,255,255,0.05)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 11, fontWeight: 800, color: i < 3 ? 'var(--gold)' : 'var(--text-muted)',
+                    }}>{i + 1}</div>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700 }}>
+                        {u.first_name || u.username || 'Noname'}
+                        {u.is_premium && <span style={{ fontSize: 8, marginLeft: 3 }}>⭐</span>}
+                      </div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                        TG: {u.tg_id}{u.username ? ` • @${u.username}` : ''}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--gold)' }}>
+                      {topField === 'ton_balance' && `${parseFloat(u.ton_balance).toFixed(4)} TON`}
+                      {topField === 'power' && `${fmtK(u.power)} GH/s`}
+                      {topField === 'purchases' && `${u.extra}`}
+                      {topField === 'revenue' && `${u.extra}`}
+                    </div>
+                    <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>
+                      {topField !== 'power' && `⚡ ${fmtK(u.power)}`}
+                      {topField !== 'ton_balance' && ` 💎 ${parseFloat(u.ton_balance || 0).toFixed(2)}`}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Manual payment check */}
       <button className="btn-gold" onClick={manualCheck} disabled={checking}
