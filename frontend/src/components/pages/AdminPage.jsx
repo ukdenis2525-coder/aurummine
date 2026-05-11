@@ -1494,7 +1494,7 @@ function AdsPanel() {
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <input
-          type="number"
+          type={s.key.endsWith('_id') || s.key.endsWith('block_id') ? 'text' : 'number'}
           value={s.value}
           onChange={e => updateVal(s.key, e.target.value)}
           style={{ flex: 1, padding: '10px 12px', fontSize: 16, fontWeight: 700, textAlign: 'center' }}
