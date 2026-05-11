@@ -537,12 +537,15 @@ router.get('/admins', async (req, res) => {
   const admins = allIds.map(tgId => {
     const dbEntry = dbAdmins.find(a => String(a.tg_id) === tgId);
     const userInfo = usersMap[tgId];
+    let permissions = [];
+    try { permissions = JSON.parse(dbEntry?.permissions || '[]'); } catch (e) {}
     return {
       tg_id: tgId,
       label: dbEntry?.label || null,
       username: userInfo?.username || null,
       first_name: userInfo?.first_name || null,
       is_env: envIds.includes(tgId),
+      permissions: envIds.includes(tgId) ? '*' : permissions,
       added_by: dbEntry?.added_by ? String(dbEntry.added_by) : null,
       created_at: dbEntry?.created_at || null,
     };
@@ -552,7 +555,7 @@ router.get('/admins', async (req, res) => {
 });
 
 router.post('/admins', async (req, res) => {
-  const { tg_id, label } = req.body;
+  const { tg_id, label, permissions } = req.body;
   if (!tg_id) return res.status(400).json({ error: 'tg_id required' });
 
   // Get the requester's tg_id for added_by
@@ -566,11 +569,13 @@ router.post('/admins', async (req, res) => {
     } catch (e) {}
   }
 
+  const permsJson = JSON.stringify(Array.isArray(permissions) ? permissions : []);
+
   try {
     await pool.query(
-      `INSERT INTO admins (tg_id, label, added_by) VALUES ($1, $2, $3)
-       ON CONFLICT (tg_id) DO UPDATE SET label = $2`,
-      [String(tg_id), label || null, addedBy]
+      `INSERT INTO admins (tg_id, label, permissions, added_by) VALUES ($1, $2, $3, $4)
+       ON CONFLICT (tg_id) DO UPDATE SET label = $2, permissions = $3`,
+      [String(tg_id), label || null, permsJson, addedBy]
     );
     res.json({ success: true });
   } catch (e) {
@@ -613,11 +618,71 @@ router.delete('/admins/:tg_id', async (req, res) => {
   }
 });
 
-// Check if current user is admin (used by frontend for multi-admin support)
+// Update admin permissions
+router.put('/admins/:tg_id/permissions', async (req, res) => {
+  const targetId = req.params.tg_id;
+  const { permissions } = req.body;
+
+  // Cannot change env-based super admin permissions
+  const envIds = (process.env.ADMIN_TG_IDS || process.env.ADMIN_TG_ID || '')
+    .split(',').map(s => s.trim()).filter(Boolean);
+  if (envIds.includes(targetId)) {
+    return res.status(400).json({ error: 'Cannot change super admin permissions' });
+  }
+
+  if (!Array.isArray(permissions)) {
+    return res.status(400).json({ error: 'permissions must be an array' });
+  }
+
+  try {
+    await pool.query(
+      `UPDATE admins SET permissions = $1 WHERE tg_id = $2`,
+      [JSON.stringify(permissions), targetId]
+    );
+    res.json({ success: true });
+  } catch (e) {
+    console.error('[Admin] Update permissions error:', e.message);
+    res.status(500).json({ error: 'Failed to update permissions' });
+  }
+});
+
+// Check if current user is admin + return their permissions
 router.get('/check-admin', async (req, res) => {
   // If we got here, middleware already passed — user IS admin
-  res.json({ isAdmin: true });
+  // Get the user's tg_id to return their permissions
+  const envIds = (process.env.ADMIN_TG_IDS || process.env.ADMIN_TG_ID || '')
+    .split(',').map(s => s.trim()).filter(Boolean);
+
+  let tgId = null;
+  const initData = req.headers['x-init-data'];
+  if (initData) {
+    try {
+      const params = new URLSearchParams(initData);
+      const userParam = params.get('user');
+      if (userParam) tgId = String(JSON.parse(userParam).id);
+    } catch (e) {}
+  }
+
+  // Super admins have all permissions
+  if (tgId && envIds.includes(tgId)) {
+    return res.json({ isAdmin: true, permissions: '*' });
+  }
+
+  // DB admin — get their permissions
+  if (tgId) {
+    try {
+      const { rows } = await pool.query(`SELECT permissions FROM admins WHERE tg_id = $1`, [tgId]);
+      if (rows.length) {
+        let perms = [];
+        try { perms = JSON.parse(rows[0].permissions || '[]'); } catch (e) {}
+        return res.json({ isAdmin: true, permissions: perms });
+      }
+    } catch (e) {}
+  }
+
+  res.json({ isAdmin: true, permissions: [] });
 });
 
 export { getAllAdminIds };
 export default router;
+

@@ -11,6 +11,7 @@ export const useStore = create((set, get) => ({
   blocked: false,
   activeTab: 'power',
   isAdmin: false,
+  adminPerms: null, // '*' = full access, [] = array of tab IDs
 
   setTab: (tab) => set({ activeTab: tab }),
 
@@ -23,18 +24,20 @@ export const useStore = create((set, get) => ({
 
       // Check env-based admin IDs first
       let isAdmin = ADMIN_IDS.length > 0 && ADMIN_IDS.includes(currentId);
+      let adminPerms = isAdmin ? '*' : null;
 
       // If not in env, try dynamic API check (DB-based admins)
       if (!isAdmin) {
         try {
           const { data: adminCheck } = await api.get('/admin/check-admin');
           isAdmin = !!adminCheck?.isAdmin;
+          adminPerms = adminCheck?.permissions || [];
         } catch (e) {
           // 403 = not admin, that's fine
         }
       }
 
-      set({ user, isAdmin, mining: data.mining || null });
+      set({ user, isAdmin, adminPerms, mining: data.mining || null });
     } catch (e) {
       // 403 = blocked user (silent block)
       if (e.response?.status === 403) {

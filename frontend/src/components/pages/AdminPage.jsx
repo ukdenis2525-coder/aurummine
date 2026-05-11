@@ -3,7 +3,7 @@ import api from '../../utils/api.js';
 import { useStore } from '../../store/index.js';
 import { fmt, fmtK } from '../../utils/format.js';
 
-const TABS = [
+const ALL_TABS = [
   { id: 'dashboard', icon: '📊', label: 'Обзор' },
   { id: 'users', icon: '👥', label: 'Юзеры' },
   { id: 'withdrawals', icon: '💸', label: 'Выводы' },
@@ -16,8 +16,23 @@ const TABS = [
 ];
 
 export default function AdminPage() {
-  const { setTab: setAppTab } = useStore();
-  const [tab, setTab] = useState('dashboard');
+  const { setTab: setAppTab, adminPerms } = useStore();
+
+  // Filter tabs by permissions
+  const visibleTabs = adminPerms === '*'
+    ? ALL_TABS
+    : ALL_TABS.filter(t => {
+        // 'admins' tab only for super admins
+        if (t.id === 'admins') return false;
+        // Dashboard always visible
+        if (t.id === 'dashboard') return true;
+        return Array.isArray(adminPerms) && adminPerms.includes(t.id);
+      });
+
+  const [tab, setTab] = useState(visibleTabs[0]?.id || 'dashboard');
+
+  // Dynamic grid columns based on tab count
+  const cols = visibleTabs.length <= 4 ? visibleTabs.length : visibleTabs.length <= 6 ? 3 : 3;
 
   return (
     <div className="page" style={{ paddingBottom: 20 }}>
@@ -35,9 +50,9 @@ export default function AdminPage() {
 
       {/* Tab grid */}
       <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 20,
+        display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 8, marginBottom: 20,
       }}>
-        {TABS.map(t => (
+        {visibleTabs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
             padding: '14px 6px', borderRadius: 14, border: 'none',
             background: tab === t.id
@@ -1352,21 +1367,32 @@ function AdsPanel() {
 }
 
 // ═══════════════════ ADMINS ═══════════════════
+const PERM_TABS = [
+  { id: 'users', icon: '👥', label: 'Юзеры' },
+  { id: 'withdrawals', icon: '💸', label: 'Выводы' },
+  { id: 'tasks', icon: '📋', label: 'Задания' },
+  { id: 'orders', icon: '🛒', label: 'Заказы' },
+  { id: 'packages', icon: '📦', label: 'Пакеты' },
+  { id: 'ads', icon: '🎬', label: 'Реклама' },
+  { id: 'referrals', icon: '🤝', label: 'Рефералы' },
+];
+
 function AdminsPanel() {
   const [admins, setAdmins] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ tg_id: '', label: '' });
+  const [form, setForm] = useState({ tg_id: '', label: '', permissions: [] });
   const [msg, setMsg] = useState(null);
   const [confirmRemove, setConfirmRemove] = useState(null);
+  const [editPerms, setEditPerms] = useState(null); // tg_id of admin being edited
+  const [tempPerms, setTempPerms] = useState([]);
+  const [savingPerms, setSavingPerms] = useState(false);
 
   const load = async () => {
     try {
       const { data } = await api.get('/admin/admins');
       setAdmins(data);
-    } catch (e) {
-      setMsg('❌ Ошибка загрузки');
-    }
+    } catch (e) { setMsg('❌ Ошибка загрузки'); }
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
@@ -1376,14 +1402,16 @@ function AdminsPanel() {
   const addAdmin = async () => {
     if (!form.tg_id) return;
     try {
-      await api.post('/admin/admins', { tg_id: form.tg_id.trim(), label: form.label.trim() || null });
+      await api.post('/admin/admins', {
+        tg_id: form.tg_id.trim(),
+        label: form.label.trim() || null,
+        permissions: form.permissions,
+      });
       showMsg('✅ Админ добавлен');
-      setForm({ tg_id: '', label: '' });
+      setForm({ tg_id: '', label: '', permissions: [] });
       setShowForm(false);
       load();
-    } catch (e) {
-      showMsg(`❌ ${e.response?.data?.error || 'Ошибка'}`);
-    }
+    } catch (e) { showMsg(`❌ ${e.response?.data?.error || 'Ошибка'}`); }
   };
 
   const removeAdmin = async (tgId) => {
@@ -1392,27 +1420,46 @@ function AdminsPanel() {
       showMsg('🗑️ Админ удалён');
       setConfirmRemove(null);
       load();
-    } catch (e) {
-      showMsg(`❌ ${e.response?.data?.error || 'Ошибка'}`);
-    }
+    } catch (e) { showMsg(`❌ ${e.response?.data?.error || 'Ошибка'}`); }
+  };
+
+  const startEditPerms = (a) => {
+    setEditPerms(a.tg_id);
+    setTempPerms(Array.isArray(a.permissions) ? [...a.permissions] : []);
+  };
+
+  const togglePerm = (id) => {
+    setTempPerms(prev => prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]);
+  };
+
+  const toggleAllPerms = () => {
+    setTempPerms(prev => prev.length === PERM_TABS.length ? [] : PERM_TABS.map(t => t.id));
+  };
+
+  const savePerms = async (tgId) => {
+    setSavingPerms(true);
+    try {
+      await api.put(`/admin/admins/${tgId}/permissions`, { permissions: tempPerms });
+      showMsg('✅ Права сохранены');
+      setEditPerms(null);
+      load();
+    } catch (e) { showMsg(`❌ ${e.response?.data?.error || 'Ошибка'}`); }
+    setSavingPerms(false);
   };
 
   if (loading) return <Loading />;
 
   return (
     <div>
-      {/* Status message */}
       {msg && (
         <div style={{
           padding: '10px 14px', borderRadius: 10, marginBottom: 12,
           background: msg.startsWith('✅') || msg.startsWith('🗑') ? 'rgba(52,211,153,0.1)' : 'var(--red-bg)',
           color: msg.startsWith('✅') || msg.startsWith('🗑') ? 'var(--green)' : 'var(--red)',
-          fontSize: 12, fontWeight: 600, textAlign: 'center',
-          animation: 'fadeIn 0.3s ease'
+          fontSize: 12, fontWeight: 600, textAlign: 'center', animation: 'fadeIn 0.3s ease'
         }}>{msg}</div>
       )}
 
-      {/* Header info */}
       <div className="card" style={{ padding: 14, marginBottom: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
           <span style={{ fontSize: 24 }}>🛡️</span>
@@ -1422,18 +1469,16 @@ function AdminsPanel() {
           </div>
         </div>
         <div style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-          🔒 Суперадмины (env) не могут быть удалены через панель.
-          Добавленные через панель админы имеют полный доступ к админке.
+          👑 Суперадмины (env) имеют полный доступ.
+          Добавленным админам нужно назначить разделы.
         </div>
       </div>
 
-      {/* Add button */}
       <button onClick={() => setShowForm(!showForm)}
         className="btn-gold" style={{ marginBottom: 14, padding: 10, fontSize: 13 }}>
         {showForm ? '✕ Отмена' : '+ Добавить админа'}
       </button>
 
-      {/* Add form */}
       {showForm && (
         <div className="card" style={{ marginBottom: 14, animation: 'fadeIn 0.3s ease' }}>
           <div style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 700, marginBottom: 10, letterSpacing: 1 }}>
@@ -1443,13 +1488,31 @@ function AdminsPanel() {
             placeholder="Telegram ID (числовой)" style={{ marginBottom: 8, fontSize: 13 }} />
           <input type="text" value={form.label} onChange={e => setForm({...form, label: e.target.value})}
             placeholder="Имя / метка (опционально)" style={{ marginBottom: 10, fontSize: 13 }} />
+
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 6, fontWeight: 600 }}>
+            🔐 ДОСТУП К РАЗДЕЛАМ:
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 10 }}>
+            {PERM_TABS.map(t => {
+              const active = form.permissions.includes(t.id);
+              return (
+                <button key={t.id} onClick={() => setForm({...form,
+                  permissions: active ? form.permissions.filter(p => p !== t.id) : [...form.permissions, t.id]
+                })} style={{
+                  padding: '5px 10px', borderRadius: 8, border: 'none', fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                  background: active ? 'rgba(52,211,153,0.15)' : 'rgba(255,255,255,0.04)',
+                  color: active ? 'var(--green)' : 'var(--text-muted)',
+                }}>{t.icon} {t.label}</button>
+              );
+            })}
+          </div>
+
           <button className="btn-gold" onClick={addAdmin} style={{ padding: 10, fontSize: 13 }}>
             🛡️ Добавить
           </button>
         </div>
       )}
 
-      {/* Admins list */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {admins.map((a, i) => (
           <div key={a.tg_id} className="card" style={{
@@ -1460,13 +1523,9 @@ function AdminsPanel() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
                 <div style={{
                   width: 38, height: 38, borderRadius: '50%',
-                  background: a.is_env
-                    ? 'linear-gradient(135deg, var(--gold-dark), var(--gold))'
-                    : 'rgba(255,255,255,0.06)',
+                  background: a.is_env ? 'linear-gradient(135deg, var(--gold-dark), var(--gold))' : 'rgba(255,255,255,0.06)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 16, fontWeight: 800,
-                  color: a.is_env ? '#000' : 'var(--text-muted)',
-                  flexShrink: 0,
+                  fontSize: 16, color: a.is_env ? '#000' : 'var(--text-muted)', flexShrink: 0,
                 }}>
                   {a.is_env ? '👑' : '🛡️'}
                 </div>
@@ -1476,47 +1535,97 @@ function AdminsPanel() {
                       {a.first_name || a.username || a.label || 'Admin'}
                     </span>
                     {a.is_env && (
-                      <span style={{
-                        fontSize: 8, padding: '2px 6px', borderRadius: 4, fontWeight: 800,
-                        background: 'linear-gradient(135deg, var(--gold-dark), var(--gold))',
-                        color: '#000', letterSpacing: 0.5
+                      <span style={{ fontSize: 8, padding: '2px 6px', borderRadius: 4, fontWeight: 800,
+                        background: 'linear-gradient(135deg, var(--gold-dark), var(--gold))', color: '#000'
                       }}>SUPER</span>
                     )}
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
-                    TG: {a.tg_id}
-                    {a.username ? ` • @${a.username}` : ''}
+                    TG: {a.tg_id}{a.username ? ` • @${a.username}` : ''}
                   </div>
-                  {a.label && a.label !== (a.first_name || a.username) && (
-                    <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 2 }}>
-                      📝 {a.label}
-                    </div>
-                  )}
-                  {a.created_at && (
-                    <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>
-                      Добавлен: {new Date(a.created_at).toLocaleDateString()}
-                    </div>
-                  )}
+                  {/* Permissions badges */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 4 }}>
+                    {a.permissions === '*' ? (
+                      <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4, background: 'rgba(212,175,55,0.15)', color: 'var(--gold)', fontWeight: 700 }}>
+                        ✦ Полный доступ
+                      </span>
+                    ) : Array.isArray(a.permissions) && a.permissions.length > 0 ? (
+                      a.permissions.map(p => {
+                        const t = PERM_TABS.find(x => x.id === p);
+                        return t ? (
+                          <span key={p} style={{ fontSize: 8, padding: '1px 5px', borderRadius: 4, background: 'rgba(52,211,153,0.1)', color: 'var(--green)', fontWeight: 600 }}>
+                            {t.icon}
+                          </span>
+                        ) : null;
+                      })
+                    ) : (
+                      <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4, background: 'rgba(248,113,113,0.1)', color: 'var(--red)', fontWeight: 600 }}>
+                        ⚠ Нет доступа
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              {/* Actions */}
-              {!a.is_env && (
-                <button onClick={() => setConfirmRemove(a.tg_id)} style={{
-                  background: 'var(--red-bg)', border: 'none', borderRadius: 10,
-                  padding: '8px 12px', color: 'var(--red)',
-                  fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                  flexShrink: 0,
-                }}>🗑 Удалить</button>
-              )}
+              <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                {!a.is_env && (
+                  <>
+                    <button onClick={() => editPerms === a.tg_id ? setEditPerms(null) : startEditPerms(a)} style={{
+                      background: editPerms === a.tg_id ? 'rgba(212,175,55,0.15)' : 'rgba(255,255,255,0.04)',
+                      border: 'none', borderRadius: 8, padding: '6px 10px',
+                      color: editPerms === a.tg_id ? 'var(--gold)' : 'var(--text-muted)',
+                      fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                    }}>🔐</button>
+                    <button onClick={() => setConfirmRemove(a.tg_id)} style={{
+                      background: 'var(--red-bg)', border: 'none', borderRadius: 8,
+                      padding: '6px 10px', color: 'var(--red)', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                    }}>🗑</button>
+                  </>
+                )}
+              </div>
             </div>
+
+            {/* Permissions editor */}
+            {editPerms === a.tg_id && (
+              <div style={{ marginTop: 10, padding: 12, background: 'rgba(255,255,255,0.03)', borderRadius: 12, animation: 'fadeIn 0.2s ease' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <div style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 700, letterSpacing: 1 }}>🔐 ДОСТУП</div>
+                  <button onClick={toggleAllPerms} style={{
+                    background: 'rgba(255,255,255,0.04)', border: 'none', borderRadius: 6,
+                    padding: '3px 8px', color: 'var(--text-muted)', fontSize: 9, fontWeight: 700, cursor: 'pointer',
+                  }}>{tempPerms.length === PERM_TABS.length ? 'Снять все' : 'Выбрать все'}</button>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 10 }}>
+                  {PERM_TABS.map(t => {
+                    const active = tempPerms.includes(t.id);
+                    return (
+                      <button key={t.id} onClick={() => togglePerm(t.id)} style={{
+                        padding: '6px 10px', borderRadius: 8, border: 'none', fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                        background: active ? 'rgba(52,211,153,0.15)' : 'rgba(255,255,255,0.04)',
+                        color: active ? 'var(--green)' : 'var(--text-muted)',
+                        transition: 'all 0.15s ease',
+                      }}>{active ? '✅' : '⬜'} {t.icon} {t.label}</button>
+                    );
+                  })}
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => savePerms(a.tg_id)} disabled={savingPerms} className="btn-gold"
+                    style={{ flex: 1, padding: 10, fontSize: 12 }}>
+                    {savingPerms ? '⏳...' : '💾 Сохранить'}
+                  </button>
+                  <button onClick={() => setEditPerms(null)} style={{
+                    padding: '10px 16px', borderRadius: 10, border: '1px solid var(--border)',
+                    background: 'transparent', color: 'var(--text-muted)', fontWeight: 700, fontSize: 12, cursor: 'pointer',
+                  }}>✕</button>
+                </div>
+              </div>
+            )}
 
             {/* Remove confirmation */}
             {confirmRemove === a.tg_id && (
               <div style={{
                 marginTop: 10, padding: 12, background: 'var(--red-bg)', borderRadius: 12,
-                border: '1px solid rgba(248,113,113,0.3)', textAlign: 'center',
-                animation: 'fadeIn 0.2s ease'
+                border: '1px solid rgba(248,113,113,0.3)', textAlign: 'center', animation: 'fadeIn 0.2s ease'
               }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--red)', marginBottom: 10 }}>
                   ⚠️ Удалить админа {a.first_name || a.username || a.tg_id}?
@@ -1524,13 +1633,11 @@ function AdminsPanel() {
                 <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
                   <button onClick={() => removeAdmin(a.tg_id)} style={{
                     padding: '8px 20px', borderRadius: 10, border: 'none',
-                    background: 'var(--red)', color: '#fff',
-                    fontWeight: 700, fontSize: 12, cursor: 'pointer'
+                    background: 'var(--red)', color: '#fff', fontWeight: 700, fontSize: 12, cursor: 'pointer'
                   }}>Да, удалить</button>
                   <button onClick={() => setConfirmRemove(null)} style={{
                     padding: '8px 20px', borderRadius: 10, border: '1px solid var(--border)',
-                    background: 'transparent', color: 'var(--text-muted)',
-                    fontWeight: 700, fontSize: 12, cursor: 'pointer'
+                    background: 'transparent', color: 'var(--text-muted)', fontWeight: 700, fontSize: 12, cursor: 'pointer'
                   }}>Отмена</button>
                 </div>
               </div>

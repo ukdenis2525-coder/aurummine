@@ -195,9 +195,15 @@ const migrate = async () => {
         id SERIAL PRIMARY KEY,
         tg_id BIGINT UNIQUE NOT NULL,
         label VARCHAR(255),
+        permissions TEXT DEFAULT '[]',
         added_by BIGINT,
         created_at TIMESTAMP DEFAULT NOW()
       );
+    `);
+
+    // Add permissions column if not exists (for existing DBs)
+    await client.query(`
+      ALTER TABLE admins ADD COLUMN IF NOT EXISTS permissions TEXT DEFAULT '[]';
     `);
 
     console.log('Migration complete');
