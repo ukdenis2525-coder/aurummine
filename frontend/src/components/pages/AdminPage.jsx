@@ -94,6 +94,9 @@ function Dashboard() {
   const [checking, setChecking] = useState(false);
   const [checkResult, setCheckResult] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [topField, setTopField] = useState(null);
+  const [topUsers, setTopUsers] = useState([]);
+  const [topLoading, setTopLoading] = useState(false);
 
   const loadStats = async () => {
     try { const { data } = await api.get('/admin/stats'); setStats(data); } catch (e) {}
@@ -108,10 +111,6 @@ function Dashboard() {
   };
 
   if (!stats) return <Loading />;
-
-  const [topField, setTopField] = useState(null);
-  const [topUsers, setTopUsers] = useState([]);
-  const [topLoading, setTopLoading] = useState(false);
 
   const fieldLabels = {
     ton_balance: '💰 TON баланс',
