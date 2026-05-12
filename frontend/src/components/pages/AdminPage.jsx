@@ -2295,7 +2295,7 @@ function AmbassadorSettings({ settings, onSave, showMsg }) {
           />
           <span style={{ fontSize: 18, fontWeight: 800, color: 'var(--gold)' }}>%</span>
           <div style={{ flex: 1, fontSize: 11, color: 'var(--text-muted)' }}>
-            Стандартная: 15%<br/>Амбассадор: <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{commission}%</span>
+            Стандартная: {settings?.standard_commission_pct ?? '...'}%<br/>Амбассадор: <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{commission}%</span>
           </div>
         </div>
       </div>

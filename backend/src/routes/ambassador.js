@@ -424,12 +424,13 @@ router.post('/admin/posts/:id/publish', ambassadorAdminMiddleware, async (req, r
 router.get('/admin/settings', ambassadorAdminMiddleware, async (req, res) => {
   try {
     const { rows: settingsRows } = await pool.query(
-      `SELECT key, value FROM app_settings WHERE key IN ('ambassador_visibility', 'ambassador_commission_pct')`
+      `SELECT key, value FROM app_settings WHERE key IN ('ambassador_visibility', 'ambassador_commission_pct', 'ref_commission_pct')`
     );
     const s = {};
     for (const r of settingsRows) s[r.key] = r.value;
     const visibility = parseInt(s.ambassador_visibility || '0');
     const commission_pct = parseFloat(s.ambassador_commission_pct || '25');
+    const standard_commission_pct = parseFloat(s.ref_commission_pct || '15');
 
     // Stats
     const [totalChannels, approvedChannels, pendingChannels, totalPosts] = await Promise.all([
@@ -442,6 +443,7 @@ router.get('/admin/settings', ambassadorAdminMiddleware, async (req, res) => {
     res.json({
       visibility,
       commission_pct,
+      standard_commission_pct,
       stats: {
         total_channels: parseInt(totalChannels.rows[0].c),
         approved_channels: parseInt(approvedChannels.rows[0].c),
