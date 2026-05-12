@@ -2758,8 +2758,20 @@ function PromoCodesPanel() {
       {showForm && (
         <div className="card" style={{ marginBottom: 14, animation: 'fadeIn 0.3s ease' }}>
           <div style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 700, marginBottom: 12, letterSpacing: 1 }}>🎟️ НОВЫЙ ПРОМОКОД</div>
-          <input type="text" value={code} onChange={e => setCode(e.target.value.toUpperCase())}
-            placeholder="Код (например: WELCOME20)" style={{ marginBottom: 8, fontSize: 14, fontWeight: 700, letterSpacing: 2 }} />
+          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+            <input type="text" value={code} onChange={e => setCode(e.target.value.toUpperCase())}
+              placeholder="Код (например: WELCOME20)" style={{ flex: 1, fontSize: 14, fontWeight: 700, letterSpacing: 2 }} />
+            <button onClick={() => {
+              const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+              let r = '';
+              for (let i = 0; i < 8; i++) r += chars[Math.floor(Math.random() * chars.length)];
+              setCode(r);
+            }} style={{
+              padding: '10px 14px', borderRadius: 10, border: '1px solid rgba(212,175,55,0.2)',
+              background: 'rgba(212,175,55,0.08)', color: 'var(--gold)',
+              fontSize: 16, cursor: 'pointer', fontWeight: 700, whiteSpace: 'nowrap',
+            }} title="Сгенерировать случайный код">🎲</button>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
             <div>
               <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>Скидка (%)</div>
