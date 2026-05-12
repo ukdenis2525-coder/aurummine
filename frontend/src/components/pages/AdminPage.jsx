@@ -13,6 +13,7 @@ const ALL_TABS = [
   { id: 'ads', icon: '🎬', label: 'Реклама' },
   { id: 'referrals', icon: '🤝', label: 'Рефералы' },
   { id: 'ambassador', icon: '🤝', label: 'Амбассадор' },
+  { id: 'promo', icon: '🎟️', label: 'Промокоды' },
   { id: 'broadcast', icon: '📢', label: 'Рассылка' },
   { id: 'multi', icon: '👁', label: 'Мульти' },
   { id: 'admins', icon: '🛡️', label: 'Админы' },
@@ -86,6 +87,7 @@ export default function AdminPage() {
       {tab === 'multi' && <MultiAccountPanel />}
       {tab === 'admins' && <AdminsPanel />}
       {tab === 'ambassador' && <AmbassadorAdminPanel />}
+      {tab === 'promo' && <PromoCodesPanel />}
     </div>
   );
 }
@@ -1892,6 +1894,7 @@ const PERM_TABS = [
   { id: 'ads', icon: '🎬', label: 'Реклама' },
   { id: 'referrals', icon: '🤝', label: 'Рефералы' },
   { id: 'ambassador', icon: '🤝', label: 'Амбассадор' },
+  { id: 'promo', icon: '🎟️', label: 'Промокоды' },
   { id: 'broadcast', icon: '📢', label: 'Рассылка' },
   { id: 'multi', icon: '👁', label: 'Мульти' },
 ];
@@ -2690,6 +2693,156 @@ function PagBtn({ children, ...props }) {
   );
 }
 
+// ═══════════════════ PROMO CODES ═══════════════════
+function PromoCodesPanel() {
+  const [promos, setPromos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [code, setCode] = useState('');
+  const [discountPct, setDiscountPct] = useState(10);
+  const [maxUses, setMaxUses] = useState(0);
+  const [expiresAt, setExpiresAt] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  const load = async () => {
+    try { const { data } = await api.get('/admin/promo-codes'); setPromos(data); }
+    catch (e) {} finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, []);
+  const showMsg = (m) => { setMsg(m); setTimeout(() => setMsg(null), 3000); };
+
+  const create = async () => {
+    if (!code.trim()) return;
+    setCreating(true);
+    try {
+      await api.post('/admin/promo-codes', { code: code.trim(), discount_pct: discountPct, max_uses: maxUses, expires_at: expiresAt || null });
+      showMsg('✅ Промокод создан');
+      setCode(''); setDiscountPct(10); setMaxUses(0); setExpiresAt(''); setShowForm(false); load();
+    } catch (e) { showMsg(`❌ ${e.response?.data?.error || 'Ошибка'}`); }
+    setCreating(false);
+  };
+  const toggle = async (id) => { try { await api.post(`/admin/promo-codes/${id}/toggle`); load(); } catch (e) { showMsg('❌ Ошибка'); } };
+  const remove = async (id) => { try { await api.delete(`/admin/promo-codes/${id}`); showMsg('🗑 Удалён'); load(); } catch (e) { showMsg('❌ Ошибка'); } };
+
+  if (loading) return <Loading />;
+
+  return (
+    <div>
+      <div style={{ fontSize: 18, fontWeight: 900, marginBottom: 4 }}>🎟️ Промокоды</div>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>Скидки на покупки в магазине</div>
+
+      {msg && (<div style={{ padding: 10, borderRadius: 10, marginBottom: 12, fontSize: 12, fontWeight: 600,
+        background: msg.includes('✅') ? 'rgba(52,211,153,0.1)' : 'rgba(248,113,113,0.1)',
+        color: msg.includes('✅') ? 'var(--green)' : 'var(--red)',
+      }}>{msg}</div>)}
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 16 }}>
+        {[
+          { icon: '🎟️', label: 'Всего', val: promos.length, color: 'var(--gold)' },
+          { icon: '✅', label: 'Активных', val: promos.filter(p => p.is_active).length, color: 'var(--green)' },
+          { icon: '🔢', label: 'Исп-но', val: promos.reduce((a, p) => a + p.used_count, 0), color: 'var(--gold-light)' },
+        ].map(c => (
+          <div key={c.label} className="card" style={{ padding: 12, textAlign: 'center' }}>
+            <div style={{ fontSize: 14, marginBottom: 2 }}>{c.icon}</div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: c.color }}>{c.val}</div>
+            <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{c.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <button onClick={() => setShowForm(!showForm)} className="btn-gold" style={{ marginBottom: 14, padding: 10, fontSize: 13, width: '100%' }}>
+        {showForm ? '✕ Отмена' : '+ Новый промокод'}
+      </button>
+
+      {showForm && (
+        <div className="card" style={{ marginBottom: 14, animation: 'fadeIn 0.3s ease' }}>
+          <div style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 700, marginBottom: 12, letterSpacing: 1 }}>🎟️ НОВЫЙ ПРОМОКОД</div>
+          <input type="text" value={code} onChange={e => setCode(e.target.value.toUpperCase())}
+            placeholder="Код (например: WELCOME20)" style={{ marginBottom: 8, fontSize: 14, fontWeight: 700, letterSpacing: 2 }} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+            <div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>Скидка (%)</div>
+              <input type="number" min="1" max="100" value={discountPct} onChange={e => setDiscountPct(parseInt(e.target.value) || 0)} style={{ fontSize: 16, fontWeight: 800, textAlign: 'center' }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>Макс. исп. (0=∞)</div>
+              <input type="number" min="0" value={maxUses} onChange={e => setMaxUses(parseInt(e.target.value) || 0)} style={{ fontSize: 16, fontWeight: 800, textAlign: 'center' }} />
+            </div>
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>Срок действия (необязательно)</div>
+            <input type="datetime-local" value={expiresAt} onChange={e => setExpiresAt(e.target.value)} style={{ fontSize: 12 }} />
+          </div>
+          {code && (
+            <div style={{ padding: 10, borderRadius: 10, marginBottom: 12, background: 'rgba(52,211,153,0.06)', border: '1px solid rgba(52,211,153,0.15)' }}>
+              <div style={{ fontSize: 10, color: 'var(--green)', fontWeight: 700, marginBottom: 4 }}>ПРЕДПРОСМОТР</div>
+              <div style={{ fontSize: 14, fontWeight: 800 }}>{code} — <span style={{ color: 'var(--green)' }}>-{discountPct}%</span>
+                {maxUses > 0 && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}> (макс. {maxUses} исп.)</span>}
+              </div>
+            </div>
+          )}
+          <button className="btn-gold" onClick={create} disabled={creating || !code.trim() || discountPct <= 0} style={{ padding: 10, fontSize: 13 }}>
+            {creating ? '⏳ Создаю...' : '💾 Создать промокод'}
+          </button>
+        </div>
+      )}
+
+      {promos.length === 0 && !showForm && (
+        <div className="card" style={{ textAlign: 'center', padding: 30 }}>
+          <div style={{ fontSize: 30, marginBottom: 8 }}>🎟️</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Промокодов пока нет</div>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {promos.map((p, i) => {
+          const expired = p.expires_at && new Date(p.expires_at) < new Date();
+          const exhausted = p.max_uses > 0 && p.used_count >= p.max_uses;
+          return (
+            <div key={p.id} className="card" style={{ padding: 14, animation: `fadeIn 0.3s ease ${i * 0.04}s both`, opacity: (!p.is_active || expired || exhausted) ? 0.5 : 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <div style={{ fontSize: 16, fontWeight: 900, letterSpacing: 2, color: 'var(--gold)' }}>{p.code}</div>
+                <div style={{ fontSize: 16, fontWeight: 800, background: 'linear-gradient(135deg, #22c55e, #16a34a)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>-{p.discount_pct}%</div>
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+                <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 6, fontWeight: 700,
+                  background: p.is_active && !expired && !exhausted ? 'rgba(52,211,153,0.15)' : 'rgba(248,113,113,0.15)',
+                  color: p.is_active && !expired && !exhausted ? 'var(--green)' : 'var(--red)',
+                }}>{!p.is_active ? '⏸ Неактивен' : expired ? '⏰ Истёк' : exhausted ? '🔢 Лимит' : '✅ Активен'}</span>
+                <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 6, background: 'rgba(212,175,55,0.1)', color: 'var(--gold)', fontWeight: 600 }}>
+                  Исп: {p.used_count}{p.max_uses > 0 ? `/${p.max_uses}` : '/∞'}
+                </span>
+                {p.expires_at && <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 6, background: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)' }}>до {new Date(p.expires_at).toLocaleDateString()}</span>}
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button onClick={() => toggle(p.id)} style={{ flex: 1, padding: 8, borderRadius: 8, border: 'none', fontWeight: 700, fontSize: 11, cursor: 'pointer',
+                  background: p.is_active ? 'rgba(251,191,36,0.1)' : 'rgba(52,211,153,0.1)', color: p.is_active ? 'var(--orange)' : 'var(--green)' }}>
+                  {p.is_active ? '⏸ Выключить' : '▶ Включить'}
+                </button>
+                <button onClick={() => remove(p.id)} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(248,113,113,0.2)', background: 'transparent', color: 'var(--red)', fontSize: 11, cursor: 'pointer' }}>🗑</button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function Btn({ children, ...props }) {
+  return (
+    <button {...props} style={{
+      padding: '8px 18px', borderRadius: 10, border: 'none',
+      background: props.disabled ? 'rgba(255,255,255,0.03)' : 'var(--bg-card)',
+      color: props.disabled ? 'var(--text-muted)' : 'var(--text)',
+      fontWeight: 600, fontSize: 12, cursor: props.disabled ? 'default' : 'pointer',
+      opacity: props.disabled ? 0.4 : 1
+    }}>{children}</button>
+  );
+}
+
 function Loading() {
   return <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>Загрузка...</div>;
 }
+

@@ -971,6 +971,55 @@ router.get('/check-admin', async (req, res) => {
   res.json({ isAdmin: true, permissions: [] });
 });
 
+// ══════════════════════════════════════════════════
+// PROMO CODES MANAGEMENT
+// ══════════════════════════════════════════════════
+
+// List all promo codes
+router.get('/promo-codes', adminMiddleware, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT * FROM promo_codes ORDER BY created_at DESC`);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+
+// Create promo code
+router.post('/promo-codes', adminMiddleware, async (req, res) => {
+  const { code, discount_pct, max_uses, expires_at } = req.body;
+  if (!code || !discount_pct) return res.status(400).json({ error: 'code and discount_pct required' });
+
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO promo_codes (code, discount_pct, max_uses, expires_at)
+       VALUES ($1, $2, $3, $4) RETURNING *`,
+      [code.trim().toUpperCase(), discount_pct, max_uses || 0, expires_at || null]
+    );
+    res.json(rows[0]);
+  } catch (e) {
+    if (e.code === '23505') return res.status(400).json({ error: 'Промокод уже существует' });
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+// Toggle active
+router.post('/promo-codes/:id/toggle', adminMiddleware, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE promo_codes SET is_active = NOT is_active WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+
+// Delete promo
+router.delete('/promo-codes/:id', adminMiddleware, async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM promo_codes WHERE id = $1`, [req.params.id]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+
 export { getAllAdminIds };
 export default router;
 

@@ -18,9 +18,37 @@ router.get('/packages', authMiddleware, async (req, res) => {
   res.json(rows);
 });
 
+// Validate promo code (user-facing, real-time check)
+router.post('/validate-promo', authMiddleware, async (req, res) => {
+  const { code } = req.body;
+  if (!code) return res.status(400).json({ error: 'code required' });
+
+  const clean = code.trim().toUpperCase();
+  const { rows } = await pool.query(
+    `SELECT * FROM promo_codes WHERE UPPER(code) = $1 AND is_active = TRUE`, [clean]
+  );
+  if (!rows.length) return res.json({ valid: false, error: 'Промокод не найден' });
+
+  const promo = rows[0];
+  if (promo.expires_at && new Date(promo.expires_at) < new Date()) {
+    return res.json({ valid: false, error: 'Промокод истёк' });
+  }
+  if (promo.max_uses > 0 && promo.used_count >= promo.max_uses) {
+    return res.json({ valid: false, error: 'Лимит использований исчерпан' });
+  }
+  // Check if user already used this promo
+  const { rows: uses } = await pool.query(
+    `SELECT id FROM promo_code_uses WHERE promo_id = $1 AND user_id = $2`,
+    [promo.id, req.user.id]
+  );
+  if (uses.length) return res.json({ valid: false, error: 'Вы уже использовали этот промокод' });
+
+  res.json({ valid: true, discount_pct: promo.discount_pct, code: promo.code });
+});
+
 // Create pending purchase — returns memo + wallet address
 router.post('/create-order', authMiddleware, async (req, res) => {
-  const { package_id } = req.body;
+  const { package_id, promo_code } = req.body;
   const user = req.user;
 
   if (!package_id) return res.status(400).json({ error: 'package_id required' });
@@ -31,6 +59,35 @@ router.post('/create-order', authMiddleware, async (req, res) => {
   );
   if (!pkgs.length) return res.status(404).json({ error: 'Package not found' });
   const pkg = pkgs[0];
+
+  let finalPrice = parseFloat(pkg.price_ton);
+  let promoId = null;
+  let discountPct = 0;
+
+  // Apply promo code if provided
+  if (promo_code) {
+    const clean = promo_code.trim().toUpperCase();
+    const { rows: promos } = await pool.query(
+      `SELECT * FROM promo_codes WHERE UPPER(code) = $1 AND is_active = TRUE`, [clean]
+    );
+    if (promos.length) {
+      const promo = promos[0];
+      const isValid = (!promo.expires_at || new Date(promo.expires_at) > new Date())
+        && (promo.max_uses === 0 || promo.used_count < promo.max_uses);
+      
+      // Check if user already used
+      const { rows: uses } = await pool.query(
+        `SELECT id FROM promo_code_uses WHERE promo_id = $1 AND user_id = $2`,
+        [promo.id, user.id]
+      );
+
+      if (isValid && !uses.length) {
+        discountPct = promo.discount_pct;
+        finalPrice = +(finalPrice * (1 - discountPct / 100)).toFixed(4);
+        promoId = promo.id;
+      }
+    }
+  }
 
   // Cancel any existing pending order for this user
   await pool.query(
@@ -55,14 +112,29 @@ router.post('/create-order', authMiddleware, async (req, res) => {
   const { rows } = await pool.query(
     `INSERT INTO pending_purchases (user_id, package_id, memo, ton_amount, expires_at)
      VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-    [user.id, pkg.id, memo, pkg.price_ton, expiresAt]
+    [user.id, pkg.id, memo, finalPrice, expiresAt]
   );
+
+  // Record promo usage
+  if (promoId) {
+    await pool.query(
+      `INSERT INTO promo_code_uses (promo_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+      [promoId, user.id]
+    );
+    await pool.query(
+      `UPDATE promo_codes SET used_count = used_count + 1 WHERE id = $1`,
+      [promoId]
+    );
+  }
 
   res.json({
     order: rows[0],
     package: pkg,
     wallet: process.env.PAYMENT_WALLET,
-    expires_at: expiresAt
+    expires_at: expiresAt,
+    discount_pct: discountPct,
+    original_price: pkg.price_ton,
+    final_price: finalPrice,
   });
 });
 

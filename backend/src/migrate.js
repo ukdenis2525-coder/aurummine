@@ -270,6 +270,31 @@ const migrate = async () => {
       ON CONFLICT (key) DO NOTHING;
     `);
 
+    // ── Promo codes ──
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS promo_codes (
+        id SERIAL PRIMARY KEY,
+        code VARCHAR(50) UNIQUE NOT NULL,
+        discount_pct INTEGER DEFAULT 0,
+        max_uses INTEGER DEFAULT 0,
+        used_count INTEGER DEFAULT 0,
+        expires_at TIMESTAMP,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_promo_codes_code ON promo_codes(code);
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS promo_code_uses (
+        id SERIAL PRIMARY KEY,
+        promo_id INTEGER REFERENCES promo_codes(id) ON DELETE CASCADE,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        used_at TIMESTAMP DEFAULT NOW()
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_promo_uses_unique ON promo_code_uses(promo_id, user_id);
+    `);
+
     console.log('Migration complete');
   } catch (e) {
     console.error('Migration error:', e);
