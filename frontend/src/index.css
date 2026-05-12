@@ -153,6 +153,18 @@ input::placeholder { color: var(--text-muted); }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes countUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+@keyframes particleRise {
+  0% { transform: translateY(0) scale(1); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 0.5; }
+  100% { transform: translateY(-160px) scale(0.3); opacity: 0; }
+}
+@keyframes orbCollect {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.12); filter: brightness(1.3); }
+  60% { transform: scale(0.95); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
 
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 4px; }
