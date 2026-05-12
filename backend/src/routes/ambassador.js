@@ -423,10 +423,13 @@ router.post('/admin/posts/:id/publish', ambassadorAdminMiddleware, async (req, r
 // Get settings
 router.get('/admin/settings', ambassadorAdminMiddleware, async (req, res) => {
   try {
-    const { rows } = await pool.query(
-      `SELECT value FROM app_settings WHERE key = 'ambassador_visibility'`
+    const { rows: settingsRows } = await pool.query(
+      `SELECT key, value FROM app_settings WHERE key IN ('ambassador_visibility', 'ambassador_commission_pct')`
     );
-    const visibility = rows.length ? parseInt(rows[0].value) : 0;
+    const s = {};
+    for (const r of settingsRows) s[r.key] = r.value;
+    const visibility = parseInt(s.ambassador_visibility || '0');
+    const commission_pct = parseFloat(s.ambassador_commission_pct || '25');
 
     // Stats
     const [totalChannels, approvedChannels, pendingChannels, totalPosts] = await Promise.all([
@@ -438,6 +441,7 @@ router.get('/admin/settings', ambassadorAdminMiddleware, async (req, res) => {
 
     res.json({
       visibility,
+      commission_pct,
       stats: {
         total_channels: parseInt(totalChannels.rows[0].c),
         approved_channels: parseInt(approvedChannels.rows[0].c),
@@ -452,16 +456,22 @@ router.get('/admin/settings', ambassadorAdminMiddleware, async (req, res) => {
 
 // Update visibility: 0=hidden, 1=all see, 2=admin only
 router.post('/admin/settings', ambassadorAdminMiddleware, async (req, res) => {
-  const { visibility } = req.body;
-  if (![0, 1, 2].includes(visibility)) {
-    return res.status(400).json({ error: 'visibility must be 0, 1, or 2' });
-  }
+  const { visibility, commission_pct } = req.body;
   try {
-    await pool.query(
-      `INSERT INTO app_settings (key, value, label) VALUES ('ambassador_visibility', $1, 'Видимость раздела Амбассадор')
-       ON CONFLICT (key) DO UPDATE SET value = $1`,
-      [String(visibility)]
-    );
+    if (visibility !== undefined && [0, 1, 2].includes(visibility)) {
+      await pool.query(
+        `INSERT INTO app_settings (key, value, label) VALUES ('ambassador_visibility', $1, 'Видимость раздела Амбассадор')
+         ON CONFLICT (key) DO UPDATE SET value = $1`,
+        [String(visibility)]
+      );
+    }
+    if (commission_pct !== undefined && commission_pct >= 0 && commission_pct <= 100) {
+      await pool.query(
+        `INSERT INTO app_settings (key, value, label) VALUES ('ambassador_commission_pct', $1, 'Комиссия амбассадора (%)')
+         ON CONFLICT (key) DO UPDATE SET value = $1`,
+        [String(commission_pct)]
+      );
+    }
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: 'Failed to save' });

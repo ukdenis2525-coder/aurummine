@@ -262,10 +262,11 @@ const migrate = async () => {
       );
     `);
 
-    // Seed ambassador visibility setting (0=hidden, 1=all see, 2=admin only)
+    // Seed ambassador settings
     await client.query(`
       INSERT INTO app_settings (key, value, label) VALUES
-        ('ambassador_visibility', '0', 'Видимость раздела Амбассадор (0=скрыт, 1=все, 2=только админ)')
+        ('ambassador_visibility', '0', 'Видимость раздела Амбассадор (0=скрыт, 1=все, 2=только админ)'),
+        ('ambassador_commission_pct', '25', 'Комиссия амбассадора от покупок рефералов (%)')
       ON CONFLICT (key) DO NOTHING;
     `);
 

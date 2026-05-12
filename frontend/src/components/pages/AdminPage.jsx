@@ -2239,12 +2239,13 @@ function AmbassadorAdminPanel() {
 
 function AmbassadorSettings({ settings, onSave, showMsg }) {
   const [vis, setVis] = useState(settings?.visibility ?? 0);
+  const [commission, setCommission] = useState(settings?.commission_pct ?? 25);
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
     setSaving(true);
     try {
-      await api.post('/ambassador/admin/settings', { visibility: vis });
+      await api.post('/ambassador/admin/settings', { visibility: vis, commission_pct: commission });
       showMsg('✅ Настройки сохранены');
       onSave();
     } catch (e) { showMsg('❌ Ошибка'); }
@@ -2276,6 +2277,28 @@ function AmbassadorSettings({ settings, onSave, showMsg }) {
           ))}
         </div>
       )}
+
+      {/* Commission */}
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', letterSpacing: 1, marginBottom: 10, fontWeight: 600 }}>
+        💰 КОМИССИЯ АМБАССАДОРА
+      </div>
+      <div className="card" style={{ padding: 14, marginBottom: 16 }}>
+        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10, lineHeight: 1.5 }}>
+          Амбассадоры получают повышенный % от покупок своих рефералов (вместо стандартной реферальной комиссии)
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <input
+            type="number" min="0" max="100" step="1"
+            value={commission}
+            onChange={e => setCommission(parseFloat(e.target.value) || 0)}
+            style={{ width: 80, textAlign: 'center', fontSize: 18, fontWeight: 800, padding: '10px 12px' }}
+          />
+          <span style={{ fontSize: 18, fontWeight: 800, color: 'var(--gold)' }}>%</span>
+          <div style={{ flex: 1, fontSize: 11, color: 'var(--text-muted)' }}>
+            Стандартная: 15%<br/>Амбассадор: <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{commission}%</span>
+          </div>
+        </div>
+      </div>
 
       <div style={{ fontSize: 12, color: 'var(--text-muted)', letterSpacing: 1, marginBottom: 12, fontWeight: 600 }}>
         👁 ВИДИМОСТЬ РАЗДЕЛА
@@ -2392,6 +2415,7 @@ function AmbassadorPosts({ posts, channels, onUpdate, showMsg }) {
   const [creating, setCreating] = useState(false);
   const [publishing, setPublishing] = useState(null);
   const [publishResult, setPublishResult] = useState(null);
+  const [previewId, setPreviewId] = useState(null);
 
   const apiBase = (import.meta.env.VITE_API_URL || '/api').replace(/\/api$/, '');
 
@@ -2501,6 +2525,31 @@ function AmbassadorPosts({ posts, channels, onUpdate, showMsg }) {
             </div>
           )}
 
+          {/* Live Preview */}
+          {(title || text || imagePreview) && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 10, color: 'var(--gold)', letterSpacing: 1, fontWeight: 700, marginBottom: 8 }}>
+                👁 ПРЕДПРОСМОТР
+              </div>
+              <div style={{
+                padding: 14, borderRadius: 12,
+                background: 'linear-gradient(135deg, rgba(212,175,55,0.05), rgba(0,0,0,0.2))',
+                border: '1px solid rgba(212,175,55,0.15)',
+              }}>
+                {imagePreview && (
+                  <img src={imagePreview} alt="" style={{
+                    width: '100%', borderRadius: 8, maxHeight: 180, objectFit: 'cover', marginBottom: 10,
+                  }} />
+                )}
+                {title && <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 6 }}>{title}</div>}
+                {text && (
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}
+                    dangerouslySetInnerHTML={{ __html: text }} />
+                )}
+              </div>
+            </div>
+          )}
+
           <button className="btn-gold" onClick={create} disabled={creating || (!title && !text)}
             style={{ padding: 10, fontSize: 13 }}>
             {creating ? '⏳ Создаю...' : '💾 Создать пост'}
@@ -2541,17 +2590,48 @@ function AmbassadorPosts({ posts, channels, onUpdate, showMsg }) {
           <div key={p.id} className="card" style={{
             padding: 14, animation: `fadeIn 0.3s ease ${i * 0.04}s both`,
           }}>
-            {p.image_path && (
-              <img src={`${apiBase}${p.image_path}`} alt="" style={{
-                width: '100%', borderRadius: 10, maxHeight: 160, objectFit: 'cover', marginBottom: 10,
-              }} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, flex: 1 }}>{p.title}</div>
+              <button onClick={() => setPreviewId(previewId === p.id ? null : p.id)} style={{
+                padding: '4px 10px', borderRadius: 8, border: '1px solid rgba(212,175,55,0.2)',
+                background: previewId === p.id ? 'rgba(212,175,55,0.1)' : 'transparent',
+                color: 'var(--gold)', fontSize: 10, fontWeight: 700, cursor: 'pointer',
+              }}>
+                {previewId === p.id ? '✕ Закрыть' : '👁 Просмотр'}
+              </button>
+            </div>
+
+            {/* Expanded preview */}
+            {previewId === p.id && (
+              <div style={{
+                padding: 14, borderRadius: 12, marginBottom: 10,
+                background: 'linear-gradient(135deg, rgba(212,175,55,0.05), rgba(0,0,0,0.2))',
+                border: '1px solid rgba(212,175,55,0.15)',
+                animation: 'fadeIn 0.3s ease',
+              }}>
+                <div style={{ fontSize: 9, color: 'var(--gold)', letterSpacing: 1, fontWeight: 700, marginBottom: 8 }}>
+                  👁 ПРЕДПРОСМОТР (как в Telegram)
+                </div>
+                {p.image_path && (
+                  <img src={`${apiBase}${p.image_path}`} alt="" style={{
+                    width: '100%', borderRadius: 8, maxHeight: 250, objectFit: 'cover', marginBottom: 10,
+                  }} />
+                )}
+                {p.title && <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 6 }}>{p.title}</div>}
+                {p.text && (
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}
+                    dangerouslySetInnerHTML={{ __html: p.text }} />
+                )}
+              </div>
             )}
-            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>{p.title}</div>
-            {p.text && (
+
+            {/* Collapsed text preview */}
+            {previewId !== p.id && p.text && (
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8, lineHeight: 1.4,
-                maxHeight: 60, overflow: 'hidden',
+                maxHeight: 40, overflow: 'hidden',
               }}>{p.text}</div>
             )}
+
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
               <span style={{
                 fontSize: 9, padding: '2px 6px', borderRadius: 6, fontWeight: 700,
@@ -2562,6 +2642,9 @@ function AmbassadorPosts({ posts, channels, onUpdate, showMsg }) {
                 <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>
                   {new Date(p.published_at).toLocaleString()}
                 </span>
+              )}
+              {p.image_path && previewId !== p.id && (
+                <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>📷 С картинкой</span>
               )}
             </div>
             <div style={{ display: 'flex', gap: 6 }}>

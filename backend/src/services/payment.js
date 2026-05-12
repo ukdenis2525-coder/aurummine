@@ -215,13 +215,24 @@ const completePurchase = async (client, purchase, txHash) => {
     if (refRows.length > 0) {
       // Load referral settings from DB
       const { rows: settingsRows } = await client.query(
-        `SELECT key, value FROM app_settings WHERE key LIKE 'ref_%'`
+        `SELECT key, value FROM app_settings WHERE key LIKE 'ref_%' OR key = 'ambassador_commission_pct'`
       );
       const cfg = {};
       for (const r of settingsRows) cfg[r.key] = parseFloat(r.value);
-      const commissionPct = (cfg.ref_commission_pct ?? 15) / 100;
+      let commissionPct = (cfg.ref_commission_pct ?? 15) / 100;
       const powerPremium = cfg.ref_power_premium ?? 6000;
       const powerNormal = cfg.ref_power_normal ?? 3000;
+
+      // Check if referrer is an ambassador (has approved channel) → use higher commission
+      const { rows: ambRows } = await client.query(
+        `SELECT ac.id FROM ambassador_channels ac
+         JOIN users u ON u.id = ac.user_id
+         WHERE u.id = $1 AND ac.status = 'approved' LIMIT 1`,
+        [refRows[0].referrer_id]
+      );
+      if (ambRows.length > 0 && cfg.ambassador_commission_pct) {
+        commissionPct = cfg.ambassador_commission_pct / 100;
+      }
 
       const commission = parseFloat(purchase.ton_amount) * commissionPct;
       await client.query(
