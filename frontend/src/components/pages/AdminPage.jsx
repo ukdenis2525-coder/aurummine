@@ -12,6 +12,7 @@ const ALL_TABS = [
   { id: 'packages', icon: '📦', label: 'Пакеты' },
   { id: 'ads', icon: '🎬', label: 'Реклама' },
   { id: 'referrals', icon: '🤝', label: 'Рефералы' },
+  { id: 'ambassador', icon: '🤝', label: 'Амбассадор' },
   { id: 'broadcast', icon: '📢', label: 'Рассылка' },
   { id: 'multi', icon: '👁', label: 'Мульти' },
   { id: 'admins', icon: '🛡️', label: 'Админы' },
@@ -84,6 +85,7 @@ export default function AdminPage() {
       {tab === 'broadcast' && <BroadcastPanel />}
       {tab === 'multi' && <MultiAccountPanel />}
       {tab === 'admins' && <AdminsPanel />}
+      {tab === 'ambassador' && <AmbassadorAdminPanel />}
     </div>
   );
 }
@@ -1889,6 +1891,7 @@ const PERM_TABS = [
   { id: 'packages', icon: '📦', label: 'Пакеты' },
   { id: 'ads', icon: '🎬', label: 'Реклама' },
   { id: 'referrals', icon: '🤝', label: 'Рефералы' },
+  { id: 'ambassador', icon: '🤝', label: 'Амбассадор' },
   { id: 'broadcast', icon: '📢', label: 'Рассылка' },
   { id: 'multi', icon: '👁', label: 'Мульти' },
 ];
@@ -2168,6 +2171,416 @@ function AdminsPanel() {
           <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Нет админов</div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ═══════════════════ AMBASSADOR ADMIN ═══════════════════
+function AmbassadorAdminPanel() {
+  const [subTab, setSubTab] = useState('settings');
+  const [settings, setSettings] = useState(null);
+  const [channels, setChannels] = useState([]);
+  const [posts, setPosts] = useState([]);
+  const [msg, setMsg] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const loadAll = async () => {
+    try {
+      const [sRes, chRes, pRes] = await Promise.all([
+        api.get('/ambassador/admin/settings'),
+        api.get('/ambassador/admin/channels'),
+        api.get('/ambassador/admin/posts'),
+      ]);
+      setSettings(sRes.data);
+      setChannels(chRes.data);
+      setPosts(pRes.data);
+    } catch (e) { setMsg('❌ Ошибка загрузки'); }
+    setLoading(false);
+  };
+  useEffect(() => { loadAll(); }, []);
+
+  const showMsg = (t) => { setMsg(t); setTimeout(() => setMsg(null), 3000); };
+
+  if (loading) return <Loading />;
+
+  const tabs = [
+    { id: 'settings', icon: '⚙️', label: 'Настройки' },
+    { id: 'channels', icon: '📢', label: `Каналы (${channels.filter(c => c.status === 'pending').length})` },
+    { id: 'posts', icon: '📝', label: 'Посты' },
+  ];
+
+  return (
+    <div>
+      {msg && (
+        <div style={{
+          padding: '10px 14px', borderRadius: 10, marginBottom: 12,
+          background: msg.startsWith('✅') ? 'rgba(52,211,153,0.1)' : 'var(--red-bg)',
+          color: msg.startsWith('✅') ? 'var(--green)' : 'var(--red)',
+          fontSize: 12, fontWeight: 600, textAlign: 'center', animation: 'fadeIn 0.3s ease'
+        }}>{msg}</div>
+      )}
+
+      <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+        {tabs.map(t => (
+          <button key={t.id} onClick={() => setSubTab(t.id)} style={{
+            flex: 1, padding: '10px 6px', borderRadius: 10, border: 'none', fontSize: 10, fontWeight: 700, cursor: 'pointer',
+            background: subTab === t.id ? 'rgba(212,175,55,0.15)' : 'rgba(255,255,255,0.04)',
+            color: subTab === t.id ? 'var(--gold)' : 'var(--text-muted)',
+          }}>{t.icon} {t.label}</button>
+        ))}
+      </div>
+
+      {subTab === 'settings' && <AmbassadorSettings settings={settings} onSave={loadAll} showMsg={showMsg} />}
+      {subTab === 'channels' && <AmbassadorChannels channels={channels} onUpdate={loadAll} showMsg={showMsg} />}
+      {subTab === 'posts' && <AmbassadorPosts posts={posts} channels={channels} onUpdate={loadAll} showMsg={showMsg} />}
+    </div>
+  );
+}
+
+function AmbassadorSettings({ settings, onSave, showMsg }) {
+  const [vis, setVis] = useState(settings?.visibility ?? 0);
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await api.post('/ambassador/admin/settings', { visibility: vis });
+      showMsg('✅ Настройки сохранены');
+      onSave();
+    } catch (e) { showMsg('❌ Ошибка'); }
+    setSaving(false);
+  };
+
+  const visOptions = [
+    { val: 0, icon: '🔒', label: 'Скрыт', desc: 'Никто не видит раздел', color: 'var(--red)' },
+    { val: 1, icon: '🌍', label: 'Все видят', desc: 'Все пользователи видят раздел', color: 'var(--green)' },
+    { val: 2, icon: '🛡️', label: 'Только админ', desc: 'Только админы видят раздел', color: 'var(--orange)' },
+  ];
+
+  return (
+    <div>
+      {/* Stats */}
+      {settings?.stats && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
+          {[
+            { icon: '📢', label: 'Каналов', val: settings.stats.total_channels, color: 'var(--gold)' },
+            { icon: '✅', label: 'Одобрено', val: settings.stats.approved_channels, color: 'var(--green)' },
+            { icon: '⏳', label: 'Ожидают', val: settings.stats.pending_channels, color: 'var(--orange)' },
+            { icon: '📝', label: 'Постов', val: settings.stats.total_posts, color: 'var(--gold-light)' },
+          ].map((c, i) => (
+            <div key={c.label} className="card" style={{ padding: 14, animation: `fadeIn 0.3s ease ${i * 0.05}s both` }}>
+              <div style={{ fontSize: 16, marginBottom: 4 }}>{c.icon}</div>
+              <div style={{ fontSize: 20, fontWeight: 900, color: c.color }}>{c.val}</div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{c.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', letterSpacing: 1, marginBottom: 12, fontWeight: 600 }}>
+        👁 ВИДИМОСТЬ РАЗДЕЛА
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+        {visOptions.map(o => (
+          <button key={o.val} onClick={() => setVis(o.val)} className="card" style={{
+            padding: '14px 16px', cursor: 'pointer', textAlign: 'left',
+            border: vis === o.val ? `1px solid ${o.color}` : '1px solid var(--border)',
+            background: vis === o.val ? `${o.color}11` : undefined,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 22 }}>{o.icon}</span>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: vis === o.val ? o.color : 'var(--text)' }}>{o.label}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{o.desc}</div>
+              </div>
+            </div>
+          </button>
+        ))}
+      </div>
+      <button className="btn-gold" onClick={save} disabled={saving} style={{ padding: 12, fontSize: 13 }}>
+        {saving ? '⏳ Сохраняю...' : '💾 Сохранить настройки'}
+      </button>
+    </div>
+  );
+}
+
+function AmbassadorChannels({ channels, onUpdate, showMsg }) {
+  const [processing, setProcessing] = useState(null);
+
+  const approve = async (id) => {
+    setProcessing(id);
+    try { await api.post(`/ambassador/admin/channels/${id}/approve`); showMsg('✅ Канал одобрен'); onUpdate(); }
+    catch { showMsg('❌ Ошибка'); }
+    setProcessing(null);
+  };
+  const reject = async (id) => {
+    setProcessing(id);
+    try { await api.post(`/ambassador/admin/channels/${id}/reject`); showMsg('✅ Канал отклонён'); onUpdate(); }
+    catch { showMsg('❌ Ошибка'); }
+    setProcessing(null);
+  };
+  const del = async (id) => {
+    setProcessing(id);
+    try { await api.delete(`/ambassador/admin/channels/${id}`); showMsg('🗑 Удалён'); onUpdate(); }
+    catch { showMsg('❌ Ошибка'); }
+    setProcessing(null);
+  };
+
+  const statusColors = { pending: 'var(--orange)', approved: 'var(--green)', rejected: 'var(--red)' };
+  const statusLabels = { pending: '⏳ Ожидает', approved: '✅ Одобрен', rejected: '❌ Отклонён' };
+
+  if (!channels.length) return (
+    <div className="card" style={{ textAlign: 'center', padding: 30 }}>
+      <div style={{ fontSize: 30, marginBottom: 8 }}>📭</div>
+      <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Заявок пока нет</div>
+    </div>
+  );
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {channels.map((ch, i) => (
+        <div key={ch.id} className="card" style={{
+          padding: 14, animation: `fadeIn 0.3s ease ${i * 0.04}s both`,
+          border: ch.status === 'pending' ? '1px solid rgba(251,191,36,0.3)' : undefined,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <span style={{ fontSize: 20 }}>📢</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>{ch.channel_title}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                @{ch.channel_username} • 👥 {ch.subscribers_count}
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                От: {ch.first_name || ch.username || `TG:${ch.tg_id}`}
+              </div>
+            </div>
+            <span style={{
+              fontSize: 10, padding: '3px 8px', borderRadius: 6, fontWeight: 700,
+              background: `${statusColors[ch.status]}22`, color: statusColors[ch.status],
+            }}>{statusLabels[ch.status]}</span>
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {ch.status === 'pending' && (
+              <>
+                <button onClick={() => approve(ch.id)} disabled={processing === ch.id} style={{
+                  flex: 1, padding: 8, borderRadius: 8, border: 'none', fontWeight: 700, fontSize: 11, cursor: 'pointer',
+                  background: 'rgba(52,211,153,0.15)', color: 'var(--green)',
+                }}>✅ Одобрить</button>
+                <button onClick={() => reject(ch.id)} disabled={processing === ch.id} style={{
+                  flex: 1, padding: 8, borderRadius: 8, border: 'none', fontWeight: 700, fontSize: 11, cursor: 'pointer',
+                  background: 'rgba(248,113,113,0.15)', color: 'var(--red)',
+                }}>❌ Отклонить</button>
+              </>
+            )}
+            <button onClick={() => del(ch.id)} disabled={processing === ch.id} style={{
+              padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(248,113,113,0.2)',
+              background: 'transparent', color: 'var(--text-muted)', fontSize: 11, cursor: 'pointer',
+            }}>🗑</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AmbassadorPosts({ posts, channels, onUpdate, showMsg }) {
+  const [showForm, setShowForm] = useState(false);
+  const [title, setTitle] = useState('');
+  const [text, setText] = useState('');
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [creating, setCreating] = useState(false);
+  const [publishing, setPublishing] = useState(null);
+  const [publishResult, setPublishResult] = useState(null);
+
+  const apiBase = (import.meta.env.VITE_API_URL || '/api').replace(/\/api$/, '');
+
+  const handleImage = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setImageFile(file);
+    const reader = new FileReader();
+    reader.onload = (ev) => setImagePreview(ev.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  const create = async () => {
+    if (!title && !text) return;
+    setCreating(true);
+    try {
+      const formData = new FormData();
+      formData.append('title', title);
+      formData.append('text', text);
+      if (imageFile) formData.append('image', imageFile);
+
+      await api.post('/ambassador/admin/posts', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      showMsg('✅ Пост создан');
+      setTitle(''); setText(''); setImageFile(null); setImagePreview(null);
+      setShowForm(false);
+      onUpdate();
+    } catch (e) { showMsg('❌ Ошибка создания'); }
+    setCreating(false);
+  };
+
+  const deletePost = async (id) => {
+    try { await api.delete(`/ambassador/admin/posts/${id}`); showMsg('🗑 Пост удалён'); onUpdate(); }
+    catch { showMsg('❌ Ошибка'); }
+  };
+
+  const publish = async (id) => {
+    setPublishing(id);
+    setPublishResult(null);
+    try {
+      const { data } = await api.post(`/ambassador/admin/posts/${id}/publish`);
+      setPublishResult(data);
+      showMsg(`✅ Опубликовано: ${data.sent}/${data.total}`);
+      onUpdate();
+    } catch (e) {
+      showMsg('❌ ' + (e.response?.data?.error || 'Ошибка публикации'));
+    }
+    setPublishing(null);
+  };
+
+  const approvedCount = channels.filter(c => c.status === 'approved').length;
+
+  return (
+    <div>
+      <div className="card" style={{ padding: 12, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 16 }}>📢</span>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+          Одобренных каналов: <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{approvedCount}</span>
+        </div>
+      </div>
+
+      <button onClick={() => setShowForm(!showForm)} className="btn-gold" style={{ marginBottom: 14, padding: 10, fontSize: 13 }}>
+        {showForm ? '✕ Отмена' : '+ Новый пост'}
+      </button>
+
+      {showForm && (
+        <div className="card" style={{ marginBottom: 14, animation: 'fadeIn 0.3s ease' }}>
+          <div style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 700, marginBottom: 10, letterSpacing: 1 }}>
+            📝 НОВЫЙ ПОСТ
+          </div>
+          <input type="text" value={title} onChange={e => setTitle(e.target.value)}
+            placeholder="Заголовок" style={{ marginBottom: 8, fontSize: 13 }} />
+          <textarea value={text} onChange={e => setText(e.target.value)}
+            placeholder="Текст поста (поддерживается HTML)"
+            style={{
+              width: '100%', minHeight: 100, padding: 12, borderRadius: 12,
+              background: 'var(--bg-card)', border: '1px solid var(--border)',
+              color: 'var(--text)', fontSize: 13, fontFamily: 'inherit',
+              resize: 'vertical', outline: 'none', boxSizing: 'border-box', marginBottom: 8,
+            }} />
+
+          <div style={{ marginBottom: 10 }}>
+            <label style={{
+              display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px',
+              borderRadius: 10, border: '1px dashed var(--border)', cursor: 'pointer',
+              background: 'rgba(255,255,255,0.02)',
+            }}>
+              <span style={{ fontSize: 20 }}>📷</span>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                {imageFile ? imageFile.name : 'Загрузить картинку'}
+              </span>
+              <input type="file" accept="image/*" onChange={handleImage} style={{ display: 'none' }} />
+            </label>
+          </div>
+
+          {imagePreview && (
+            <div style={{ marginBottom: 10, position: 'relative' }}>
+              <img src={imagePreview} alt="preview" style={{
+                width: '100%', borderRadius: 10, maxHeight: 200, objectFit: 'cover',
+              }} />
+              <button onClick={() => { setImageFile(null); setImagePreview(null); }} style={{
+                position: 'absolute', top: 6, right: 6, background: 'rgba(0,0,0,0.7)',
+                border: 'none', borderRadius: '50%', width: 24, height: 24,
+                color: '#fff', fontSize: 12, cursor: 'pointer',
+              }}>✕</button>
+            </div>
+          )}
+
+          <button className="btn-gold" onClick={create} disabled={creating || (!title && !text)}
+            style={{ padding: 10, fontSize: 13 }}>
+            {creating ? '⏳ Создаю...' : '💾 Создать пост'}
+          </button>
+        </div>
+      )}
+
+      {/* Publish result */}
+      {publishResult && (
+        <div className="card" style={{
+          marginBottom: 14, padding: 14, animation: 'fadeIn 0.3s ease',
+          border: publishResult.failed ? '1px solid rgba(251,191,36,0.3)' : '1px solid rgba(52,211,153,0.3)',
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--green)', marginBottom: 8 }}>📊 Результат публикации</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+            <MiniStat label="Всего" val={publishResult.total} color="var(--text)" />
+            <MiniStat label="Отправлено" val={publishResult.sent} color="var(--green)" />
+            <MiniStat label="Ошибки" val={publishResult.failed} color="var(--red)" />
+          </div>
+          {publishResult.errors?.length > 0 && (
+            <div style={{ marginTop: 8, fontSize: 10, color: 'var(--text-muted)' }}>
+              {publishResult.errors.map((e, i) => <div key={i}>{e}</div>)}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Posts list */}
+      {posts.length === 0 && !showForm && (
+        <div className="card" style={{ textAlign: 'center', padding: 30 }}>
+          <div style={{ fontSize: 30, marginBottom: 8 }}>📝</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Постов пока нет</div>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {posts.map((p, i) => (
+          <div key={p.id} className="card" style={{
+            padding: 14, animation: `fadeIn 0.3s ease ${i * 0.04}s both`,
+          }}>
+            {p.image_path && (
+              <img src={`${apiBase}${p.image_path}`} alt="" style={{
+                width: '100%', borderRadius: 10, maxHeight: 160, objectFit: 'cover', marginBottom: 10,
+              }} />
+            )}
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>{p.title}</div>
+            {p.text && (
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8, lineHeight: 1.4,
+                maxHeight: 60, overflow: 'hidden',
+              }}>{p.text}</div>
+            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+              <span style={{
+                fontSize: 9, padding: '2px 6px', borderRadius: 6, fontWeight: 700,
+                background: p.status === 'published' ? 'rgba(52,211,153,0.15)' : 'rgba(251,191,36,0.15)',
+                color: p.status === 'published' ? 'var(--green)' : 'var(--orange)',
+              }}>{p.status === 'published' ? '✅ Опубликован' : '📝 Черновик'}</span>
+              {p.published_at && (
+                <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>
+                  {new Date(p.published_at).toLocaleString()}
+                </span>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button onClick={() => publish(p.id)} disabled={publishing === p.id || approvedCount === 0}
+                style={{
+                  flex: 1, padding: 8, borderRadius: 8, border: 'none', fontWeight: 700, fontSize: 11, cursor: 'pointer',
+                  background: 'linear-gradient(135deg, var(--gold-dark), var(--gold))', color: '#000',
+                  opacity: approvedCount === 0 ? 0.4 : 1,
+                }}>
+                {publishing === p.id ? '⏳ Публикация...' : `📤 Опубликовать (${approvedCount} каналов)`}
+              </button>
+              <button onClick={() => deletePost(p.id)} style={{
+                padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(248,113,113,0.2)',
+                background: 'transparent', color: 'var(--red)', fontSize: 11, cursor: 'pointer',
+              }}>🗑</button>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

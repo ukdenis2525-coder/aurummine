@@ -3,9 +3,9 @@ import { useStore } from '../../store/index.js';
 import { useTranslation } from 'react-i18next';
 
 export default function BottomNav() {
-  const { activeTab, setTab } = useStore();
+  const { activeTab, setTab, ambassadorVisible } = useStore();
   const { t } = useTranslation();
-  const isHidden = activeTab === 'withdraw' || activeTab === 'admin';
+  const isHidden = activeTab === 'withdraw' || activeTab === 'admin' || activeTab === 'ambassador';
 
   if (isHidden) return null;
 
@@ -16,6 +16,11 @@ export default function BottomNav() {
     { id: 'team', label: t('nav.team'), icon: '👥' },
     { id: 'tasks', label: t('nav.tasks'), icon: '📋' },
   ];
+
+  // Add ambassador tab if visible
+  if (ambassadorVisible) {
+    tabs.push({ id: 'ambassador', label: t('nav.ambassador', 'Партнёр'), icon: '🤝' });
+  }
 
   return (
     <nav style={{

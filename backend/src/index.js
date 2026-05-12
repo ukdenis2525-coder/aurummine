@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import cron from 'node-cron';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { pool } from './db.js';
 import { rateLimit } from './middleware/rateLimit.js';
 import authRoutes from './routes/auth.js';
@@ -12,9 +14,13 @@ import referralRoutes from './routes/referrals.js';
 import tasksRoutes from './routes/tasks.js';
 import leaderboardRoutes from './routes/leaderboard.js';
 import adminRoutes, { getAllAdminIds } from './routes/admin.js';
+import ambassadorRoutes from './routes/ambassador.js';
 import { accrueHashes } from './services/mining.js';
 import { checkPendingPayments } from './services/payment.js';
 import './bot.js'; // Start Telegram bot
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
@@ -32,6 +38,9 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Serve uploaded files (ambassador images etc.)
+app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
+
 // Rate limiters
 const generalLimit = rateLimit(100, 60000);   // 100 req/min per IP
 const strictLimit = rateLimit(10, 60000);      // 10 req/min per IP
@@ -45,6 +54,7 @@ app.use('/api/referrals', generalLimit, referralRoutes);
 app.use('/api/tasks', generalLimit, tasksRoutes);
 app.use('/api/leaderboard', generalLimit, leaderboardRoutes);
 app.use('/api/admin', strictLimit, adminRoutes);
+app.use('/api/ambassador', generalLimit, ambassadorRoutes);
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 

@@ -12,6 +12,7 @@ export const useStore = create((set, get) => ({
   activeTab: 'power',
   isAdmin: false,
   adminPerms: null, // '*' = full access, [] = array of tab IDs
+  ambassadorVisible: false, // whether ambassador tab is shown
 
   setTab: (tab) => set({ activeTab: tab }),
 
@@ -37,7 +38,17 @@ export const useStore = create((set, get) => ({
         }
       }
 
-      set({ user, isAdmin, adminPerms, mining: data.mining || null });
+      // Check ambassador visibility (0=hidden, 1=all, 2=admin only)
+      let ambassadorVisible = false;
+      try {
+        const { data: ambData } = await api.get('/ambassador/visibility');
+        const vis = ambData?.visibility ?? 0;
+        if (vis === 1) ambassadorVisible = true;
+        else if (vis === 2) ambassadorVisible = isAdmin;
+        // vis === 0 → hidden for all
+      } catch (e) {}
+
+      set({ user, isAdmin, adminPerms, ambassadorVisible, mining: data.mining || null });
     } catch (e) {
       // 403 = blocked user (silent block)
       if (e.response?.status === 403) {

@@ -165,7 +165,8 @@
     "rating": "Rating",
     "mining": "Mining",
     "team": "Team",
-    "tasks": "Tasks"
+    "tasks": "Tasks",
+    "ambassador": "Partner"
   },
   "common": {
     "loading": "Loading...",

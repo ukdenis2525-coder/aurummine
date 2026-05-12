@@ -234,6 +234,41 @@ const migrate = async () => {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS ads_watched INTEGER DEFAULT 0;
     `);
 
+    // ── Ambassador / Partnership tables ──
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ambassador_channels (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        channel_tg_id VARCHAR(64),
+        channel_username VARCHAR(255) NOT NULL,
+        channel_title VARCHAR(500),
+        subscribers_count INTEGER DEFAULT 0,
+        status VARCHAR(20) DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_ambassador_channels_user ON ambassador_channels(user_id);
+      CREATE INDEX IF NOT EXISTS idx_ambassador_channels_status ON ambassador_channels(status);
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ambassador_posts (
+        id SERIAL PRIMARY KEY,
+        title VARCHAR(500),
+        text TEXT,
+        image_path VARCHAR(500),
+        status VARCHAR(20) DEFAULT 'draft',
+        published_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+
+    // Seed ambassador visibility setting (0=hidden, 1=all see, 2=admin only)
+    await client.query(`
+      INSERT INTO app_settings (key, value, label) VALUES
+        ('ambassador_visibility', '0', 'Видимость раздела Амбассадор (0=скрыт, 1=все, 2=только админ)')
+      ON CONFLICT (key) DO NOTHING;
+    `);
+
     console.log('Migration complete');
   } catch (e) {
     console.error('Migration error:', e);
