@@ -89,7 +89,7 @@ export default function AmbassadorPage() {
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {[
-            { icon: '💰', text: t('ambassador.benefit_commission', `Повышенная комиссия ${commPct}% от покупок рефералов (вместо стандартной)`) },
+            { icon: '💰', text: t('ambassador.benefit_commission', { pct: commPct }) },
             { icon: '📢', text: t('ambassador.benefit_posts', 'Рекламные посты от наших партнёров в ваш канал') },
             { icon: '🔗', text: t('ambassador.benefit_ref', 'Персональная реферальная ссылка с автоматическим учётом') },
             { icon: '📊', text: t('ambassador.benefit_stats', 'Статистика рефералов и заработка в реальном времени') },
@@ -119,11 +119,11 @@ export default function AmbassadorPage() {
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {[
-            { icon: '📢', text: t('ambassador.step1', `Имейте канал/группу с ${minSubs.toLocaleString()}+ подписчиков`) },
+            { icon: '📢', text: t('ambassador.step1', { min: minSubs.toLocaleString() }) },
             { icon: '🤖', text: t('ambassador.step2', 'Добавьте бота @AurumMiBot в админы канала') },
             { icon: '✍️', text: t('ambassador.step3', 'Дайте боту разрешение на публикации') },
             { icon: '📝', text: t('ambassador.step4', 'Подайте заявку — мы проверим и одобрим') },
-            { icon: '💰', text: t('ambassador.step5', `Получайте ${commPct}% от покупок своих рефералов`) },
+            { icon: '💰', text: t('ambassador.step5', { pct: commPct }) },
           ].map((s, i) => (
             <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
               <div style={{
@@ -190,7 +190,7 @@ export default function AmbassadorPage() {
           </div>
 
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>
-            {t('ambassador.apply_hint', `Введите юзернейм вашего канала (мин. ${minSubs.toLocaleString()} подписчиков). Бот должен быть добавлен в админы канала с правом на публикации.`)}
+            {t('ambassador.apply_hint', { min: minSubs.toLocaleString() })}
           </div>
 
           <input
@@ -289,7 +289,7 @@ export default function AmbassadorPage() {
             {t('ambassador.empty_title', 'Станьте амбассадором!')}
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-            {t('ambassador.empty_desc', `Подайте заявку с вашим Telegram каналом (${minSubs.toLocaleString()}+ подписчиков) и станьте нашим партнёром`)}
+            {t('ambassador.empty_desc', { min: minSubs.toLocaleString() })}
           </div>
         </div>
       )}
