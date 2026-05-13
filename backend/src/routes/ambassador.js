@@ -70,16 +70,21 @@ const ambassadorAdminMiddleware = async (req, res, next) => {
 // USER-FACING ROUTES (require auth)
 // ══════════════════════════════════════════════════
 
-// Check visibility setting
+// Check visibility + public settings
 router.get('/visibility', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT value FROM app_settings WHERE key = 'ambassador_visibility'`
+      `SELECT key, value FROM app_settings WHERE key IN ('ambassador_visibility', 'ambassador_min_subscribers', 'ambassador_commission_pct')`
     );
-    const val = rows.length ? parseInt(rows[0].value) : 0;
-    res.json({ visibility: val });
+    const s = {};
+    for (const r of rows) s[r.key] = r.value;
+    res.json({
+      visibility: parseInt(s.ambassador_visibility || '0'),
+      min_subscribers: parseInt(s.ambassador_min_subscribers || '1000'),
+      commission_pct: parseInt(s.ambassador_commission_pct || '25'),
+    });
   } catch (e) {
-    res.json({ visibility: 0 });
+    res.json({ visibility: 0, min_subscribers: 1000, commission_pct: 25 });
   }
 });
 

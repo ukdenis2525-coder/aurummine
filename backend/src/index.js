@@ -77,6 +77,50 @@ cron.schedule('*/2 * * * *', async () => {
   }
 });
 
+// Cron: verify ambassador channels every 24h (4:00 AM)
+cron.schedule('0 4 * * *', async () => {
+  try {
+    const { Api } = await import('grammy');
+    const tgApi = process.env.BOT_TOKEN ? new Api(process.env.BOT_TOKEN) : null;
+    if (!tgApi) return;
+
+    const { rows: channels } = await pool.query(
+      `SELECT * FROM ambassador_channels WHERE status = 'approved'`
+    );
+    console.log(`[Ambassador Cron] Checking ${channels.length} approved channels...`);
+
+    for (const ch of channels) {
+      try {
+        const chatId = ch.channel_tg_id || `@${ch.channel_username}`;
+        const botInfo = await tgApi.getMe();
+        const member = await tgApi.getChatMember(chatId, botInfo.id);
+
+        if (!['administrator', 'creator'].includes(member.status)) {
+          // Bot is no longer admin — revoke partnership
+          await pool.query(
+            `UPDATE ambassador_channels SET status = 'rejected' WHERE id = $1`,
+            [ch.id]
+          );
+          console.log(`[Ambassador Cron] ❌ Revoked @${ch.channel_username} — bot not admin`);
+        }
+      } catch (e) {
+        // Channel deleted or bot kicked — revoke
+        await pool.query(
+          `UPDATE ambassador_channels SET status = 'rejected' WHERE id = $1`,
+          [ch.id]
+        );
+        console.log(`[Ambassador Cron] ❌ Revoked @${ch.channel_username} — ${e.message}`);
+      }
+
+      // Rate limit
+      await new Promise(r => setTimeout(r, 500));
+    }
+    console.log(`[Ambassador Cron] Check complete`);
+  } catch (e) {
+    console.error('Ambassador cron error:', e.message);
+  }
+});
+
 // Admin: manual payment check trigger
 app.post('/api/admin/check-payments', async (req, res) => {
   const key = req.headers['x-admin-key'];

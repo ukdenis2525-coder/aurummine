@@ -13,11 +13,16 @@ export default function AmbassadorPage() {
   const [channelInput, setChannelInput] = useState('');
   const [msg, setMsg] = useState(null);
   const [error, setError] = useState(null);
+  const [ambSettings, setAmbSettings] = useState({ min_subscribers: 1000, commission_pct: 25 });
 
   const load = async () => {
     try {
-      const { data } = await api.get('/ambassador/my-channels');
-      setChannels(data);
+      const [chRes, visRes] = await Promise.all([
+        api.get('/ambassador/my-channels'),
+        api.get('/ambassador/visibility'),
+      ]);
+      setChannels(chRes.data);
+      setAmbSettings(prev => ({ ...prev, ...visRes.data }));
     } catch (e) {}
     setLoading(false);
   };
@@ -52,6 +57,9 @@ export default function AmbassadorPage() {
     rejected: t('ambassador.status_rejected', '❌ Отклонён'),
   };
 
+  const minSubs = ambSettings.min_subscribers || 1000;
+  const commPct = ambSettings.commission_pct || 25;
+
   return (
     <div className="page" style={{ paddingBottom: 100 }}>
       {/* Header */}
@@ -70,7 +78,37 @@ export default function AmbassadorPage() {
         </div>
       </div>
 
-      {/* Info card */}
+      {/* Benefits — what you get */}
+      <div className="card" style={{
+        padding: 18, marginBottom: 16,
+        background: 'linear-gradient(135deg, rgba(52,211,153,0.08), rgba(212,175,55,0.04))',
+        border: '1px solid rgba(52,211,153,0.2)',
+      }}>
+        <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--green)', marginBottom: 12 }}>
+          🎁 {t('ambassador.benefits_title', 'Что вы получаете?')}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {[
+            { icon: '💰', text: t('ambassador.benefit_commission', `Повышенная комиссия ${commPct}% от покупок рефералов (вместо стандартной)`) },
+            { icon: '📢', text: t('ambassador.benefit_posts', 'Рекламные посты от наших партнёров в ваш канал') },
+            { icon: '🔗', text: t('ambassador.benefit_ref', 'Персональная реферальная ссылка с автоматическим учётом') },
+            { icon: '📊', text: t('ambassador.benefit_stats', 'Статистика рефералов и заработка в реальном времени') },
+          ].map((s, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+              <div style={{
+                width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+                background: 'rgba(52,211,153,0.12)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16,
+              }}>{s.icon}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5, paddingTop: 6 }}>
+                {s.text}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* How it works */}
       <div className="card" style={{
         padding: 18, marginBottom: 16,
         background: 'linear-gradient(135deg, rgba(212,175,55,0.08), rgba(212,175,55,0.02))',
@@ -81,24 +119,40 @@ export default function AmbassadorPage() {
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {[
-            { icon: '📢', text: t('ambassador.step1', 'Имейте канал/группу с 1000+ подписчиков') },
+            { icon: '📢', text: t('ambassador.step1', `Имейте канал/группу с ${minSubs.toLocaleString()}+ подписчиков`) },
             { icon: '🤖', text: t('ambassador.step2', 'Добавьте бота @AurumMiBot в админы канала') },
             { icon: '✍️', text: t('ambassador.step3', 'Дайте боту разрешение на публикации') },
             { icon: '📝', text: t('ambassador.step4', 'Подайте заявку — мы проверим и одобрим') },
-            { icon: '💰', text: t('ambassador.step5', 'Получайте публикации от наших партнёров') },
+            { icon: '💰', text: t('ambassador.step5', `Получайте ${commPct}% от покупок своих рефералов`) },
           ].map((s, i) => (
             <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
               <div style={{
                 width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
                 background: 'rgba(212,175,55,0.12)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 16,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16,
               }}>{s.icon}</div>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5, paddingTop: 6 }}>
                 {s.text}
               </div>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* ⚠️ Warning — bot removal */}
+      <div className="card" style={{
+        padding: 14, marginBottom: 16,
+        background: 'rgba(248,113,113,0.06)',
+        border: '1px solid rgba(248,113,113,0.2)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+          <span style={{ fontSize: 18, flexShrink: 0 }}>⚠️</span>
+          <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+            <span style={{ color: 'var(--red)', fontWeight: 700 }}>
+              {t('ambassador.warning_title', 'Важно!')}
+            </span>{' '}
+            {t('ambassador.warning_text', 'Если бот будет удалён из администраторов вашего канала, партнёрство будет автоматически разорвано. Проверка проводится каждые 24 часа.')}
+          </div>
         </div>
       </div>
 
@@ -136,7 +190,7 @@ export default function AmbassadorPage() {
           </div>
 
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>
-            {t('ambassador.apply_hint', 'Введите юзернейм вашего канала. Бот должен быть добавлен в админы канала с правом на публикации.')}
+            {t('ambassador.apply_hint', `Введите юзернейм вашего канала (мин. ${minSubs.toLocaleString()} подписчиков). Бот должен быть добавлен в админы канала с правом на публикации.`)}
           </div>
 
           <input
@@ -235,7 +289,7 @@ export default function AmbassadorPage() {
             {t('ambassador.empty_title', 'Станьте амбассадором!')}
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-            {t('ambassador.empty_desc', 'Подайте заявку с вашим Telegram каналом (1000+ подписчиков) и станьте нашим партнёром')}
+            {t('ambassador.empty_desc', `Подайте заявку с вашим Telegram каналом (${minSubs.toLocaleString()}+ подписчиков) и станьте нашим партнёром`)}
           </div>
         </div>
       )}
