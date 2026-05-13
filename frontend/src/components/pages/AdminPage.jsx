@@ -1817,11 +1817,18 @@ function BroadcastPanel() {
     try {
       const opts = { message };
       if (parseMode) opts.parse_mode = parseMode;
-      const { data } = await api.post('/admin/broadcast', opts);
+      const { data } = await api.post('/admin/broadcast', opts, { timeout: 120000 });
       setResult(data);
       setMessage('');
     } catch (e) {
-      setResult({ error: e.response?.data?.error || 'Ошибка отправки' });
+      console.error('[Broadcast] Error:', e);
+      const status = e.response?.status;
+      const serverMsg = e.response?.data?.error;
+      let errorText = serverMsg || e.message || 'Ошибка отправки';
+      if (status) errorText = `[${status}] ${errorText}`;
+      if (!e.response && e.code === 'ECONNABORTED') errorText = 'Таймаут — сервер не ответил за 120с';
+      if (!e.response && !e.code) errorText = 'Нет связи с сервером';
+      setResult({ error: errorText });
     }
     setSending(false);
   };
