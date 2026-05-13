@@ -86,16 +86,24 @@ router.get('/stats', async (req, res) => {
   // Buyers vs Non-buyers (active only)
   let buyers = null;
   try {
-    const [buyerStats, nonBuyerStats] = await Promise.all([
+    const [buyerStats, buyerSpent, nonBuyerStats] = await Promise.all([
+      // Buyer user stats (no JOIN — avoids duplication)
       pool.query(`
-        SELECT COUNT(DISTINCT u.id) as count,
-               COALESCE(SUM(u.power), 0) as power,
-               COALESCE(SUM(u.ton_balance), 0) as balance,
-               COALESCE(SUM(p.ton_paid), 0) as spent
-        FROM users u
-        JOIN purchases p ON p.user_id = u.id
+        SELECT COUNT(*) as count,
+               COALESCE(SUM(power), 0) as power,
+               COALESCE(SUM(ton_balance), 0) as balance
+        FROM users
+        WHERE is_blocked = false
+          AND id IN (SELECT DISTINCT user_id FROM purchases)
+      `),
+      // Total spent (separate query)
+      pool.query(`
+        SELECT COALESCE(SUM(p.ton_paid), 0) as spent
+        FROM purchases p
+        JOIN users u ON p.user_id = u.id
         WHERE u.is_blocked = false
       `),
+      // Non-buyers
       pool.query(`
         SELECT COUNT(*) as count,
                COALESCE(SUM(power), 0) as power,
@@ -109,7 +117,7 @@ router.get('/stats', async (req, res) => {
       buyers_count: parseInt(buyerStats.rows[0].count),
       buyers_power: parseFloat(buyerStats.rows[0].power),
       buyers_balance: parseFloat(buyerStats.rows[0].balance),
-      buyers_spent: parseFloat(buyerStats.rows[0].spent),
+      buyers_spent: parseFloat(buyerSpent.rows[0].spent),
       free_count: parseInt(nonBuyerStats.rows[0].count),
       free_power: parseFloat(nonBuyerStats.rows[0].power),
       free_balance: parseFloat(nonBuyerStats.rows[0].balance),
