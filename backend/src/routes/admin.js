@@ -152,6 +152,7 @@ router.get('/stats', async (req, res) => {
       approvedWithdrawals,// already paid out
       pendingWithdrawals, // queued to be paid
       blockedCount,       // total blocked users
+      bannedStats,        // power + balance of blocked users
     ] = await Promise.all([
       pool.query(`
         SELECT COUNT(p.id) as count, COALESCE(SUM(p.ton_paid), 0) as sum
@@ -162,6 +163,7 @@ router.get('/stats', async (req, res) => {
       pool.query(`SELECT COALESCE(SUM(ton_amount), 0) as total FROM withdrawals WHERE status = 'approved'`),
       pool.query(`SELECT COALESCE(SUM(ton_amount), 0) as total FROM withdrawals WHERE status = 'pending'`),
       pool.query(`SELECT COUNT(*) as c FROM users WHERE is_blocked = true`),
+      pool.query(`SELECT COALESCE(SUM(power), 0) as p, COALESCE(SUM(ton_balance), 0) as b FROM users WHERE is_blocked = true`),
     ]);
 
     // Power forecast — how much TON will be mined
@@ -177,6 +179,8 @@ router.get('/stats', async (req, res) => {
       banned_users: parseInt(blockedCount.rows[0].c),
       banned_purchases_count: parseInt(bannedPurchases.rows[0].count),
       banned_purchases_ton: parseFloat(bannedPurchases.rows[0].sum),
+      banned_power: parseFloat(bannedStats.rows[0].p),
+      banned_balance: parseFloat(bannedStats.rows[0].b),
       total_liability: parseFloat(totalBalances.rows[0].total),
       active_liability: parseFloat(activeBalances.rows[0].total),
       total_withdrawn: parseFloat(approvedWithdrawals.rows[0].total),

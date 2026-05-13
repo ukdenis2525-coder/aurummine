@@ -400,15 +400,25 @@ function Dashboard() {
           {/* Banned users section */}
           {stats.finance.banned_users > 0 && (
             <div style={{ padding: 12, borderRadius: 10, background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.15)', marginBottom: 12 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--red)', marginBottom: 6 }}>🚫 Забаненные юзеры</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--red)', marginBottom: 8 }}>🚫 Забаненные юзеры</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                 <div>
-                  <div style={{ fontSize: 18, fontWeight: 900, color: 'var(--red)' }}>{stats.finance.banned_users}</div>
+                  <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--red)' }}>{stats.finance.banned_users}</div>
                   <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>юзеров в бане</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 18, fontWeight: 900, color: 'var(--red)' }}>{fmt(stats.finance.banned_purchases_ton, 4)} TON</div>
+                  <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--red)' }}>{fmt(stats.finance.banned_purchases_ton, 4)} TON</div>
                   <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{stats.finance.banned_purchases_count} покупок</div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 12, marginTop: 8, padding: '8px 0', borderTop: '1px solid rgba(248,113,113,0.12)' }}>
+                <div style={{ fontSize: 10 }}>
+                  <span style={{ color: 'var(--text-muted)' }}>⚡ Power: </span>
+                  <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{fmtK(stats.finance.banned_power || 0)}</span>
+                </div>
+                <div style={{ fontSize: 10 }}>
+                  <span style={{ color: 'var(--text-muted)' }}>💰 Баланс: </span>
+                  <span style={{ color: 'var(--orange)', fontWeight: 700 }}>{fmt(stats.finance.banned_balance || 0, 4)} TON</span>
                 </div>
               </div>
             </div>
