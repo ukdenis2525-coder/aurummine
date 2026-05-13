@@ -828,11 +828,13 @@ router.get('/multi-accounts', async (req, res) => {
 
     if (!filtered.length) return res.json({ active: [], blocked: [] });
 
-    // Fetch all user details
+    // Fetch all user details + referrer info
     const allUserIds = [...new Set(filtered.flatMap(([, ids]) => [...ids]))];
     const { rows: users } = await pool.query(
-      `SELECT id, tg_id, username, first_name, power, ton_balance, is_premium, is_blocked, created_at
-       FROM users WHERE id = ANY($1::INT[])`,
+      `SELECT u.id, u.tg_id, u.username, u.first_name, u.power, u.ton_balance, u.is_premium, u.is_blocked, u.created_at, u.ref_id,
+              r.tg_id AS ref_tg_id, r.username AS ref_username, r.first_name AS ref_first_name
+       FROM users u LEFT JOIN users r ON u.ref_id = r.id
+       WHERE u.id = ANY($1::INT[])`,
       [allUserIds]
     );
     const usersMap = {};

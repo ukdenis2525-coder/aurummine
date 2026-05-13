@@ -3,6 +3,9 @@ import api from '../../utils/api.js';
 import { useStore } from '../../store/index.js';
 import { fmt, fmtK } from '../../utils/format.js';
 
+// Module-level: used to pass search query from MultiAccountPanel to UsersPanel
+let _searchFromMulti = '';
+
 const ALL_TABS = [
   { id: 'dashboard', icon: '📊', label: 'Обзор' },
   { id: 'users', icon: '👥', label: 'Юзеры' },
@@ -84,7 +87,7 @@ export default function AdminPage() {
       {tab === 'ads' && <AdsPanel />}
       {tab === 'referrals' && <ReferralsPanel />}
       {tab === 'broadcast' && <BroadcastPanel />}
-      {tab === 'multi' && <MultiAccountPanel />}
+      {tab === 'multi' && <MultiAccountPanel onGoToUser={(tgId) => { _searchFromMulti = String(tgId); setTab('users'); }} />}
       {tab === 'admins' && <AdminsPanel />}
       {tab === 'ambassador' && <AmbassadorAdminPanel />}
       {tab === 'promo' && <PromoCodesPanel />}
@@ -367,7 +370,10 @@ function DashboardCharts() {
 // ═══════════════════ USERS ═══════════════════
 function UsersPanel() {
   const [users, setUsers] = useState([]);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(_searchFromMulti || '');
+
+  // Clear module-level search after using it
+  useEffect(() => { if (_searchFromMulti) { _searchFromMulti = ''; } }, []);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [editing, setEditing] = useState(null);
@@ -1647,7 +1653,7 @@ function AdsPanel() {
   );
 }
 // ═══════════════════ MULTI-ACCOUNT DETECTION ═══════════════════
-function MultiAccountPanel() {
+function MultiAccountPanel({ onGoToUser }) {
   const [data, setData] = useState({ active: [], blocked: [] });
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState(null);
@@ -1829,14 +1835,33 @@ function MultiAccountPanel() {
                   <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>
                     Рег: {new Date(u.created_at).toLocaleDateString()}
                   </div>
+                  {u.ref_tg_id && (
+                    <div style={{ fontSize: 9, marginTop: 3, color: 'var(--text-muted)' }}>
+                      👤 Привёл: <span style={{ color: 'var(--gold)', fontWeight: 700 }}>
+                        {u.ref_first_name || u.ref_username || 'Noname'}
+                        {u.ref_username ? ` (@${u.ref_username})` : ''}
+                      </span>
+                      <span style={{ fontFamily: 'monospace', marginLeft: 4 }}>TG:{u.ref_tg_id}</span>
+                    </div>
+                  )}
+                  {!u.ref_tg_id && (
+                    <div style={{ fontSize: 9, marginTop: 3, color: 'var(--text-muted)', opacity: 0.5 }}>👤 Без реферера</div>
+                  )}
                 </div>
-                {!u.is_blocked && !u.is_admin && (
-                  <button onClick={() => blockUser(u.id)} style={{
-                    background: 'var(--red-bg)', border: 'none', borderRadius: 8,
-                    padding: '6px 10px', color: 'var(--red)', fontSize: 10, fontWeight: 700, cursor: 'pointer',
-                    flexShrink: 0,
-                  }}>🚫 Бан</button>
-                )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0 }}>
+                  {onGoToUser && (
+                    <button onClick={() => onGoToUser(u.tg_id)} style={{
+                      background: 'rgba(212,175,55,0.1)', border: 'none', borderRadius: 8,
+                      padding: '6px 10px', color: 'var(--gold)', fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                    }}>👤 Профиль</button>
+                  )}
+                  {!u.is_blocked && !u.is_admin && (
+                    <button onClick={() => blockUser(u.id)} style={{
+                      background: 'var(--red-bg)', border: 'none', borderRadius: 8,
+                      padding: '6px 10px', color: 'var(--red)', fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                    }}>🚫 Бан</button>
+                  )}
+                </div>
               </div>
             </div>
           ))}
