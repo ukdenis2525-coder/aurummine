@@ -3070,13 +3070,24 @@ function AmbassadorPosts({ posts, channels, onUpdate, showMsg }) {
           <input type="text" value={title} onChange={e => setTitle(e.target.value)}
             placeholder="Заголовок" style={{ marginBottom: 8, fontSize: 13 }} />
           <textarea value={text} onChange={e => setText(e.target.value)}
-            placeholder="Текст поста (поддерживается HTML)"
+            placeholder="Текст поста (поддерживается HTML)&#10;&#10;Спец. символы:&#10;{REF_LINK} — реф. ссылка партнёра&#10;{REF_CODE} — реф. код партнёра"
             style={{
               width: '100%', minHeight: 100, padding: 12, borderRadius: 12,
               background: 'var(--bg-card)', border: '1px solid var(--border)',
               color: 'var(--text)', fontSize: 13, fontFamily: 'inherit',
-              resize: 'vertical', outline: 'none', boxSizing: 'border-box', marginBottom: 8,
+              resize: 'vertical', outline: 'none', boxSizing: 'border-box', marginBottom: 4,
             }} />
+          <div style={{
+            padding: '8px 12px', marginBottom: 8, borderRadius: 8,
+            background: 'rgba(212,175,55,0.06)', border: '1px solid rgba(212,175,55,0.12)',
+          }}>
+            <div style={{ fontSize: 10, color: 'var(--gold)', fontWeight: 700, marginBottom: 4 }}>📌 СПЕЦ. СИМВОЛЫ:</div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+              <code style={{ background: 'rgba(255,255,255,0.06)', padding: '1px 5px', borderRadius: 4, color: 'var(--green)' }}>{'{REF_LINK}'}</code> — ссылка партнёра (авто для каждого канала)<br/>
+              <code style={{ background: 'rgba(255,255,255,0.06)', padding: '1px 5px', borderRadius: 4, color: 'var(--green)' }}>{'{REF_CODE}'}</code> — TG ID партнёра<br/>
+              <span style={{ color: 'var(--gold)' }}>🔘 Кнопка «Открыть»</span> — автоматически добавляется к каждому посту
+            </div>
+          </div>
 
           <div style={{ marginBottom: 10 }}>
             <label style={{

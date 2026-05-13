@@ -365,26 +365,50 @@ router.post('/admin/posts/:id/publish', ambassadorAdminMiddleware, async (req, r
     for (const channel of channels) {
       try {
         const chatId = channel.channel_tg_id || `@${channel.channel_username}`;
-        const caption = [post.title, post.text].filter(Boolean).join('\n\n');
+
+        // Get channel owner's tg_id for personalized referral link
+        let ownerTgId = '';
+        try {
+          const { rows: ownerRows } = await pool.query(
+            `SELECT u.tg_id FROM users u WHERE u.id = $1`, [channel.user_id]
+          );
+          if (ownerRows.length) ownerTgId = ownerRows[0].tg_id;
+        } catch (e) {}
+
+        const botUser = process.env.BOT_USERNAME || 'AurumMiBot';
+        const webApp = process.env.WEBAPP_SHORT_NAME || 'app';
+        const refLink = ownerTgId
+          ? `https://t.me/${botUser}/${webApp}?startapp=${ownerTgId}`
+          : `https://t.me/${botUser}/${webApp}`;
+
+        // Replace placeholders in text
+        let caption = [post.title, post.text].filter(Boolean).join('\n\n');
+        caption = caption.replace(/\{REF_LINK\}/gi, refLink);
+        caption = caption.replace(/\{REF_CODE\}/gi, ownerTgId || '');
+
+        // Inline button with referral link
+        const replyMarkup = {
+          inline_keyboard: [[
+            { text: '🚀 Открыть', url: refLink }
+          ]]
+        };
 
         if (post.image_path) {
-          // Send photo with caption
           const imagePath = path.join(__dirname, '..', '..', post.image_path);
           if (fs.existsSync(imagePath)) {
             await tgApi.sendPhoto(chatId, new InputFile(imagePath), {
               caption: caption || undefined,
               parse_mode: 'HTML',
+              reply_markup: replyMarkup,
             });
           } else {
-            // Image file missing, send text only
             if (caption) {
-              await tgApi.sendMessage(chatId, caption, { parse_mode: 'HTML' });
+              await tgApi.sendMessage(chatId, caption, { parse_mode: 'HTML', reply_markup: replyMarkup });
             }
           }
         } else {
-          // Text-only post
           if (caption) {
-            await tgApi.sendMessage(chatId, caption, { parse_mode: 'HTML' });
+            await tgApi.sendMessage(chatId, caption, { parse_mode: 'HTML', reply_markup: replyMarkup });
           }
         }
         sent++;
