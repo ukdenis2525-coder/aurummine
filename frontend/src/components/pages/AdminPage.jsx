@@ -1815,7 +1815,9 @@ function BroadcastPanel() {
     setSending(true);
     setResult(null);
     try {
-      const { data } = await api.post('/admin/broadcast', { message, parse_mode: parseMode });
+      const opts = { message };
+      if (parseMode) opts.parse_mode = parseMode;
+      const { data } = await api.post('/admin/broadcast', opts);
       setResult(data);
       setMessage('');
     } catch (e) {
@@ -1921,6 +1923,14 @@ function BroadcastPanel() {
                 <MiniStat label="Доставлено" val={result.sent} color="var(--green)" />
                 <MiniStat label="Ошибки" val={result.failed} color="var(--red)" />
               </div>
+              {result.errors && result.errors.length > 0 && (
+                <div style={{ marginTop: 10, padding: 10, background: 'rgba(248,113,113,0.06)', borderRadius: 8 }}>
+                  <div style={{ fontSize: 10, color: 'var(--red)', fontWeight: 700, marginBottom: 4 }}>⚠️ Первые ошибки:</div>
+                  {result.errors.map((err, i) => (
+                    <div key={i} style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace', marginBottom: 2 }}>{err}</div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

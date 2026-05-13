@@ -700,26 +700,34 @@ router.post('/broadcast', async (req, res) => {
     const { rows } = await pool.query(`SELECT tg_id FROM users WHERE is_blocked = false`);
     const tgIds = rows.map(r => String(r.tg_id));
 
+    if (!tgIds.length) return res.json({ success: true, total: 0, sent: 0, failed: 0 });
+
     let sent = 0, failed = 0;
+    const errors = [];
+
+    // Build sendMessage options — omit parse_mode if empty (Plain text mode)
+    const msgOpts = { disable_web_page_preview: true };
+    if (parse_mode && parse_mode.trim()) {
+      msgOpts.parse_mode = parse_mode.trim();
+    }
 
     for (let i = 0; i < tgIds.length; i++) {
       try {
-        await tgApi.sendMessage(tgIds[i], message.trim(), {
-          parse_mode: parse_mode || 'HTML',
-          disable_web_page_preview: true,
-        });
+        await tgApi.sendMessage(tgIds[i], message.trim(), msgOpts);
         sent++;
       } catch (e) {
         failed++;
+        if (errors.length < 5) errors.push(`TG:${tgIds[i]} → ${e.message}`);
       }
       // Telegram rate limit: max ~30 msgs/sec
       if ((i + 1) % 25 === 0) await new Promise(r => setTimeout(r, 1000));
     }
 
-    res.json({ success: true, total: tgIds.length, sent, failed });
+    console.log(`[Broadcast] Done: ${sent}/${tgIds.length} sent, ${failed} failed`);
+    res.json({ success: true, total: tgIds.length, sent, failed, errors });
   } catch (e) {
     console.error('[Admin] Broadcast error:', e.message);
-    res.status(500).json({ error: 'Broadcast failed' });
+    res.status(500).json({ error: 'Broadcast failed: ' + e.message });
   }
 });
 
