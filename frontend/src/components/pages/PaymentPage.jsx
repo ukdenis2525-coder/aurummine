@@ -169,9 +169,19 @@ export default function PaymentPage({ order, pkg, wallet, expiresAt, onCancel, o
           {fmtK(pkg.power_amount)}
         </div>
         <div style={{ fontSize: 12, color: 'var(--gold)', letterSpacing: 2, marginBottom: 10 }}>POWER</div>
-        <div style={{ fontSize: 26, fontWeight: 900 }}>
-          {pkg.price_ton} <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>TON</span>
+        {parseFloat(order.ton_amount) < parseFloat(pkg.price_ton) && (
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', textDecoration: 'line-through', marginBottom: 2 }}>
+            {pkg.price_ton} TON
+          </div>
+        )}
+        <div style={{ fontSize: 26, fontWeight: 900, color: parseFloat(order.ton_amount) < parseFloat(pkg.price_ton) ? 'var(--green)' : undefined }}>
+          {order.ton_amount} <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>TON</span>
         </div>
+        {parseFloat(order.ton_amount) < parseFloat(pkg.price_ton) && (
+          <div style={{ fontSize: 11, color: 'var(--green)', fontWeight: 700, marginTop: 4 }}>
+            🎟️ Скидка применена!
+          </div>
+        )}
       </div>
 
       {/* ⚠️ Important Rules Warning */}
@@ -253,10 +263,10 @@ export default function PaymentPage({ order, pkg, wallet, expiresAt, onCancel, o
             border: '1px solid var(--border-gold)'
           }}>
             <div>
-              <span style={{ fontSize: 24, fontWeight: 900, color: 'var(--gold-light)' }}>{pkg.price_ton}</span>
+              <span style={{ fontSize: 24, fontWeight: 900, color: 'var(--gold-light)' }}>{order.ton_amount}</span>
               <span style={{ fontSize: 14, color: 'var(--text-muted)', marginLeft: 6 }}>TON</span>
             </div>
-            <CopyBtn value={String(pkg.price_ton)} id="amount" label={t('payment.copy')} />
+            <CopyBtn value={String(order.ton_amount)} id="amount" label={t('payment.copy')} />
           </div>
           <div style={{ fontSize: 11, color: 'var(--red)', marginTop: 6, textAlign: 'center', fontWeight: 500 }}>
             {t('payment.exact_amount_warning')}
