@@ -93,7 +93,46 @@ router.get('/stats', async (req, res) => {
     online_1h: online60,
     total_referrals: totalRefs,
     total_ads_watched: totalAds,
-  });
+  };
+
+  // Finance analytics — banned purchases + project liability
+  try {
+    const [
+      bannedPurchases,    // purchases made by currently blocked users
+      totalBalances,      // all ton_balance across ALL users (potential liability)
+      activeBalances,     // ton_balance of active (non-blocked) users only
+      approvedWithdrawals,// already paid out
+      pendingWithdrawals, // queued to be paid
+      blockedCount,       // total blocked users
+    ] = await Promise.all([
+      pool.query(`
+        SELECT COUNT(p.id) as count, COALESCE(SUM(p.ton_paid), 0) as sum
+        FROM purchases p JOIN users u ON p.user_id = u.id WHERE u.is_blocked = true
+      `),
+      pool.query(`SELECT COALESCE(SUM(ton_balance), 0) as total FROM users`),
+      pool.query(`SELECT COALESCE(SUM(ton_balance), 0) as total FROM users WHERE is_blocked = false`),
+      pool.query(`SELECT COALESCE(SUM(ton_amount), 0) as total FROM withdrawals WHERE status = 'approved'`),
+      pool.query(`SELECT COALESCE(SUM(ton_amount), 0) as total FROM withdrawals WHERE status = 'pending'`),
+      pool.query(`SELECT COUNT(*) as c FROM users WHERE is_blocked = true`),
+    ]);
+
+    stats.finance = {
+      banned_users: parseInt(blockedCount.rows[0].c),
+      banned_purchases_count: parseInt(bannedPurchases.rows[0].count),
+      banned_purchases_ton: parseFloat(bannedPurchases.rows[0].sum),
+      total_liability: parseFloat(totalBalances.rows[0].total),       // all balances
+      active_liability: parseFloat(activeBalances.rows[0].total),     // only active users
+      total_withdrawn: parseFloat(approvedWithdrawals.rows[0].total), // already paid
+      pending_withdrawals_ton: parseFloat(pendingWithdrawals.rows[0].total),
+      // Net = revenue - paid - pending - active balances
+      net_position: parseFloat(completed.rows[0].sum) - parseFloat(approvedWithdrawals.rows[0].total) - parseFloat(pendingWithdrawals.rows[0].total),
+    };
+  } catch (e) {
+    console.error('[Stats] Finance error:', e.message);
+    stats.finance = null;
+  }
+
+  res.json(stats);
 });
 
 // ── Charts: hourly data for 24h ──

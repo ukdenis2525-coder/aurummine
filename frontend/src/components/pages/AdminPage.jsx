@@ -286,6 +286,113 @@ function Dashboard() {
         </div>
       )}
 
+      {/* 💰 Finance Analytics */}
+      {stats.finance && (
+        <div className="card" style={{ padding: 16, marginBottom: 16, border: '1px solid rgba(212,175,55,0.2)', animation: 'fadeIn 0.3s ease' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+            <span style={{ fontSize: 22 }}>💰</span>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 800 }}>Финансовая аналитика</div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Прогноз затрат и позиция проекта</div>
+            </div>
+          </div>
+
+          {/* Revenue vs Liability */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+            <div style={{ padding: 12, borderRadius: 10, background: 'rgba(52,211,153,0.06)', border: '1px solid rgba(52,211,153,0.15)' }}>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>📥 Доход (покупки)</div>
+              <div style={{ fontSize: 18, fontWeight: 900, color: 'var(--green)' }}>{fmt(stats.total_revenue, 4)} TON</div>
+            </div>
+            <div style={{ padding: 12, borderRadius: 10, background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.15)' }}>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>📤 Общий долг (балансы)</div>
+              <div style={{ fontSize: 18, fontWeight: 900, color: 'var(--red)' }}>{fmt(stats.finance.total_liability, 4)} TON</div>
+            </div>
+          </div>
+
+          {/* Detailed breakdown */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+            {[
+              { icon: '👤', label: 'Балансы активных юзеров', val: `${fmt(stats.finance.active_liability, 4)} TON`, color: 'var(--orange)', desc: 'Могут вывести' },
+              { icon: '✅', label: 'Уже выведено', val: `${fmt(stats.finance.total_withdrawn, 4)} TON`, color: 'var(--green)', desc: 'Approved' },
+              { icon: '⏳', label: 'Ожидают вывода', val: `${fmt(stats.finance.pending_withdrawals_ton, 4)} TON`, color: '#f59e0b', desc: 'Pending' },
+            ].map(r => (
+              <div key={r.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '8px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span>{r.icon}</span>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700 }}>{r.label}</div>
+                    <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{r.desc}</div>
+                  </div>
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: r.color }}>{r.val}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Banned users section */}
+          {stats.finance.banned_users > 0 && (
+            <div style={{ padding: 12, borderRadius: 10, background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.15)', marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--red)', marginBottom: 6 }}>🚫 Забаненные юзеры</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <div>
+                  <div style={{ fontSize: 18, fontWeight: 900, color: 'var(--red)' }}>{stats.finance.banned_users}</div>
+                  <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>юзеров в бане</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 18, fontWeight: 900, color: 'var(--red)' }}>{fmt(stats.finance.banned_purchases_ton, 4)} TON</div>
+                  <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{stats.finance.banned_purchases_count} покупок</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Net position */}
+          <div style={{
+            padding: 14, borderRadius: 12, textAlign: 'center',
+            background: stats.finance.net_position >= 0
+              ? 'linear-gradient(135deg, rgba(52,211,153,0.08), rgba(52,211,153,0.02))'
+              : 'linear-gradient(135deg, rgba(248,113,113,0.08), rgba(248,113,113,0.02))',
+            border: stats.finance.net_position >= 0
+              ? '1px solid rgba(52,211,153,0.25)' : '1px solid rgba(248,113,113,0.25)',
+          }}>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>
+              📊 Нетто позиция (Доход − Выведено − Ожидает)
+            </div>
+            <div style={{
+              fontSize: 24, fontWeight: 900,
+              color: stats.finance.net_position >= 0 ? 'var(--green)' : 'var(--red)',
+            }}>
+              {stats.finance.net_position >= 0 ? '+' : ''}{fmt(stats.finance.net_position, 4)} TON
+            </div>
+            <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 4 }}>
+              Потенциальный макс. вывод активных юзеров: {fmt(stats.finance.active_liability, 4)} TON
+            </div>
+
+            {/* Health bar */}
+            {stats.total_revenue > 0 && (() => {
+              const paidPct = Math.min(100, (stats.finance.total_withdrawn / stats.total_revenue) * 100);
+              const pendPct = Math.min(100 - paidPct, (stats.finance.pending_withdrawals_ton / stats.total_revenue) * 100);
+              const liabPct = Math.min(100 - paidPct - pendPct, (stats.finance.active_liability / stats.total_revenue) * 100);
+              return (
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ height: 8, borderRadius: 4, background: 'rgba(255,255,255,0.06)', overflow: 'hidden', display: 'flex' }}>
+                    <div style={{ width: `${paidPct}%`, background: 'var(--green)', transition: 'width 0.5s' }} title="Выведено" />
+                    <div style={{ width: `${pendPct}%`, background: '#f59e0b', transition: 'width 0.5s' }} title="Ожидает" />
+                    <div style={{ width: `${liabPct}%`, background: 'var(--red)', opacity: 0.5, transition: 'width 0.5s' }} title="Балансы" />
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 8, color: 'var(--text-muted)' }}>
+                    <span>🟢 Выведено {paidPct.toFixed(0)}%</span>
+                    <span>🟡 Ожидает {pendPct.toFixed(0)}%</span>
+                    <span>🔴 Балансы {liabPct.toFixed(0)}%</span>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
       {/* Charts */}
       <DashboardCharts />
     </div>
