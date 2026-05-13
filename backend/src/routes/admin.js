@@ -116,16 +116,34 @@ router.get('/stats', async (req, res) => {
       pool.query(`SELECT COUNT(*) as c FROM users WHERE is_blocked = true`),
     ]);
 
+    // Power forecast — how much TON will be mined
+    // Formula: 100K power = 2500 hashes/day = 0.036 TON/day
+    const TON_PER_DAY_PER_100K = 0.036;
+    const activePowerRes = await pool.query(`SELECT COALESCE(SUM(power), 0) as total FROM users WHERE is_blocked = false`);
+    const totalPowerRes = await pool.query(`SELECT COALESCE(SUM(power), 0) as total FROM users`);
+    const activePower = parseFloat(activePowerRes.rows[0].total);
+    const totalPower = parseFloat(totalPowerRes.rows[0].total);
+    const tonPerDay = (activePower / 100000) * TON_PER_DAY_PER_100K;
+
     stats.finance = {
       banned_users: parseInt(blockedCount.rows[0].c),
       banned_purchases_count: parseInt(bannedPurchases.rows[0].count),
       banned_purchases_ton: parseFloat(bannedPurchases.rows[0].sum),
-      total_liability: parseFloat(totalBalances.rows[0].total),       // all balances
-      active_liability: parseFloat(activeBalances.rows[0].total),     // only active users
-      total_withdrawn: parseFloat(approvedWithdrawals.rows[0].total), // already paid
+      total_liability: parseFloat(totalBalances.rows[0].total),
+      active_liability: parseFloat(activeBalances.rows[0].total),
+      total_withdrawn: parseFloat(approvedWithdrawals.rows[0].total),
       pending_withdrawals_ton: parseFloat(pendingWithdrawals.rows[0].total),
-      // Net = revenue - paid - pending - active balances
       net_position: parseFloat(completed.rows[0].sum) - parseFloat(approvedWithdrawals.rows[0].total) - parseFloat(pendingWithdrawals.rows[0].total),
+      // Power forecast
+      active_power: activePower,
+      total_power: totalPower,
+      mining_ton_per_day: tonPerDay,
+      mining_ton_per_week: tonPerDay * 7,
+      mining_ton_per_month: tonPerDay * 30,
+      // Future liability = current balances + future mining
+      liability_7d: parseFloat(activeBalances.rows[0].total) + (tonPerDay * 7),
+      liability_30d: parseFloat(activeBalances.rows[0].total) + (tonPerDay * 30),
+      liability_90d: parseFloat(activeBalances.rows[0].total) + (tonPerDay * 90),
     };
   } catch (e) {
     console.error('[Stats] Finance error:', e.message);

@@ -347,6 +347,43 @@ function Dashboard() {
             </div>
           )}
 
+          {/* ⚡ Mining Forecast */}
+          <div style={{ padding: 12, borderRadius: 10, background: 'rgba(212,175,55,0.04)', border: '1px solid rgba(212,175,55,0.15)', marginBottom: 12 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gold)', marginBottom: 8 }}>⚡ Прогноз майнинга (по текущему Power)</div>
+            <div style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 10 }}>
+              Активный Power: <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{fmtK(stats.finance.active_power)} GH/s</span>
+              {' '}(100K = 0.036 TON/день)
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginBottom: 10 }}>
+              {[
+                { label: 'День', val: stats.finance.mining_ton_per_day, icon: '📅' },
+                { label: 'Неделя', val: stats.finance.mining_ton_per_week, icon: '📆' },
+                { label: 'Месяц', val: stats.finance.mining_ton_per_month, icon: '🗓️' },
+              ].map(p => (
+                <div key={p.label} style={{ textAlign: 'center', padding: 8, borderRadius: 8, background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)' }}>
+                  <div style={{ fontSize: 16, marginBottom: 2 }}>{p.icon}</div>
+                  <div style={{ fontSize: 14, fontWeight: 900, color: 'var(--orange)' }}>{fmt(p.val, 4)}</div>
+                  <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>TON/{p.label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Future liability */}
+            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--red)', marginBottom: 6 }}>📈 Прогноз затрат (балансы + будущий майнинг)</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+              {[
+                { label: '7 дней', val: stats.finance.liability_7d },
+                { label: '30 дней', val: stats.finance.liability_30d },
+                { label: '90 дней', val: stats.finance.liability_90d },
+              ].map(p => (
+                <div key={p.label} style={{ textAlign: 'center', padding: 8, borderRadius: 8, background: 'rgba(248,113,113,0.04)', border: '1px solid rgba(248,113,113,0.12)' }}>
+                  <div style={{ fontSize: 14, fontWeight: 900, color: 'var(--red)' }}>{fmt(p.val, 4)}</div>
+                  <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>через {p.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Net position */}
           <div style={{
             padding: 14, borderRadius: 12, textAlign: 'center',
