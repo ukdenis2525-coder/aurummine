@@ -38,10 +38,19 @@ router.get('/', authMiddleware, async (req, res) => {
 
   // Load referral settings for display
   const { rows: settingsRows } = await pool.query(
-    `SELECT key, value FROM app_settings WHERE key LIKE 'ref_%'`
+    `SELECT key, value FROM app_settings WHERE key LIKE 'ref_%' OR key LIKE 'ambassador_%'`
   );
   const settings = {};
   for (const r of settingsRows) settings[r.key] = parseFloat(r.value);
+
+  // Check if user is ambassador (has approved channel)
+  const { rows: ambRows } = await pool.query(
+    `SELECT id FROM ambassador_channels WHERE user_id = $1 AND status = 'approved' LIMIT 1`,
+    [user.id]
+  );
+  const isAmbassador = ambRows.length > 0;
+  const ambassadorPct = settings.ambassador_commission_pct ?? 25;
+  const standardPct = settings.ref_commission_pct ?? 15;
 
   res.json({
     stats: stats[0],
@@ -53,7 +62,10 @@ router.get('/', authMiddleware, async (req, res) => {
     settings: {
       power_premium: settings.ref_power_premium ?? 6000,
       power_normal: settings.ref_power_normal ?? 3000,
-      commission_pct: settings.ref_commission_pct ?? 15,
+      commission_pct: isAmbassador ? ambassadorPct : standardPct,
+      is_ambassador: isAmbassador,
+      ambassador_commission_pct: ambassadorPct,
+      standard_commission_pct: standardPct,
     }
   });
 });

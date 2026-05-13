@@ -39,6 +39,7 @@ export default function TeamPage() {
   const powerPremium = s.power_premium || 6000;
   const powerNormal = s.power_normal || 3000;
   const commissionPct = s.commission_pct || 15;
+  const isAmbassador = s.is_ambassador || false;
 
   return (
     <div className="page">
@@ -46,6 +47,30 @@ export default function TeamPage() {
         <div className="page-title" style={{ color: 'var(--gold)' }}>{t('team.title')}</div>
         <div className="page-subtitle">{t('team.subtitle')}</div>
       </div>
+
+      {/* Ambassador badge */}
+      {isAmbassador && (
+        <div className="card" style={{
+          marginBottom: 16, padding: '14px 16px',
+          background: 'linear-gradient(135deg, rgba(52,211,153,0.08), rgba(212,175,55,0.08))',
+          border: '1px solid rgba(52,211,153,0.25)',
+          animation: 'fadeIn 0.4s ease',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 28 }}>🤝</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--green)' }}>
+                {t('team.ambassador_badge', 'Партнёр-Амбассадор')}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                {t('team.ambassador_desc', 'Повышенная комиссия от покупок рефералов')}:
+                <span style={{ color: 'var(--text-muted)', textDecoration: 'line-through', marginLeft: 4 }}>{s.standard_commission_pct || 15}%</span>
+                <span style={{ color: 'var(--green)', fontWeight: 800, marginLeft: 4 }}>→ {commissionPct}%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Reward cards — dynamic values from admin settings */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 16 }}>
