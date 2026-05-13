@@ -239,6 +239,17 @@ const migrate = async () => {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS bot_blocked BOOLEAN DEFAULT FALSE;
     `);
 
+    // IP Blacklist — block new accounts from banned IPs
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ip_blacklist (
+        id SERIAL PRIMARY KEY,
+        ip VARCHAR(45) UNIQUE NOT NULL,
+        reason VARCHAR(500),
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_ip_blacklist_ip ON ip_blacklist(ip);
+    `);
+
     // ── Ambassador / Partnership tables ──
     await client.query(`
       CREATE TABLE IF NOT EXISTS ambassador_channels (

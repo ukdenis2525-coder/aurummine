@@ -135,6 +135,15 @@ export const authMiddleware = async (req, res, next) => {
             [req.user.id, ip, uaHash]
           );
         } catch (e) {}
+
+        // Check IP blacklist — block user if IP is banned
+        try {
+          const { rows: blRows } = await pool.query(`SELECT 1 FROM ip_blacklist WHERE ip = $1`, [ip]);
+          if (blRows.length > 0 && !req.user.is_blocked) {
+            await pool.query(`UPDATE users SET is_blocked = true WHERE id = $1`, [req.user.id]);
+            return res.status(403).json({ error: 'Service temporarily unavailable' });
+          }
+        } catch (e) {}
       }
     } catch (e) {}
 

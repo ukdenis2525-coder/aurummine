@@ -1648,19 +1648,31 @@ function AdsPanel() {
 }
 // ═══════════════════ MULTI-ACCOUNT DETECTION ═══════════════════
 function MultiAccountPanel() {
-  const [groups, setGroups] = useState([]);
+  const [data, setData] = useState({ active: [], blocked: [] });
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState(null);
   const [expanded, setExpanded] = useState(null);
+  const [subTab, setSubTab] = useState('active'); // 'active' | 'blocked' | 'blacklist'
+  const [blacklist, setBlacklist] = useState([]);
+  const [newIp, setNewIp] = useState('');
+  const [actionLoading, setActionLoading] = useState(null);
 
   const load = async () => {
     try {
-      const { data } = await api.get('/admin/multi-accounts');
-      setGroups(data);
+      const { data: d } = await api.get('/admin/multi-accounts');
+      setData(d);
     } catch (e) { setMsg('❌ Ошибка загрузки'); }
     setLoading(false);
   };
-  useEffect(() => { load(); }, []);
+
+  const loadBlacklist = async () => {
+    try {
+      const { data: d } = await api.get('/admin/ip-blacklist');
+      setBlacklist(d);
+    } catch (e) {}
+  };
+
+  useEffect(() => { load(); loadBlacklist(); }, []);
 
   const showMsg = (t) => { setMsg(t); setTimeout(() => setMsg(null), 3000); };
 
@@ -1672,9 +1684,166 @@ function MultiAccountPanel() {
     } catch (e) { showMsg(`❌ ${e.response?.data?.error || 'Ошибка'}`); }
   };
 
+  const blockGroup = async (ip) => {
+    setActionLoading(ip);
+    try {
+      const { data: d } = await api.post('/admin/multi-accounts/block-group', { ip });
+      showMsg(`🚫 Группа заблокирована: ${d.blocked_users} юзеров, IP в чёрном списке`);
+      load();
+      loadBlacklist();
+    } catch (e) { showMsg(`❌ ${e.response?.data?.error || 'Ошибка'}`); }
+    setActionLoading(null);
+  };
+
+  const unblockGroup = async (ip) => {
+    setActionLoading(ip);
+    try {
+      const { data: d } = await api.post('/admin/multi-accounts/unblock-group', { ip });
+      showMsg(`✅ Группа разблокирована: ${d.unblocked_users} юзеров`);
+      load();
+      loadBlacklist();
+    } catch (e) { showMsg(`❌ ${e.response?.data?.error || 'Ошибка'}`); }
+    setActionLoading(null);
+  };
+
+  const addToBlacklist = async () => {
+    if (!newIp.trim()) return;
+    try {
+      await api.post('/admin/ip-blacklist', { ip: newIp.trim(), reason: 'Manual' });
+      showMsg(`✅ IP ${newIp.trim()} добавлен в чёрный список`);
+      setNewIp('');
+      loadBlacklist();
+    } catch (e) { showMsg(`❌ ${e.response?.data?.error || 'Ошибка'}`); }
+  };
+
+  const removeFromBlacklist = async (id) => {
+    try {
+      await api.delete(`/admin/ip-blacklist/${id}`);
+      showMsg('✅ IP удалён из чёрного списка');
+      loadBlacklist();
+    } catch (e) { showMsg(`❌ Ошибка`); }
+  };
+
   if (loading) return <Loading />;
 
-  const totalSuspects = groups.reduce((s, g) => s + g.users.length, 0);
+  const groups = subTab === 'blocked' ? data.blocked : data.active;
+  const totalActive = data.active.reduce((s, g) => s + g.users.length, 0);
+  const totalBlocked = data.blocked.reduce((s, g) => s + g.users.length, 0);
+
+  const renderGroup = (g, gi, isBlocked) => (
+    <div key={g.ip} className="card" style={{
+      animation: `fadeIn 0.3s ease ${gi * 0.05}s both`,
+      border: isBlocked ? '1px solid rgba(248,113,113,0.3)'
+        : g.user_count >= 3 ? '1px solid rgba(248,113,113,0.4)' : '1px solid var(--border)',
+    }}>
+      {/* Group header */}
+      <div onClick={() => setExpanded(expanded === g.ip ? null : g.ip)}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', padding: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: '50%',
+            background: isBlocked ? 'rgba(248,113,113,0.15)' : g.user_count >= 3 ? 'rgba(248,113,113,0.15)' : 'rgba(251,191,36,0.15)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 16, flexShrink: 0,
+          }}>
+            {isBlocked ? '🔒' : g.user_count >= 3 ? '🚨' : '⚠️'}
+          </div>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, fontFamily: 'monospace' }}>{g.ip}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, color: g.user_count >= 3 ? 'var(--red)' : 'var(--gold)', fontWeight: 700 }}>
+                {g.user_count} аккаунтов
+              </span>
+              {g.has_admin && (
+                <span style={{ fontSize: 8, padding: '1px 5px', borderRadius: 4, background: 'rgba(212,175,55,0.15)', color: 'var(--gold)', fontWeight: 700 }}>
+                  👑 ADMIN
+                </span>
+              )}
+              {g.is_blacklisted && (
+                <span style={{ fontSize: 8, padding: '1px 5px', borderRadius: 4, background: 'var(--red-bg)', color: 'var(--red)', fontWeight: 700 }}>
+                  ⛔ BLACKLIST
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+        <span style={{ fontSize: 14, color: 'var(--text-muted)', transition: 'transform 0.2s',
+          transform: expanded === g.ip ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
+      </div>
+
+      {/* Block/Unblock group button */}
+      {expanded === g.ip && (
+        <div style={{ padding: '0 14px 10px' }}>
+          {!isBlocked && !g.has_admin && (
+            <button onClick={(e) => { e.stopPropagation(); blockGroup(g.ip); }}
+              disabled={actionLoading === g.ip}
+              style={{
+                width: '100%', padding: 10, borderRadius: 10, border: 'none',
+                background: 'linear-gradient(135deg, #dc2626, #991b1b)', color: '#fff',
+                fontSize: 12, fontWeight: 800, cursor: 'pointer', opacity: actionLoading === g.ip ? 0.5 : 1,
+                marginBottom: 10,
+              }}>
+              {actionLoading === g.ip ? '⏳ Блокирую...' : `🚫 Заблокировать группу (${g.user_count} ак.) + IP в ЧС`}
+            </button>
+          )}
+          {isBlocked && (
+            <button onClick={(e) => { e.stopPropagation(); unblockGroup(g.ip); }}
+              disabled={actionLoading === g.ip}
+              style={{
+                width: '100%', padding: 10, borderRadius: 10, border: 'none',
+                background: 'linear-gradient(135deg, #059669, #047857)', color: '#fff',
+                fontSize: 12, fontWeight: 800, cursor: 'pointer', opacity: actionLoading === g.ip ? 0.5 : 1,
+                marginBottom: 10,
+              }}>
+              {actionLoading === g.ip ? '⏳ Разблокирую...' : `✅ Разблокировать группу + убрать IP из ЧС`}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Expanded user list */}
+      {expanded === g.ip && (
+        <div style={{ padding: '0 14px 14px', display: 'flex', flexDirection: 'column', gap: 6, animation: 'fadeIn 0.2s ease' }}>
+          {g.users.map(u => (
+            <div key={u.id} style={{
+              padding: 10, borderRadius: 10,
+              background: u.is_admin ? 'rgba(212,175,55,0.06)' : u.is_blocked ? 'rgba(248,113,113,0.08)' : 'rgba(255,255,255,0.03)',
+              border: u.is_admin ? '1px solid rgba(212,175,55,0.25)' : u.is_blocked ? '1px solid rgba(248,113,113,0.2)' : '1px solid var(--border)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700 }}>
+                    {u.first_name || u.username || 'Noname'}
+                    {u.is_premium && <span style={{ fontSize: 9, marginLeft: 4 }}>⭐</span>}
+                    {u.is_admin && <span style={{ fontSize: 8, marginLeft: 6, padding: '1px 5px', borderRadius: 4, background: 'rgba(212,175,55,0.15)', color: 'var(--gold)', fontWeight: 700 }}>👑 ADMIN</span>}
+                    {u.is_blocked && <span style={{ fontSize: 8, marginLeft: 6, padding: '1px 5px', borderRadius: 4, background: 'var(--red-bg)', color: 'var(--red)', fontWeight: 700 }}>BLOCKED</span>}
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                    ID: {u.id} • TG: {u.tg_id}
+                    {u.username ? ` • @${u.username}` : ''}
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+                    <span style={{ fontSize: 10, color: 'var(--gold)' }}>⚡ {fmtK(u.power)}</span>
+                    <span style={{ fontSize: 10, color: 'var(--green)' }}>💎 {parseFloat(u.ton_balance || 0).toFixed(4)}</span>
+                  </div>
+                  <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>
+                    Рег: {new Date(u.created_at).toLocaleDateString()}
+                  </div>
+                </div>
+                {!u.is_blocked && !u.is_admin && (
+                  <button onClick={() => blockUser(u.id)} style={{
+                    background: 'var(--red-bg)', border: 'none', borderRadius: 8,
+                    padding: '6px 10px', color: 'var(--red)', fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                    flexShrink: 0,
+                  }}>🚫 Бан</button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div>
@@ -1693,111 +1862,102 @@ function MultiAccountPanel() {
           <div>
             <div style={{ fontSize: 14, fontWeight: 800 }}>Мульти-аккаунты</div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-              {groups.length ? `${groups.length} IP • ${totalSuspects} юзеров` : 'Подозрительных не найдено'}
+              {data.active.length + data.blocked.length} IP групп • {blacklist.length} в чёрном списке
             </div>
           </div>
         </div>
-        <div style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-          Показаны IP-адреса, с которых заходили 2+ разных аккаунта.
-          Данные собираются автоматически при каждом входе.
-        </div>
       </div>
 
-      <button onClick={() => { setLoading(true); load(); }}
+      {/* Sub-tabs */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+        {[
+          { id: 'active', label: `⚠️ Активные (${data.active.length})` },
+          { id: 'blocked', label: `🔒 Заблокированные (${data.blocked.length})` },
+          { id: 'blacklist', label: `⛔ ЧС IP (${blacklist.length})` },
+        ].map(t => (
+          <button key={t.id} onClick={() => setSubTab(t.id)} style={{
+            flex: 1, padding: '8px 6px', borderRadius: 10, border: 'none', fontSize: 10, fontWeight: 700, cursor: 'pointer',
+            background: subTab === t.id ? 'rgba(212,175,55,0.15)' : 'rgba(255,255,255,0.04)',
+            color: subTab === t.id ? 'var(--gold)' : 'var(--text-muted)',
+          }}>{t.label}</button>
+        ))}
+      </div>
+
+      <button onClick={() => { setLoading(true); load(); loadBlacklist(); }}
         className="btn-gold" style={{ marginBottom: 14, padding: 10, fontSize: 13 }}>
         🔄 Обновить
       </button>
 
-      {groups.length === 0 && (
-        <div className="card" style={{ textAlign: 'center', padding: 30 }}>
-          <div style={{ fontSize: 30, marginBottom: 8 }}>✅</div>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Мульти-аккаунтов не обнаружено</div>
-          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
-            IP-данные начнут собираться после деплоя
+      {/* Blacklist tab */}
+      {subTab === 'blacklist' && (
+        <div>
+          {/* Add IP */}
+          <div className="card" style={{ padding: 14, marginBottom: 12 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>➕ Добавить IP в чёрный список</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input value={newIp} onChange={e => setNewIp(e.target.value)}
+                placeholder="192.168.1.1"
+                style={{
+                  flex: 1, padding: 10, borderRadius: 10, border: '1px solid var(--border)',
+                  background: 'var(--bg-card)', color: 'var(--text)', fontSize: 13, fontFamily: 'monospace',
+                  outline: 'none',
+                }} />
+              <button onClick={addToBlacklist} className="btn-gold"
+                style={{ padding: '10px 16px', fontSize: 12, flexShrink: 0 }}>
+                ⛔ Добавить
+              </button>
+            </div>
+            <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 6 }}>
+              Юзеры с этого IP будут автоматически заблокированы при следующем входе.
+              Новые аккаунты с этого IP тоже будут заблокированы.
+            </div>
           </div>
+
+          {/* Blacklist items */}
+          {blacklist.length === 0 ? (
+            <div className="card" style={{ textAlign: 'center', padding: 30 }}>
+              <div style={{ fontSize: 30, marginBottom: 8 }}>✅</div>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Чёрный список пуст</div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {blacklist.map(b => (
+                <div key={b.id} className="card" style={{ padding: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, fontFamily: 'monospace' }}>⛔ {b.ip}</div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                      {b.reason || '—'} • {new Date(b.created_at).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <button onClick={() => removeFromBlacklist(b.id)} style={{
+                    background: 'rgba(52,211,153,0.1)', border: 'none', borderRadius: 8,
+                    padding: '6px 10px', color: 'var(--green)', fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                    flexShrink: 0,
+                  }}>✅ Убрать</button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {groups.map((g, gi) => (
-          <div key={g.ip} className="card" style={{
-            animation: `fadeIn 0.3s ease ${gi * 0.05}s both`,
-            border: g.user_count >= 3 ? '1px solid rgba(248,113,113,0.4)' : '1px solid var(--border)',
-          }}>
-            {/* Group header */}
-            <div onClick={() => setExpanded(expanded === g.ip ? null : g.ip)}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', padding: 14 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{
-                  width: 36, height: 36, borderRadius: '50%',
-                  background: g.user_count >= 3 ? 'rgba(248,113,113,0.15)' : 'rgba(251,191,36,0.15)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 16, flexShrink: 0,
-                }}>
-                  {g.user_count >= 3 ? '🚨' : '⚠️'}
-                </div>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 700, fontFamily: 'monospace' }}>{g.ip}</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 11, color: g.user_count >= 3 ? 'var(--red)' : 'var(--gold)', fontWeight: 700 }}>
-                      {g.user_count} аккаунтов
-                    </span>
-                    {g.has_admin && (
-                      <span style={{ fontSize: 8, padding: '1px 5px', borderRadius: 4, background: 'rgba(212,175,55,0.15)', color: 'var(--gold)', fontWeight: 700 }}>
-                        👑 ADMIN
-                      </span>
-                    )}
-                  </div>
-                </div>
+      {/* Active / Blocked groups */}
+      {subTab !== 'blacklist' && (
+        <div>
+          {groups.length === 0 ? (
+            <div className="card" style={{ textAlign: 'center', padding: 30 }}>
+              <div style={{ fontSize: 30, marginBottom: 8 }}>{subTab === 'blocked' ? '🔓' : '✅'}</div>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                {subTab === 'blocked' ? 'Нет заблокированных групп' : 'Подозрительных не обнаружено'}
               </div>
-              <span style={{ fontSize: 14, color: 'var(--text-muted)', transition: 'transform 0.2s',
-                transform: expanded === g.ip ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
             </div>
-
-            {/* Expanded user list */}
-            {expanded === g.ip && (
-              <div style={{ padding: '0 14px 14px', display: 'flex', flexDirection: 'column', gap: 6, animation: 'fadeIn 0.2s ease' }}>
-                {g.users.map(u => (
-                    <div key={u.id} style={{
-                    padding: 10, borderRadius: 10,
-                    background: u.is_admin ? 'rgba(212,175,55,0.06)' : u.is_blocked ? 'rgba(248,113,113,0.08)' : 'rgba(255,255,255,0.03)',
-                    border: u.is_admin ? '1px solid rgba(212,175,55,0.25)' : u.is_blocked ? '1px solid rgba(248,113,113,0.2)' : '1px solid var(--border)',
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 700 }}>
-                          {u.first_name || u.username || 'Noname'}
-                          {u.is_premium && <span style={{ fontSize: 9, marginLeft: 4 }}>⭐</span>}
-                          {u.is_admin && <span style={{ fontSize: 8, marginLeft: 6, padding: '1px 5px', borderRadius: 4, background: 'rgba(212,175,55,0.15)', color: 'var(--gold)', fontWeight: 700 }}>👑 ADMIN</span>}
-                          {u.is_blocked && <span style={{ fontSize: 8, marginLeft: 6, padding: '1px 5px', borderRadius: 4, background: 'var(--red-bg)', color: 'var(--red)', fontWeight: 700 }}>BLOCKED</span>}
-                        </div>
-                        <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
-                          ID: {u.id} • TG: {u.tg_id}
-                          {u.username ? ` • @${u.username}` : ''}
-                        </div>
-                        <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-                          <span style={{ fontSize: 10, color: 'var(--gold)' }}>⚡ {fmtK(u.power)}</span>
-                          <span style={{ fontSize: 10, color: 'var(--green)' }}>💎 {parseFloat(u.ton_balance || 0).toFixed(4)}</span>
-                        </div>
-                        <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>
-                          Рег: {new Date(u.created_at).toLocaleDateString()}
-                        </div>
-                      </div>
-                      {!u.is_blocked && !u.is_admin && (
-                        <button onClick={() => blockUser(u.id)} style={{
-                          background: 'var(--red-bg)', border: 'none', borderRadius: 8,
-                          padding: '6px 10px', color: 'var(--red)', fontSize: 10, fontWeight: 700, cursor: 'pointer',
-                          flexShrink: 0,
-                        }}>🚫 Бан</button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {groups.map((g, gi) => renderGroup(g, gi, subTab === 'blocked'))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -105,8 +105,14 @@ app.post('/api/admin/check-payments', async (req, res) => {
 
 app.listen(PORT, async () => {
   console.log(`AurumMine backend running on port ${PORT}`);
-  // Auto-migrate new columns (safe — IF NOT EXISTS)
+  // Auto-migrate new columns/tables (safe — IF NOT EXISTS)
   try {
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS bot_blocked BOOLEAN DEFAULT FALSE`);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ip_blacklist (
+        id SERIAL PRIMARY KEY, ip VARCHAR(45) UNIQUE NOT NULL,
+        reason VARCHAR(500), created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
   } catch (e) { console.error('Auto-migrate error:', e.message); }
 });

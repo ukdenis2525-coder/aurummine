@@ -802,7 +802,7 @@ router.get('/multi-accounts', async (req, res) => {
       });
     } catch (e) {}
 
-    // Source 2: users.last_ip (real-time, works even if user_ips is empty)
+    // Source 2: users.last_ip (real-time)
     try {
       const { rows } = await pool.query(`
         SELECT last_ip, ARRAY_AGG(id) as user_ids
@@ -826,7 +826,7 @@ router.get('/multi-accounts', async (req, res) => {
       .sort((a, b) => b[1].size - a[1].size)
       .slice(0, 50);
 
-    if (!filtered.length) return res.json([]);
+    if (!filtered.length) return res.json({ active: [], blocked: [] });
 
     // Fetch all user details
     const allUserIds = [...new Set(filtered.flatMap(([, ids]) => [...ids]))];
@@ -841,17 +841,122 @@ router.get('/multi-accounts', async (req, res) => {
       usersMap[u.id] = u;
     });
 
-    const groups = filtered.map(([ip, ids]) => {
+    // Get blacklisted IPs
+    let blacklistedIps = new Set();
+    try {
+      const { rows: blRows } = await pool.query(`SELECT ip FROM ip_blacklist`);
+      blRows.forEach(r => blacklistedIps.add(r.ip));
+    } catch (e) {}
+
+    const active = [];
+    const blocked = [];
+
+    filtered.forEach(([ip, ids]) => {
       const groupUsers = [...ids].map(id => usersMap[id]).filter(Boolean);
       const hasAdmin = groupUsers.some(u => u.is_admin);
-      return { ip, user_count: groupUsers.length, has_admin: hasAdmin, users: groupUsers };
+      const allBlocked = groupUsers.every(u => u.is_blocked);
+      const isBlacklisted = blacklistedIps.has(ip);
+      const group = { ip, user_count: groupUsers.length, has_admin: hasAdmin, is_blacklisted: isBlacklisted, users: groupUsers };
+
+      if (allBlocked || isBlacklisted) {
+        blocked.push(group);
+      } else {
+        active.push(group);
+      }
     });
 
-    res.json(groups);
+    res.json({ active, blocked });
   } catch (e) {
     console.error('[Admin] Multi-account check error:', e.message);
     res.status(500).json({ error: 'Failed to check multi-accounts' });
   }
+});
+
+// Block entire IP group (all non-admin users + blacklist IP)
+router.post('/multi-accounts/block-group', async (req, res) => {
+  const { ip } = req.body;
+  if (!ip) return res.status(400).json({ error: 'IP required' });
+
+  try {
+    const adminIds = await getAllAdminIds();
+
+    // Find all users from this IP
+    const { rows: ipUsers } = await pool.query(
+      `SELECT DISTINCT u.id, u.tg_id FROM users u
+       LEFT JOIN user_ips ui ON u.id = ui.user_id
+       WHERE u.last_ip = $1 OR ui.ip = $1`, [ip]
+    );
+
+    let blockedCount = 0;
+    for (const u of ipUsers) {
+      if (!adminIds.includes(String(u.tg_id))) {
+        await pool.query(`UPDATE users SET is_blocked = true WHERE id = $1`, [u.id]);
+        blockedCount++;
+      }
+    }
+
+    // Add IP to blacklist
+    await pool.query(
+      `INSERT INTO ip_blacklist (ip, reason) VALUES ($1, $2) ON CONFLICT (ip) DO NOTHING`,
+      [ip, `Multi-account group block (${blockedCount} users)`]
+    );
+
+    res.json({ success: true, blocked_users: blockedCount, ip });
+  } catch (e) {
+    console.error('[Admin] Block group error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Unblock IP group (unblock users + remove from blacklist)
+router.post('/multi-accounts/unblock-group', async (req, res) => {
+  const { ip } = req.body;
+  if (!ip) return res.status(400).json({ error: 'IP required' });
+
+  try {
+    // Unblock users with this IP
+    const { rowCount } = await pool.query(
+      `UPDATE users SET is_blocked = false WHERE id IN (
+        SELECT DISTINCT u.id FROM users u
+        LEFT JOIN user_ips ui ON u.id = ui.user_id
+        WHERE u.last_ip = $1 OR ui.ip = $1
+      )`, [ip]
+    );
+
+    // Remove from blacklist
+    await pool.query(`DELETE FROM ip_blacklist WHERE ip = $1`, [ip]);
+
+    res.json({ success: true, unblocked_users: rowCount });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── IP Blacklist ──
+router.get('/ip-blacklist', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT * FROM ip_blacklist ORDER BY created_at DESC`);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.post('/ip-blacklist', async (req, res) => {
+  const { ip, reason } = req.body;
+  if (!ip) return res.status(400).json({ error: 'IP required' });
+  try {
+    await pool.query(
+      `INSERT INTO ip_blacklist (ip, reason) VALUES ($1, $2) ON CONFLICT (ip) DO NOTHING`,
+      [ip.trim(), reason || 'Manual']
+    );
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.delete('/ip-blacklist/:id', async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM ip_blacklist WHERE id = $1`, [req.params.id]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ── Admin Management ──
