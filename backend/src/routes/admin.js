@@ -81,7 +81,7 @@ router.get('/stats', async (req, res) => {
     totalAds = parseInt(ads.rows[0].c);
   } catch (e) {}
 
-  res.json({
+  const stats = {
     total_users: parseInt(users.rows[0].total),
     total_power: parseFloat(power.rows[0].total),
     total_ton_balance: parseFloat(ton.rows[0].total),
