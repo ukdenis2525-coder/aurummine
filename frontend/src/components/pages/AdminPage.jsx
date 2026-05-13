@@ -2462,6 +2462,7 @@ function BroadcastPanel() {
 // ═══════════════════ ADMINS ═══════════════════
 const PERM_TABS = [
   { id: 'users', icon: '👥', label: 'Юзеры' },
+  { id: 'deposits', icon: '💳', label: 'Депозиты' },
   { id: 'withdrawals', icon: '💸', label: 'Выводы' },
   { id: 'tasks', icon: '📋', label: 'Задания' },
   { id: 'orders', icon: '🛒', label: 'Заказы' },
@@ -2472,6 +2473,7 @@ const PERM_TABS = [
   { id: 'promo', icon: '🎟️', label: 'Промокоды' },
   { id: 'broadcast', icon: '📢', label: 'Рассылка' },
   { id: 'multi', icon: '👁', label: 'Мульти' },
+  { id: 'activity', icon: '📜', label: 'Лог' },
 ];
 
 function AdminsPanel() {
