@@ -790,6 +790,41 @@ router.get('/deposits', async (req, res) => {
   }
 });
 
+// ── Pending Deposits (started but not completed) ──
+router.get('/deposits/pending', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT pp.id, pp.user_id, pp.memo, pp.ton_amount, pp.status, pp.expires_at, pp.created_at,
+             u.tg_id, u.username, u.first_name, u.power, u.ton_balance, u.is_blocked, u.is_premium,
+             pk.name as package_name
+      FROM pending_purchases pp
+      JOIN users u ON pp.user_id = u.id
+      LEFT JOIN power_packages pk ON pp.package_id = pk.id
+      ORDER BY pp.created_at DESC
+      LIMIT 100
+    `);
+
+    // Stats
+    const [pending, expired, completed] = await Promise.all([
+      pool.query(`SELECT COUNT(*) as c FROM pending_purchases WHERE status = 'pending' AND expires_at > NOW()`),
+      pool.query(`SELECT COUNT(*) as c FROM pending_purchases WHERE status = 'pending' AND expires_at <= NOW()`),
+      pool.query(`SELECT COUNT(*) as c FROM pending_purchases WHERE status = 'completed'`),
+    ]);
+
+    res.json({
+      items: rows,
+      stats: {
+        active: parseInt(pending.rows[0].c),
+        expired: parseInt(expired.rows[0].c),
+        completed: parseInt(completed.rows[0].c),
+      }
+    });
+  } catch (e) {
+    console.error('[PendingDeposits] Error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Ad Settings ──
 router.get('/ad-settings', async (req, res) => {
   const { rows } = await pool.query(

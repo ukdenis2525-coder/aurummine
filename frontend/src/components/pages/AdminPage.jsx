@@ -3429,8 +3429,10 @@ function Btn({ children, ...props }) {
 // ═══════════════════ DEPOSITS ═══════════════════
 function DepositsPanel({ onGoToUser }) {
   const [data, setData] = useState(null);
+  const [pending, setPending] = useState(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const [subTab, setSubTab] = useState('completed');
 
   const load = async (p) => {
     setLoading(true);
@@ -3440,27 +3442,38 @@ function DepositsPanel({ onGoToUser }) {
     } catch (e) {}
     setLoading(false);
   };
-  useEffect(() => { load(); }, [page]);
+  const loadPending = async () => {
+    try { const { data: d } = await api.get('/admin/deposits/pending'); setPending(d); } catch (e) {}
+  };
+  useEffect(() => { load(); loadPending(); }, [page]);
 
   if (loading && !data) return <Loading />;
   if (!data) return <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)' }}>Ошибка загрузки</div>;
 
   const s = data.summary;
   const totalPages = Math.ceil(data.total / 50);
+  const pendingActive = pending?.stats?.active || 0;
 
   const timeAgo = (date) => {
     const diff = (Date.now() - new Date(date).getTime()) / 1000;
+    if (diff < 0) return 'скоро';
     if (diff < 60) return `${Math.floor(diff)}с назад`;
     if (diff < 3600) return `${Math.floor(diff / 60)}м назад`;
     if (diff < 86400) return `${Math.floor(diff / 3600)}ч назад`;
     return `${Math.floor(diff / 86400)}д назад`;
   };
+  const timeLeft = (date) => {
+    const diff = (new Date(date).getTime() - Date.now()) / 1000;
+    if (diff <= 0) return null;
+    if (diff < 60) return `${Math.floor(diff)}с`;
+    if (diff < 3600) return `${Math.floor(diff / 60)}м`;
+    return `${Math.floor(diff / 3600)}ч`;
+  };
 
   return (
     <div>
-      {/* Header */}
       <div className="card" style={{ padding: 14, marginBottom: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 24 }}>💳</span>
           <div>
             <div style={{ fontSize: 14, fontWeight: 800 }}>Депозиты</div>
@@ -3469,84 +3482,151 @@ function DepositsPanel({ onGoToUser }) {
         </div>
       </div>
 
-      {/* Summary cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 14 }}>
-        {[
-          { label: 'Сегодня', count: s.today_count, ton: s.today_ton, color: 'var(--green)' },
-          { label: 'Неделя', count: s.week_count, ton: s.week_ton, color: 'var(--gold)' },
-          { label: 'Месяц', count: s.month_count, ton: s.month_ton, color: 'var(--orange)' },
-        ].map(c => (
-          <div key={c.label} className="card" style={{ padding: 10, textAlign: 'center' }}>
-            <div style={{ fontSize: 16, fontWeight: 900, color: c.color }}>{c.count}</div>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{c.label}</div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: c.color, marginTop: 2 }}>{fmt(c.ton, 4)} TON</div>
-          </div>
-        ))}
+      {/* Sub-tabs */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+        <button onClick={() => setSubTab('completed')} style={{
+          flex: 1, padding: '8px 6px', borderRadius: 10, border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+          background: subTab === 'completed' ? 'rgba(52,211,153,0.15)' : 'rgba(255,255,255,0.04)',
+          color: subTab === 'completed' ? 'var(--green)' : 'var(--text-muted)',
+        }}>✅ Оплачено ({data.total})</button>
+        <button onClick={() => setSubTab('pending')} style={{
+          flex: 1, padding: '8px 6px', borderRadius: 10, border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+          background: subTab === 'pending' ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.04)',
+          color: subTab === 'pending' ? '#f59e0b' : 'var(--text-muted)', position: 'relative',
+        }}>
+          ⏳ Ожидают ({pendingActive})
+          {pendingActive > 0 && <span style={{ position: 'absolute', top: 2, right: 6, width: 6, height: 6, borderRadius: '50%', background: '#f59e0b' }} />}
+        </button>
       </div>
 
-      {/* Refresh */}
-      <button onClick={() => load(page)} className="btn-gold" style={{ marginBottom: 14, padding: 10, fontSize: 13 }}>
-        🔄 Обновить
-      </button>
-
-      {/* Deposits list */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {data.deposits.map((d, i) => (
-          <div key={d.id} className="card" style={{
-            padding: 12, animation: `fadeIn 0.2s ease ${i * 0.03}s both`,
-            border: d.is_blocked ? '1px solid rgba(248,113,113,0.2)' : '1px solid var(--border)',
-            opacity: d.is_blocked ? 0.6 : 1,
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                  <span style={{ fontSize: 13, fontWeight: 800 }}>
-                    {d.first_name || d.username || 'Noname'}
-                  </span>
-                  {d.is_premium && <span style={{ fontSize: 8 }}>⭐</span>}
-                  {d.is_blocked && <span style={{ fontSize: 8, padding: '1px 5px', borderRadius: 4, background: 'var(--red-bg)', color: 'var(--red)', fontWeight: 700 }}>BAN</span>}
-                  <span style={{ fontSize: 9, color: 'var(--text-muted)', marginLeft: 'auto' }}>{timeAgo(d.created_at)}</span>
+      {/* COMPLETED */}
+      {subTab === 'completed' && (<div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 14 }}>
+          {[
+            { label: 'Сегодня', count: s.today_count, ton: s.today_ton, color: 'var(--green)' },
+            { label: 'Неделя', count: s.week_count, ton: s.week_ton, color: 'var(--gold)' },
+            { label: 'Месяц', count: s.month_count, ton: s.month_ton, color: 'var(--orange)' },
+          ].map(c => (
+            <div key={c.label} className="card" style={{ padding: 10, textAlign: 'center' }}>
+              <div style={{ fontSize: 16, fontWeight: 900, color: c.color }}>{c.count}</div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{c.label}</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: c.color, marginTop: 2 }}>{fmt(c.ton, 4)} TON</div>
+            </div>
+          ))}
+        </div>
+        <button onClick={() => { load(page); loadPending(); }} className="btn-gold" style={{ marginBottom: 14, padding: 10, fontSize: 13 }}>🔄 Обновить</button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {data.deposits.map((d, i) => (
+            <div key={d.id} className="card" style={{
+              padding: 12, animation: `fadeIn 0.2s ease ${i * 0.03}s both`,
+              border: d.is_blocked ? '1px solid rgba(248,113,113,0.2)' : '1px solid var(--border)',
+              opacity: d.is_blocked ? 0.6 : 1,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                    <span style={{ fontSize: 13, fontWeight: 800 }}>{d.first_name || d.username || 'Noname'}</span>
+                    {d.is_premium && <span style={{ fontSize: 8 }}>⭐</span>}
+                    {d.is_blocked && <span style={{ fontSize: 8, padding: '1px 5px', borderRadius: 4, background: 'var(--red-bg)', color: 'var(--red)', fontWeight: 700 }}>BAN</span>}
+                    <span style={{ fontSize: 9, color: 'var(--text-muted)', marginLeft: 'auto' }}>{timeAgo(d.created_at)}</span>
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace', marginBottom: 4 }}>
+                    TG: {d.tg_id}{d.username ? ` • @${d.username}` : ''}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 13, fontWeight: 900, color: 'var(--green)' }}>+{fmt(d.ton_paid, 4)} TON</span>
+                    <span style={{ fontSize: 10, color: 'var(--gold)' }}>⚡ +{fmtK(d.power_amount)}</span>
+                    {d.package_name && <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 6, background: 'rgba(212,175,55,0.1)', color: 'var(--gold)', fontWeight: 600 }}>📦 {d.package_name}</span>}
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, marginTop: 4, fontSize: 9, color: 'var(--text-muted)' }}>
+                    <span>Итого: ⚡ {fmtK(d.power)}</span>
+                    <span>💰 {fmt(parseFloat(d.ton_balance || 0), 4)} TON</span>
+                  </div>
                 </div>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace', marginBottom: 4 }}>
-                  TG: {d.tg_id}{d.username ? ` • @${d.username}` : ''}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 13, fontWeight: 900, color: 'var(--green)' }}>+{fmt(d.ton_paid, 4)} TON</span>
-                  <span style={{ fontSize: 10, color: 'var(--gold)' }}>⚡ +{fmtK(d.power_amount)}</span>
-                  {d.package_name && (
-                    <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 6, background: 'rgba(212,175,55,0.1)', color: 'var(--gold)', fontWeight: 600 }}>
-                      📦 {d.package_name}
-                    </span>
-                  )}
-                </div>
-                <div style={{ display: 'flex', gap: 10, marginTop: 4, fontSize: 9, color: 'var(--text-muted)' }}>
-                  <span>Итого: ⚡ {fmtK(d.power)}</span>
-                  <span>💰 {fmt(parseFloat(d.ton_balance || 0), 4)} TON</span>
-                </div>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0, marginLeft: 8 }}>
-                {onGoToUser && (
-                  <button onClick={() => onGoToUser(d.tg_id)} style={{
-                    background: 'rgba(212,175,55,0.1)', border: 'none', borderRadius: 8,
-                    padding: '6px 10px', color: 'var(--gold)', fontSize: 10, fontWeight: 700, cursor: 'pointer',
-                  }}>👤</button>
-                )}
+                {onGoToUser && <button onClick={() => onGoToUser(d.tg_id)} style={{
+                  background: 'rgba(212,175,55,0.1)', border: 'none', borderRadius: 8,
+                  padding: '6px 10px', color: 'var(--gold)', fontSize: 10, fontWeight: 700, cursor: 'pointer', flexShrink: 0, marginLeft: 8,
+                }}>👤</button>}
               </div>
             </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 14 }}>
-          <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page <= 1}
-            style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer' }}>←</button>
-          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{page} / {totalPages}</span>
-          <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page >= totalPages}
-            style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer' }}>→</button>
+          ))}
         </div>
-      )}
+        {totalPages > 1 && (
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 14 }}>
+            <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page <= 1} style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer' }}>←</button>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{page} / {totalPages}</span>
+            <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page >= totalPages} style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer' }}>→</button>
+          </div>
+        )}
+      </div>)}
+
+      {/* PENDING */}
+      {subTab === 'pending' && (<div>
+        <button onClick={loadPending} className="btn-gold" style={{ marginBottom: 14, padding: 10, fontSize: 13 }}>🔄 Обновить</button>
+        {pending && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 14 }}>
+            {[
+              { label: 'Активные', val: pending.stats.active, color: '#f59e0b' },
+              { label: 'Истекли', val: pending.stats.expired, color: 'var(--red)' },
+              { label: 'Оплачено', val: pending.stats.completed, color: 'var(--green)' },
+            ].map(c => (
+              <div key={c.label} className="card" style={{ padding: 10, textAlign: 'center' }}>
+                <div style={{ fontSize: 18, fontWeight: 900, color: c.color }}>{c.val}</div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{c.label}</div>
+              </div>
+            ))}
+          </div>
+        )}
+        {!pending?.items?.length ? (
+          <div className="card" style={{ textAlign: 'center', padding: 30 }}>
+            <div style={{ fontSize: 30, marginBottom: 8 }}>✅</div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Нет ожидающих платежей</div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {pending.items.map((p, i) => {
+              const isExpired = p.status === 'pending' && new Date(p.expires_at) <= new Date();
+              const isCompleted = p.status === 'completed';
+              const tl = timeLeft(p.expires_at);
+              return (
+                <div key={p.id} className="card" style={{
+                  padding: 12, animation: `fadeIn 0.2s ease ${i * 0.03}s both`,
+                  border: isCompleted ? '1px solid rgba(52,211,153,0.25)' : isExpired ? '1px solid rgba(248,113,113,0.2)' : '1px solid rgba(251,191,36,0.25)',
+                  opacity: isExpired ? 0.5 : 1,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 13, fontWeight: 800 }}>{p.first_name || p.username || 'Noname'}</span>
+                        {isCompleted && <span style={{ fontSize: 8, padding: '1px 5px', borderRadius: 4, background: 'rgba(52,211,153,0.15)', color: 'var(--green)', fontWeight: 700 }}>✅ PAID</span>}
+                        {isExpired && <span style={{ fontSize: 8, padding: '1px 5px', borderRadius: 4, background: 'var(--red-bg)', color: 'var(--red)', fontWeight: 700 }}>⏰ EXPIRED</span>}
+                        {!isCompleted && !isExpired && tl && <span style={{ fontSize: 8, padding: '1px 5px', borderRadius: 4, background: 'rgba(251,191,36,0.15)', color: '#f59e0b', fontWeight: 700 }}>⏳ {tl}</span>}
+                        <span style={{ fontSize: 9, color: 'var(--text-muted)', marginLeft: 'auto' }}>{timeAgo(p.created_at)}</span>
+                      </div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace', marginBottom: 4 }}>
+                        TG: {p.tg_id}{p.username ? ` • @${p.username}` : ''}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 13, fontWeight: 900, color: isCompleted ? 'var(--green)' : '#f59e0b' }}>{fmt(p.ton_amount, 4)} TON</span>
+                        {p.package_name && <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 6, background: 'rgba(212,175,55,0.1)', color: 'var(--gold)', fontWeight: 600 }}>📦 {p.package_name}</span>}
+                        <span style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'monospace' }}>memo: {p.memo}</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: 10, marginTop: 4, fontSize: 9, color: 'var(--text-muted)' }}>
+                        <span>⚡ {fmtK(p.power)}</span>
+                        <span>💰 {fmt(parseFloat(p.ton_balance || 0), 4)} TON</span>
+                      </div>
+                    </div>
+                    {onGoToUser && <button onClick={() => onGoToUser(p.tg_id)} style={{
+                      background: 'rgba(212,175,55,0.1)', border: 'none', borderRadius: 8,
+                      padding: '6px 10px', color: 'var(--gold)', fontSize: 10, fontWeight: 700, cursor: 'pointer', flexShrink: 0, marginLeft: 8,
+                    }}>👤</button>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>)}
     </div>
   );
 }
