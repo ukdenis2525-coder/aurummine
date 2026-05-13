@@ -27,7 +27,11 @@ const getAllAdminIds = async () => {
 // Admin auth: either x-admin-key header OR Telegram user with matching tg_id (env + DB)
 const adminMiddleware = async (req, res, next) => {
   const key = req.headers['x-admin-key'];
-  if (key && key === process.env.ADMIN_KEY) return next();
+  if (key && key === process.env.ADMIN_KEY) {
+    req.adminTgId = 'API_KEY';
+    req.adminName = 'API';
+    return next();
+  }
 
   // TG-based admin auth
   const initData = req.headers['x-init-data'];
@@ -38,7 +42,11 @@ const adminMiddleware = async (req, res, next) => {
       if (userParam) {
         const tgUser = JSON.parse(userParam);
         const adminIds = await getAllAdminIds();
-        if (adminIds.includes(String(tgUser.id))) return next();
+        if (adminIds.includes(String(tgUser.id))) {
+          req.adminTgId = String(tgUser.id);
+          req.adminName = tgUser.first_name || tgUser.username || String(tgUser.id);
+          return next();
+        }
       }
     } catch (e) {}
   }
@@ -46,7 +54,39 @@ const adminMiddleware = async (req, res, next) => {
   return res.status(403).json({ error: 'Forbidden' });
 };
 
+// Helper: log admin activity
+const logAdminAction = async (req, action, details) => {
+  try {
+    const ip = req.headers['x-forwarded-for'] || req.connection?.remoteAddress || '';
+    await pool.query(
+      `INSERT INTO admin_activity_log (admin_tg_id, admin_name, action, details, ip) VALUES ($1, $2, $3, $4, $5)`,
+      [req.adminTgId || 'unknown', req.adminName || 'unknown', action, details || null, ip.substring(0, 50)]
+    );
+  } catch (e) {}
+};
+
 router.use(adminMiddleware);
+
+// ── Admin Activity Logging ──
+router.post('/log-action', async (req, res) => {
+  const { action, details } = req.body;
+  if (!action) return res.json({ ok: true });
+  await logAdminAction(req, action, details);
+  res.json({ ok: true });
+});
+
+router.get('/activity', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT * FROM admin_activity_log
+      ORDER BY created_at DESC
+      LIMIT 200
+    `);
+    res.json(rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 // ── Dashboard Stats ──
 router.get('/stats', async (req, res) => {

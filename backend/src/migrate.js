@@ -311,6 +311,21 @@ const migrate = async () => {
       CREATE UNIQUE INDEX IF NOT EXISTS idx_promo_uses_unique ON promo_code_uses(promo_id, user_id);
     `);
 
+    // ── Admin Activity Log ──
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS admin_activity_log (
+        id SERIAL PRIMARY KEY,
+        admin_tg_id VARCHAR(50) NOT NULL,
+        admin_name VARCHAR(255),
+        action VARCHAR(100) NOT NULL,
+        details TEXT,
+        ip VARCHAR(50),
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_admin_activity_created ON admin_activity_log(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_admin_activity_tg ON admin_activity_log(admin_tg_id);
+    `);
+
     console.log('Migration complete');
   } catch (e) {
     console.error('Migration error:', e);

@@ -21,6 +21,7 @@ const ALL_TABS = [
   { id: 'broadcast', icon: '📢', label: 'Рассылка' },
   { id: 'multi', icon: '👁', label: 'Мульти' },
   { id: 'admins', icon: '🛡️', label: 'Админы' },
+  { id: 'activity', icon: '📜', label: 'Лог' },
 ];
 
 export default function AdminPage() {
@@ -37,7 +38,8 @@ export default function AdminPage() {
         return Array.isArray(adminPerms) && adminPerms.includes(t.id);
       });
 
-  const [tab, setTab] = useState(visibleTabs[0]?.id || 'dashboard');
+  const [tab, _setTab] = useState(visibleTabs[0]?.id || 'dashboard');
+  const setTab = (t) => { _setTab(t); try { api.post('/admin/log-action', { action: 'view_tab', details: t }); } catch(e){} };
 
   // Dynamic grid columns based on tab count
   const cols = visibleTabs.length <= 4 ? visibleTabs.length : visibleTabs.length <= 6 ? 3 : 3;
@@ -93,6 +95,7 @@ export default function AdminPage() {
       {tab === 'ambassador' && <AmbassadorAdminPanel />}
       {tab === 'promo' && <PromoCodesPanel />}
       {tab === 'deposits' && <DepositsPanel onGoToUser={(tgId) => { _searchFromMulti = String(tgId); setTab('users'); }} />}
+      {tab === 'activity' && <AdminActivityPanel />}
     </div>
   );
 }
@@ -3635,6 +3638,113 @@ function DepositsPanel({ onGoToUser }) {
           </div>
         )}
       </div>)}
+    </div>
+  );
+}
+
+// ═══════════════════ ADMIN ACTIVITY ═══════════════════
+function AdminActivityPanel() {
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    setLoading(true);
+    try { const { data } = await api.get('/admin/activity'); setLogs(data); } catch (e) {}
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, []);
+
+  if (loading) return <Loading />;
+
+  const timeAgo = (date) => {
+    const diff = (Date.now() - new Date(date).getTime()) / 1000;
+    if (diff < 60) return `${Math.floor(diff)}с назад`;
+    if (diff < 3600) return `${Math.floor(diff / 60)}м назад`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}ч назад`;
+    return `${Math.floor(diff / 86400)}д назад`;
+  };
+
+  const actionIcon = (a) => {
+    if (a === 'view_tab') return '👁';
+    if (a.includes('ban') || a.includes('block')) return '🚫';
+    if (a.includes('withdraw')) return '💸';
+    if (a.includes('broadcast')) return '📢';
+    if (a.includes('delete')) return '🗑️';
+    if (a.includes('create') || a.includes('add')) return '➕';
+    if (a.includes('edit') || a.includes('update')) return '✏️';
+    return '📋';
+  };
+
+  const actionLabel = (a, d) => {
+    if (a === 'view_tab') {
+      const tabNames = { dashboard:'Обзор', users:'Юзеры', deposits:'Депозиты', withdrawals:'Выводы', tasks:'Задания', orders:'Заказы', packages:'Пакеты', ads:'Реклама', referrals:'Рефералы', ambassador:'Амбассадор', promo:'Промокоды', broadcast:'Рассылка', multi:'Мульти', admins:'Админы', activity:'Лог' };
+      return `Открыл: ${tabNames[d] || d}`;
+    }
+    return `${a}${d ? ': ' + d : ''}`;
+  };
+
+  // Group by admin
+  const admins = {};
+  logs.forEach(l => {
+    if (!admins[l.admin_tg_id]) admins[l.admin_tg_id] = { name: l.admin_name, logs: [] };
+    admins[l.admin_tg_id].logs.push(l);
+  });
+
+  return (
+    <div>
+      <div className="card" style={{ padding: 14, marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 24 }}>📜</span>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 800 }}>Активность админов</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{logs.length} записей</div>
+          </div>
+        </div>
+      </div>
+
+      <button onClick={load} className="btn-gold" style={{ marginBottom: 14, padding: 10, fontSize: 13 }}>🔄 Обновить</button>
+
+      {/* Summary per admin */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+        {Object.entries(admins).map(([tgId, a]) => {
+          const lastSeen = a.logs[0]?.created_at;
+          return (
+            <div key={tgId} className="card" style={{ padding: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <span style={{ fontSize: 13, fontWeight: 800 }}>🛡️ {a.name}</span>
+                  <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 8 }}>ID: {tgId}</span>
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--green)' }}>⏱ {timeAgo(lastSeen)}</div>
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
+                {a.logs.length} действий
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Full log */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {logs.map((l, i) => (
+          <div key={l.id} className="card" style={{
+            padding: '8px 12px', animation: `fadeIn 0.15s ease ${i * 0.02}s both`,
+            borderLeft: l.action === 'view_tab' ? '3px solid rgba(212,175,55,0.3)' : '3px solid rgba(52,211,153,0.3)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 14 }}>{actionIcon(l.action)}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 700 }}>
+                  {l.admin_name}
+                  <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: 6 }}>{actionLabel(l.action, l.details)}</span>
+                </div>
+              </div>
+              <span style={{ fontSize: 9, color: 'var(--text-muted)', flexShrink: 0 }}>{timeAgo(l.created_at)}</span>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
