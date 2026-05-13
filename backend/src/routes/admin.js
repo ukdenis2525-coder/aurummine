@@ -749,14 +749,18 @@ router.get('/deposits', async (req, res) => {
     const limit = 50;
     const offset = (page - 1) * limit;
 
-    // Recent purchases with user + package info
+    // Recent purchases with user + package + promo info
     const { rows: deposits } = await pool.query(`
       SELECT p.id, p.user_id, p.power_amount, p.ton_paid, p.tx_hash, p.created_at,
              u.tg_id, u.username, u.first_name, u.power, u.ton_balance, u.is_blocked, u.is_premium,
-             pp.name as package_name
+             pp.name as package_name, pp.price_ton as original_price,
+             pc.code as promo_code, pc.discount_pct as promo_discount
       FROM purchases p
       JOIN users u ON p.user_id = u.id
       LEFT JOIN power_packages pp ON p.package_id = pp.id
+      LEFT JOIN promo_code_uses pcu ON pcu.user_id = p.user_id
+      LEFT JOIN promo_codes pc ON pc.id = pcu.promo_id
+        AND p.ton_paid < pp.price_ton
       ORDER BY p.created_at DESC
       LIMIT $1 OFFSET $2
     `, [limit, offset]);

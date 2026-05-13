@@ -3535,8 +3535,16 @@ function DepositsPanel({ onGoToUser }) {
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 13, fontWeight: 900, color: 'var(--green)' }}>+{fmt(d.ton_paid, 4)} TON</span>
+                    {d.original_price && parseFloat(d.ton_paid) < parseFloat(d.original_price) && (
+                      <span style={{ fontSize: 9, color: 'var(--text-muted)', textDecoration: 'line-through' }}>{fmt(d.original_price, 4)}</span>
+                    )}
                     <span style={{ fontSize: 10, color: 'var(--gold)' }}>⚡ +{fmtK(d.power_amount)}</span>
                     {d.package_name && <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 6, background: 'rgba(212,175,55,0.1)', color: 'var(--gold)', fontWeight: 600 }}>📦 {d.package_name}</span>}
+                    {d.promo_code && (
+                      <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 6, background: 'rgba(52,211,153,0.12)', color: 'var(--green)', fontWeight: 700 }}>
+                        🎟️ {d.promo_code} -{d.promo_discount}%
+                      </span>
+                    )}
                   </div>
                   <div style={{ display: 'flex', gap: 10, marginTop: 4, fontSize: 9, color: 'var(--text-muted)' }}>
                     <span>Итого: ⚡ {fmtK(d.power)}</span>
