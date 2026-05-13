@@ -1809,13 +1809,15 @@ function BroadcastPanel() {
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState(null);
   const [confirm, setConfirm] = useState(false);
+  const [isRtl, setIsRtl] = useState(false);
 
   const send = async () => {
     setConfirm(false);
     setSending(true);
     setResult(null);
     try {
-      const opts = { message };
+      const finalMsg = isRtl ? '\u200F' + message : message;
+      const opts = { message: finalMsg };
       if (parseMode) opts.parse_mode = parseMode;
       const { data } = await api.post('/admin/broadcast', opts, { timeout: 120000 });
       setResult(data);
@@ -1860,16 +1862,40 @@ function BroadcastPanel() {
         ))}
       </div>
 
+      {/* RTL toggle */}
+      <label onClick={() => setIsRtl(!isRtl)} style={{
+        display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10,
+        padding: '8px 12px', borderRadius: 10, cursor: 'pointer',
+        background: isRtl ? 'rgba(212,175,55,0.12)' : 'rgba(255,255,255,0.04)',
+        border: isRtl ? '1px solid rgba(212,175,55,0.3)' : '1px solid var(--border)',
+        transition: 'all 0.2s ease',
+      }}>
+        <div style={{
+          width: 18, height: 18, borderRadius: 4, flexShrink: 0,
+          background: isRtl ? 'var(--gold)' : 'transparent',
+          border: isRtl ? 'none' : '2px solid var(--border)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 11, color: '#000', fontWeight: 800,
+          transition: 'all 0.2s ease',
+        }}>{isRtl ? '✓' : ''}</div>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: isRtl ? 'var(--gold)' : 'var(--text-muted)' }}>🇸🇦 Арабский (RTL)</div>
+          <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>Текст справа налево — для арабского, иврита, фарси</div>
+        </div>
+      </label>
+
       {/* Message input */}
       <textarea
         value={message}
         onChange={e => setMessage(e.target.value)}
-        placeholder="Введите сообщение для рассылки..."
+        placeholder={isRtl ? 'اكتب رسالتك هنا...' : 'Введите сообщение для рассылки...'}
+        dir={isRtl ? 'rtl' : 'ltr'}
         style={{
           width: '100%', minHeight: 120, padding: 12, borderRadius: 12,
           background: 'var(--bg-card)', border: '1px solid var(--border)',
           color: 'var(--text)', fontSize: 13, fontFamily: 'inherit',
           resize: 'vertical', outline: 'none', boxSizing: 'border-box',
+          textAlign: isRtl ? 'right' : 'left',
         }}
       />
       <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, marginBottom: 12, textAlign: 'right' }}>
@@ -1899,7 +1925,8 @@ function BroadcastPanel() {
             Сообщение будет отправлено всем пользователям!
           </div>
           <div style={{ padding: 10, background: 'rgba(255,255,255,0.03)', borderRadius: 8, marginBottom: 12,
-            fontSize: 12, color: 'var(--text)', textAlign: 'left', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+            fontSize: 12, color: 'var(--text)', textAlign: isRtl ? 'right' : 'left',
+            whiteSpace: 'pre-wrap', wordBreak: 'break-word', direction: isRtl ? 'rtl' : 'ltr' }}>
             {message}
           </div>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
