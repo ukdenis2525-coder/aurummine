@@ -50,39 +50,78 @@ router.use(adminMiddleware);
 
 // ── Dashboard Stats ──
 router.get('/stats', async (req, res) => {
-  const [users, power, ton, pending, completed, revenue] = await Promise.all([
+  // Main metrics — ACTIVE users only (exclude banned)
+  const [users, activeUsers, power, ton, pending, completed, revenue] = await Promise.all([
     pool.query(`SELECT COUNT(*) as total FROM users`),
-    pool.query(`SELECT COALESCE(SUM(power), 0) as total FROM users`),
-    pool.query(`SELECT COALESCE(SUM(ton_balance), 0) as total FROM users`),
+    pool.query(`SELECT COUNT(*) as total FROM users WHERE is_blocked = false`),
+    pool.query(`SELECT COALESCE(SUM(power), 0) as total FROM users WHERE is_blocked = false`),
+    pool.query(`SELECT COALESCE(SUM(ton_balance), 0) as total FROM users WHERE is_blocked = false`),
     pool.query(`SELECT COUNT(*) as total FROM withdrawals WHERE status = 'pending'`),
     pool.query(`SELECT COUNT(*) as total, COALESCE(SUM(ton_paid), 0) as sum FROM purchases`),
-    pool.query(`SELECT COUNT(*) as total FROM users WHERE created_at > NOW() - INTERVAL '24 hours'`),
+    pool.query(`SELECT COUNT(*) as total FROM users WHERE created_at > NOW() - INTERVAL '24 hours' AND is_blocked = false`),
   ]);
 
-  // Online counts (graceful if column doesn't exist)
+  // Online counts
   let online5 = 0, online60 = 0;
   try {
     const [r5, r60] = await Promise.all([
-      pool.query(`SELECT COUNT(*) as c FROM users WHERE last_seen_at > NOW() - INTERVAL '5 minutes'`),
-      pool.query(`SELECT COUNT(*) as c FROM users WHERE last_seen_at > NOW() - INTERVAL '1 hour'`),
+      pool.query(`SELECT COUNT(*) as c FROM users WHERE last_seen_at > NOW() - INTERVAL '5 minutes' AND is_blocked = false`),
+      pool.query(`SELECT COUNT(*) as c FROM users WHERE last_seen_at > NOW() - INTERVAL '1 hour' AND is_blocked = false`),
     ]);
     online5 = parseInt(r5.rows[0].c);
     online60 = parseInt(r60.rows[0].c);
   } catch (e) {}
 
-  // Referral & ads totals (graceful)
+  // Referral & ads totals
   let totalRefs = 0, totalAds = 0;
   try {
     const [refs, ads] = await Promise.all([
       pool.query(`SELECT COUNT(*) as c FROM referrals`),
-      pool.query(`SELECT COALESCE(SUM(COALESCE(ads_watched, 0)), 0) as c FROM users`),
+      pool.query(`SELECT COALESCE(SUM(COALESCE(ads_watched, 0)), 0) as c FROM users WHERE is_blocked = false`),
     ]);
     totalRefs = parseInt(refs.rows[0].c);
     totalAds = parseInt(ads.rows[0].c);
   } catch (e) {}
 
+  // Buyers vs Non-buyers (active only)
+  let buyers = null;
+  try {
+    const [buyerStats, nonBuyerStats] = await Promise.all([
+      pool.query(`
+        SELECT COUNT(DISTINCT u.id) as count,
+               COALESCE(SUM(u.power), 0) as power,
+               COALESCE(SUM(u.ton_balance), 0) as balance,
+               COALESCE(SUM(p.ton_paid), 0) as spent
+        FROM users u
+        JOIN purchases p ON p.user_id = u.id
+        WHERE u.is_blocked = false
+      `),
+      pool.query(`
+        SELECT COUNT(*) as count,
+               COALESCE(SUM(power), 0) as power,
+               COALESCE(SUM(ton_balance), 0) as balance
+        FROM users
+        WHERE is_blocked = false
+          AND id NOT IN (SELECT DISTINCT user_id FROM purchases)
+      `),
+    ]);
+    buyers = {
+      buyers_count: parseInt(buyerStats.rows[0].count),
+      buyers_power: parseFloat(buyerStats.rows[0].power),
+      buyers_balance: parseFloat(buyerStats.rows[0].balance),
+      buyers_spent: parseFloat(buyerStats.rows[0].spent),
+      free_count: parseInt(nonBuyerStats.rows[0].count),
+      free_power: parseFloat(nonBuyerStats.rows[0].power),
+      free_balance: parseFloat(nonBuyerStats.rows[0].balance),
+    };
+  } catch (e) {}
+
+  const blockedCount = parseInt(users.rows[0].total) - parseInt(activeUsers.rows[0].total);
+
   const stats = {
     total_users: parseInt(users.rows[0].total),
+    active_users: parseInt(activeUsers.rows[0].total),
+    blocked_users: blockedCount,
     total_power: parseFloat(power.rows[0].total),
     total_ton_balance: parseFloat(ton.rows[0].total),
     pending_withdrawals: parseInt(pending.rows[0].total),
@@ -93,6 +132,7 @@ router.get('/stats', async (req, res) => {
     online_1h: online60,
     total_referrals: totalRefs,
     total_ads_watched: totalAds,
+    buyers,
   };
 
   // Finance analytics — banned purchases + project liability

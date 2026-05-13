@@ -144,11 +144,13 @@ function Dashboard() {
   };
 
   const cards = [
-    { icon: '👥', label: 'Пользователи', val: stats.total_users, color: 'var(--gold)' },
+    { icon: '👥', label: 'Всего юзеров', val: stats.total_users, color: 'var(--text-muted)' },
+    { icon: '✅', label: 'Активных', val: stats.active_users || stats.total_users, color: 'var(--green)' },
+    { icon: '🚫', label: 'Забанено', val: stats.blocked_users || 0, color: stats.blocked_users > 0 ? 'var(--red)' : 'var(--text-muted)' },
     { icon: '🆕', label: 'За 24ч', val: stats.new_users_24h, color: 'var(--green)' },
     { icon: '🟢', label: 'Онлайн (5м)', val: stats.online_5min || 0, color: '#22c55e' },
     { icon: '🔵', label: 'Онлайн (1ч)', val: stats.online_1h || 0, color: '#3b82f6' },
-    { icon: '⚡', label: 'Power (всего)', val: fmtK(stats.total_power), color: 'var(--gold-light)', field: 'power' },
+    { icon: '⚡', label: 'Power (актив)', val: fmtK(stats.total_power), color: 'var(--gold-light)', field: 'power' },
     { icon: '💰', label: 'TON баланс', val: fmt(stats.total_ton_balance, 2), color: 'var(--orange)', field: 'ton_balance' },
     { icon: '🛒', label: 'Покупок', val: stats.total_purchases, color: 'var(--green)', field: 'purchases' },
     { icon: '💵', label: 'Выручка', val: `${fmt(stats.total_revenue, 2)} TON`, color: 'var(--gold)', field: 'revenue' },
@@ -198,6 +200,71 @@ function Dashboard() {
           </div>
         ))}
       </div>
+
+      {/* 🛒 Buyers vs Free */}
+      {stats.buyers && (
+        <div className="card" style={{ padding: 14, marginBottom: 16, border: '1px solid rgba(212,175,55,0.15)', animation: 'fadeIn 0.3s ease' }}>
+          <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 10 }}>🛒 Покупатели vs Бесплатные</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            {/* Buyers */}
+            <div style={{ padding: 12, borderRadius: 10, background: 'rgba(52,211,153,0.05)', border: '1px solid rgba(52,211,153,0.15)' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--green)', marginBottom: 8 }}>💎 Покупатели</div>
+              <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--green)' }}>{stats.buyers.buyers_count}</div>
+              <div style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 6 }}>юзеров</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <div style={{ fontSize: 10 }}>
+                  <span style={{ color: 'var(--text-muted)' }}>⚡ Power: </span>
+                  <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{fmtK(stats.buyers.buyers_power)}</span>
+                </div>
+                <div style={{ fontSize: 10 }}>
+                  <span style={{ color: 'var(--text-muted)' }}>💰 Баланс: </span>
+                  <span style={{ color: 'var(--orange)', fontWeight: 700 }}>{fmt(stats.buyers.buyers_balance, 4)}</span>
+                </div>
+                <div style={{ fontSize: 10 }}>
+                  <span style={{ color: 'var(--text-muted)' }}>💵 Потратили: </span>
+                  <span style={{ color: 'var(--green)', fontWeight: 700 }}>{fmt(stats.buyers.buyers_spent, 4)} TON</span>
+                </div>
+              </div>
+            </div>
+            {/* Free */}
+            <div style={{ padding: 12, borderRadius: 10, background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 8 }}>🆓 Бесплатные</div>
+              <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--text-muted)' }}>{stats.buyers.free_count}</div>
+              <div style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 6 }}>юзеров</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <div style={{ fontSize: 10 }}>
+                  <span style={{ color: 'var(--text-muted)' }}>⚡ Power: </span>
+                  <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{fmtK(stats.buyers.free_power)}</span>
+                </div>
+                <div style={{ fontSize: 10 }}>
+                  <span style={{ color: 'var(--text-muted)' }}>💰 Баланс: </span>
+                  <span style={{ color: 'var(--orange)', fontWeight: 700 }}>{fmt(stats.buyers.free_balance, 4)}</span>
+                </div>
+                <div style={{ fontSize: 10 }}>
+                  <span style={{ color: 'var(--text-muted)' }}>💵 Потратили: </span>
+                  <span style={{ fontWeight: 700 }}>0 TON</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          {/* Conversion rate */}
+          {(stats.buyers.buyers_count + stats.buyers.free_count) > 0 && (() => {
+            const total = stats.buyers.buyers_count + stats.buyers.free_count;
+            const pct = ((stats.buyers.buyers_count / total) * 100).toFixed(1);
+            return (
+              <div style={{ marginTop: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'var(--text-muted)', marginBottom: 4 }}>
+                  <span>Конверсия в покупку</span>
+                  <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{pct}%</span>
+                </div>
+                <div style={{ height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+                  <div style={{ width: `${pct}%`, height: '100%', borderRadius: 3, background: 'linear-gradient(90deg, var(--gold-dark), var(--gold))', transition: 'width 0.5s' }} />
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
 
       {/* Top users overlay */}
       {topField && (
