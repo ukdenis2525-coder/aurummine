@@ -2820,12 +2820,13 @@ function AmbassadorAdminPanel() {
 function AmbassadorSettings({ settings, onSave, showMsg }) {
   const [vis, setVis] = useState(settings?.visibility ?? 0);
   const [commission, setCommission] = useState(settings?.commission_pct ?? 25);
+  const [minSubs, setMinSubs] = useState(settings?.min_subscribers ?? 1000);
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
     setSaving(true);
     try {
-      await api.post('/ambassador/admin/settings', { visibility: vis, commission_pct: commission });
+      await api.post('/ambassador/admin/settings', { visibility: vis, commission_pct: commission, min_subscribers: minSubs });
       showMsg('✅ Настройки сохранены');
       onSave();
     } catch (e) { showMsg('❌ Ошибка'); }
@@ -2876,6 +2877,27 @@ function AmbassadorSettings({ settings, onSave, showMsg }) {
           <span style={{ fontSize: 18, fontWeight: 800, color: 'var(--gold)' }}>%</span>
           <div style={{ flex: 1, fontSize: 11, color: 'var(--text-muted)' }}>
             Стандартная: {settings?.standard_commission_pct ?? '...'}%<br/>Амбассадор: <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{commission}%</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Min Subscribers */}
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', letterSpacing: 1, marginBottom: 10, fontWeight: 600 }}>
+        👥 МИН. ПОДПИСЧИКОВ
+      </div>
+      <div className="card" style={{ padding: 14, marginBottom: 16 }}>
+        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10, lineHeight: 1.5 }}>
+          Минимальное количество подписчиков в канале для подачи заявки
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <input
+            type="number" min="0" step="100"
+            value={minSubs}
+            onChange={e => setMinSubs(parseInt(e.target.value) || 0)}
+            style={{ width: 110, textAlign: 'center', fontSize: 18, fontWeight: 800, padding: '10px 12px' }}
+          />
+          <div style={{ flex: 1, fontSize: 11, color: 'var(--text-muted)' }}>
+            Текущий порог: <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{minSubs.toLocaleString()}</span> подписчиков
           </div>
         </div>
       </div>

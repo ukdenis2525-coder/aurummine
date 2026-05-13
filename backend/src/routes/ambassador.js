@@ -156,10 +156,18 @@ router.post('/apply', authMiddleware, async (req, res) => {
       }
     }
 
-    // Check minimum subscribers
-    if (subscribersCount < 1000) {
+    // Check minimum subscribers (from admin settings)
+    let minSubs = 1000;
+    try {
+      const { rows: msRows } = await pool.query(
+        `SELECT value FROM app_settings WHERE key = 'ambassador_min_subscribers'`
+      );
+      if (msRows.length) minSubs = parseInt(msRows[0].value) || 1000;
+    } catch (e) {}
+
+    if (subscribersCount < minSubs) {
       return res.status(400).json({
-        error: `Channel has ${subscribersCount} subscribers. Minimum 1000 required.`
+        error: `Channel has ${subscribersCount} subscribers. Minimum ${minSubs} required.`
       });
     }
 
@@ -448,13 +456,14 @@ router.post('/admin/posts/:id/publish', ambassadorAdminMiddleware, async (req, r
 router.get('/admin/settings', ambassadorAdminMiddleware, async (req, res) => {
   try {
     const { rows: settingsRows } = await pool.query(
-      `SELECT key, value FROM app_settings WHERE key IN ('ambassador_visibility', 'ambassador_commission_pct', 'ref_commission_pct')`
+      `SELECT key, value FROM app_settings WHERE key IN ('ambassador_visibility', 'ambassador_commission_pct', 'ref_commission_pct', 'ambassador_min_subscribers')`
     );
     const s = {};
     for (const r of settingsRows) s[r.key] = r.value;
     const visibility = parseInt(s.ambassador_visibility || '0');
     const commission_pct = parseFloat(s.ambassador_commission_pct || '25');
     const standard_commission_pct = parseFloat(s.ref_commission_pct || '15');
+    const min_subscribers = parseInt(s.ambassador_min_subscribers || '1000');
 
     // Stats
     const [totalChannels, approvedChannels, pendingChannels, totalPosts] = await Promise.all([
@@ -468,6 +477,7 @@ router.get('/admin/settings', ambassadorAdminMiddleware, async (req, res) => {
       visibility,
       commission_pct,
       standard_commission_pct,
+      min_subscribers,
       stats: {
         total_channels: parseInt(totalChannels.rows[0].c),
         approved_channels: parseInt(approvedChannels.rows[0].c),
@@ -482,7 +492,7 @@ router.get('/admin/settings', ambassadorAdminMiddleware, async (req, res) => {
 
 // Update visibility: 0=hidden, 1=all see, 2=admin only
 router.post('/admin/settings', ambassadorAdminMiddleware, async (req, res) => {
-  const { visibility, commission_pct } = req.body;
+  const { visibility, commission_pct, min_subscribers } = req.body;
   try {
     if (visibility !== undefined && [0, 1, 2].includes(visibility)) {
       await pool.query(
@@ -496,6 +506,13 @@ router.post('/admin/settings', ambassadorAdminMiddleware, async (req, res) => {
         `INSERT INTO app_settings (key, value, label) VALUES ('ambassador_commission_pct', $1, 'Комиссия амбассадора (%)')
          ON CONFLICT (key) DO UPDATE SET value = $1`,
         [String(commission_pct)]
+      );
+    }
+    if (min_subscribers !== undefined && min_subscribers >= 0) {
+      await pool.query(
+        `INSERT INTO app_settings (key, value, label) VALUES ('ambassador_min_subscribers', $1, 'Мин. подписчиков для амбассадора')
+         ON CONFLICT (key) DO UPDATE SET value = $1`,
+        [String(min_subscribers)]
       );
     }
     res.json({ success: true });
