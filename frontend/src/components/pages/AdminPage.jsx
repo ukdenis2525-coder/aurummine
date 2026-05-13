@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../../utils/api.js';
 import { useStore } from '../../store/index.js';
 import { fmt, fmtK } from '../../utils/format.js';
@@ -1810,30 +1810,60 @@ function BroadcastPanel() {
   const [result, setResult] = useState(null);
   const [confirm, setConfirm] = useState(false);
   const [isRtl, setIsRtl] = useState(false);
+  const [progress, setProgress] = useState(null); // { status, total, sent, failed }
+  const pollRef = useRef(null);
+
+  // Poll broadcast status every 2s while sending
+  const startPolling = () => {
+    pollRef.current = setInterval(async () => {
+      try {
+        const { data } = await api.get('/admin/broadcast/status');
+        setProgress(data);
+        if (data.status === 'done' || data.status === 'error' || data.status === 'idle') {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+          setSending(false);
+          if (data.status === 'done' || data.status === 'error') {
+            setResult(data);
+          }
+        }
+      } catch (e) {}
+    }, 2000);
+  };
+
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
 
   const send = async () => {
     setConfirm(false);
     setSending(true);
     setResult(null);
+    setProgress(null);
     try {
       const finalMsg = isRtl ? '\u200F' + message : message;
       const opts = { message: finalMsg };
       if (parseMode) opts.parse_mode = parseMode;
-      const { data } = await api.post('/admin/broadcast', opts, { timeout: 120000 });
-      setResult(data);
-      setMessage('');
+      const { data } = await api.post('/admin/broadcast', opts);
+      if (data.status === 'started') {
+        setProgress({ status: 'sending', total: data.total, sent: 0, failed: 0 });
+        setMessage('');
+        startPolling();
+      } else {
+        // Immediate result (0 users)
+        setResult(data);
+        setSending(false);
+      }
     } catch (e) {
       console.error('[Broadcast] Error:', e);
       const status = e.response?.status;
       const serverMsg = e.response?.data?.error;
       let errorText = serverMsg || e.message || 'Ошибка отправки';
       if (status) errorText = `[${status}] ${errorText}`;
-      if (!e.response && e.code === 'ECONNABORTED') errorText = 'Таймаут — сервер не ответил за 120с';
-      if (!e.response && !e.code) errorText = 'Нет связи с сервером';
       setResult({ error: errorText });
+      setSending(false);
     }
-    setSending(false);
   };
+
+  const pct = progress && progress.total > 0 ? Math.round(((progress.sent + progress.failed) / progress.total) * 100) : 0;
 
   return (
     <div>
@@ -1907,10 +1937,33 @@ function BroadcastPanel() {
         onClick={() => setConfirm(true)}
         disabled={!message.trim() || sending}
         className="btn-gold"
-        style={{ padding: 12, fontSize: 14, opacity: !message.trim() ? 0.4 : 1 }}
+        style={{ padding: 12, fontSize: 14, opacity: !message.trim() || sending ? 0.4 : 1 }}
       >
         {sending ? '✉️ Отправка...' : '📢 Отправить всем'}
       </button>
+
+      {/* Live progress */}
+      {sending && progress && progress.status === 'sending' && (
+        <div className="card" style={{ marginTop: 12, padding: 14, border: '1px solid rgba(212,175,55,0.3)', animation: 'fadeIn 0.3s ease' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gold)' }}>📤 Отправка...</div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gold)' }}>{pct}%</div>
+          </div>
+          {/* Progress bar */}
+          <div style={{ height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.06)', marginBottom: 10, overflow: 'hidden' }}>
+            <div style={{
+              height: '100%', borderRadius: 3, transition: 'width 0.5s ease',
+              background: 'linear-gradient(90deg, var(--gold-dark), var(--gold))',
+              width: `${pct}%`,
+            }} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+            <MiniStat label="Всего" val={progress.total} color="var(--text)" />
+            <MiniStat label="Отправлено" val={progress.sent} color="var(--green)" />
+            <MiniStat label="Ошибки" val={progress.failed} color="var(--red)" />
+          </div>
+        </div>
+      )}
 
       {/* Confirmation */}
       {confirm && (
@@ -1941,11 +1994,11 @@ function BroadcastPanel() {
         </div>
       )}
 
-      {/* Result */}
-      {result && (
+      {/* Final result */}
+      {result && !sending && (
         <div className="card" style={{
           marginTop: 12, padding: 14, animation: 'fadeIn 0.3s ease',
-          border: result.error ? '1px solid rgba(248,113,113,0.3)' : '1px solid rgba(52,211,153,0.3)',
+          border: result.error || result.status === 'error' ? '1px solid rgba(248,113,113,0.3)' : '1px solid rgba(52,211,153,0.3)',
         }}>
           {result.error ? (
             <div style={{ fontSize: 13, color: 'var(--red)', fontWeight: 700 }}>❌ {result.error}</div>

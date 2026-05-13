@@ -689,46 +689,62 @@ router.get('/ref-stats', async (req, res) => {
   });
 });
 
-// ── Broadcast to Users ──
+// ── Broadcast to Users (async — returns immediately, sends in background) ──
+let broadcastState = { status: 'idle', total: 0, sent: 0, failed: 0, errors: [], startedAt: null };
+
 router.post('/broadcast', async (req, res) => {
   const { message, parse_mode } = req.body;
   if (!message || !message.trim()) return res.status(400).json({ error: 'Message required' });
   if (!tgApi) return res.status(500).json({ error: 'BOT_TOKEN not configured' });
+  if (broadcastState.status === 'sending') {
+    return res.status(409).json({ error: `Рассылка уже идёт (${broadcastState.sent}/${broadcastState.total})` });
+  }
 
   try {
-    // Get all non-blocked user tg_ids
     const { rows } = await pool.query(`SELECT tg_id FROM users WHERE is_blocked = false`);
     const tgIds = rows.map(r => String(r.tg_id));
 
     if (!tgIds.length) return res.json({ success: true, total: 0, sent: 0, failed: 0 });
 
-    let sent = 0, failed = 0;
-    const errors = [];
+    // Reset state & respond immediately
+    broadcastState = { status: 'sending', total: tgIds.length, sent: 0, failed: 0, errors: [], startedAt: Date.now() };
+    res.json({ success: true, status: 'started', total: tgIds.length });
 
-    // Build sendMessage options — omit parse_mode if empty (Plain text mode)
+    // Build sendMessage options
     const msgOpts = { disable_web_page_preview: true };
     if (parse_mode && parse_mode.trim()) {
       msgOpts.parse_mode = parse_mode.trim();
     }
 
-    for (let i = 0; i < tgIds.length; i++) {
-      try {
-        await tgApi.sendMessage(tgIds[i], message.trim(), msgOpts);
-        sent++;
-      } catch (e) {
-        failed++;
-        if (errors.length < 5) errors.push(`TG:${tgIds[i]} → ${e.message}`);
+    // Send in background (fire-and-forget)
+    (async () => {
+      for (let i = 0; i < tgIds.length; i++) {
+        try {
+          await tgApi.sendMessage(tgIds[i], message.trim(), msgOpts);
+          broadcastState.sent++;
+        } catch (e) {
+          broadcastState.failed++;
+          if (broadcastState.errors.length < 5) broadcastState.errors.push(`TG:${tgIds[i]} → ${e.message}`);
+        }
+        if ((i + 1) % 25 === 0) await new Promise(r => setTimeout(r, 1000));
       }
-      // Telegram rate limit: max ~30 msgs/sec
-      if ((i + 1) % 25 === 0) await new Promise(r => setTimeout(r, 1000));
-    }
+      broadcastState.status = 'done';
+      console.log(`[Broadcast] Done: ${broadcastState.sent}/${broadcastState.total} sent, ${broadcastState.failed} failed`);
+    })().catch(e => {
+      broadcastState.status = 'error';
+      broadcastState.errors.push('Fatal: ' + e.message);
+      console.error('[Broadcast] Fatal error:', e.message);
+    });
 
-    console.log(`[Broadcast] Done: ${sent}/${tgIds.length} sent, ${failed} failed`);
-    res.json({ success: true, total: tgIds.length, sent, failed, errors });
   } catch (e) {
     console.error('[Admin] Broadcast error:', e.message);
     res.status(500).json({ error: 'Broadcast failed: ' + e.message });
   }
+});
+
+// Poll broadcast progress
+router.get('/broadcast/status', async (req, res) => {
+  res.json(broadcastState);
 });
 
 // ── Multi-Account Detection ──
