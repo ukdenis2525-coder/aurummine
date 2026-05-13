@@ -342,7 +342,40 @@ router.get('/users/:id/details', async (req, res) => {
 // ── Block / Unblock User ──
 router.post('/users/:id/block', async (req, res) => {
   const { blocked } = req.body;
-  await pool.query(`UPDATE users SET is_blocked = $1 WHERE id = $2`, [!!blocked, req.params.id]);
+  const userId = req.params.id;
+  await pool.query(`UPDATE users SET is_blocked = $1 WHERE id = $2`, [!!blocked, userId]);
+
+  // Auto-manage IP blacklist
+  try {
+    // Collect all IPs for this user
+    const ips = new Set();
+    const { rows: r1 } = await pool.query(`SELECT last_ip FROM users WHERE id = $1 AND last_ip IS NOT NULL AND last_ip != ''`, [userId]);
+    if (r1.length && r1[0].last_ip) ips.add(r1[0].last_ip);
+    const { rows: r2 } = await pool.query(`SELECT DISTINCT ip FROM user_ips WHERE user_id = $1`, [userId]);
+    r2.forEach(r => ips.add(r.ip));
+
+    if (blocked) {
+      // Add all user IPs to blacklist
+      for (const ip of ips) {
+        await pool.query(
+          `INSERT INTO ip_blacklist (ip, reason) VALUES ($1, $2) ON CONFLICT (ip) DO NOTHING`,
+          [ip, `User #${userId} blocked`]
+        );
+      }
+    } else {
+      // Remove user IPs from blacklist (only if no other blocked users share the IP)
+      for (const ip of ips) {
+        const { rows: others } = await pool.query(
+          `SELECT COUNT(*) as c FROM users WHERE is_blocked = true AND id != $1 AND (last_ip = $2 OR id IN (SELECT user_id FROM user_ips WHERE ip = $2))`,
+          [userId, ip]
+        );
+        if (parseInt(others[0].c) === 0) {
+          await pool.query(`DELETE FROM ip_blacklist WHERE ip = $1`, [ip]);
+        }
+      }
+    }
+  } catch (e) { console.error('[Block] IP blacklist error:', e.message); }
+
   res.json({ success: true, is_blocked: !!blocked });
 });
 
