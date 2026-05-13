@@ -2010,6 +2010,28 @@ function BroadcastPanel() {
                 <MiniStat label="Доставлено" val={result.sent} color="var(--green)" />
                 <MiniStat label="Ошибки" val={result.failed} color="var(--red)" />
               </div>
+              {(result.blocked_auto > 0 || result.blocked_skipped > 0) && (
+                <div style={{ marginTop: 10, padding: 10, background: 'rgba(212,175,55,0.06)', borderRadius: 8 }}>
+                  <div style={{ fontSize: 10, color: 'var(--gold)', fontWeight: 700, marginBottom: 6 }}>🧹 Автоочистка</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                    {result.blocked_auto > 0 && (
+                      <div style={{ fontSize: 11 }}>
+                        <span style={{ color: 'var(--red)', fontWeight: 700 }}>🚫 {result.blocked_auto}</span>
+                        <span style={{ color: 'var(--text-muted)' }}> забанены авто</span>
+                      </div>
+                    )}
+                    {result.blocked_skipped > 0 && (
+                      <div style={{ fontSize: 11 }}>
+                        <span style={{ color: 'var(--text-muted)', fontWeight: 700 }}>⏭ {result.blocked_skipped}</span>
+                        <span style={{ color: 'var(--text-muted)' }}> пропущено</span>
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 4 }}>
+                    Юзеры заблокировавшие бота автоматически исключаются из следующих рассылок
+                  </div>
+                </div>
+              )}
               {result.errors && result.errors.length > 0 && (
                 <div style={{ marginTop: 10, padding: 10, background: 'rgba(248,113,113,0.06)', borderRadius: 8 }}>
                   <div style={{ fontSize: 10, color: 'var(--red)', fontWeight: 700, marginBottom: 4 }}>⚠️ Первые ошибки:</div>

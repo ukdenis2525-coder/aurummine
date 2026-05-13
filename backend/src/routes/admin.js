@@ -690,7 +690,7 @@ router.get('/ref-stats', async (req, res) => {
 });
 
 // ── Broadcast to Users (async — returns immediately, sends in background) ──
-let broadcastState = { status: 'idle', total: 0, sent: 0, failed: 0, errors: [], startedAt: null };
+let broadcastState = { status: 'idle', total: 0, sent: 0, failed: 0, blocked_auto: 0, errors: [], startedAt: null };
 
 router.post('/broadcast', async (req, res) => {
   const { message, parse_mode } = req.body;
@@ -701,14 +701,19 @@ router.post('/broadcast', async (req, res) => {
   }
 
   try {
-    const { rows } = await pool.query(`SELECT tg_id FROM users WHERE is_blocked = false`);
-    const tgIds = rows.map(r => String(r.tg_id));
+    // Exclude admin-blocked AND bot-blocked users
+    const { rows } = await pool.query(`SELECT id, tg_id FROM users WHERE is_blocked = false AND COALESCE(bot_blocked, false) = false`);
+    const users = rows.map(r => ({ id: r.id, tgId: String(r.tg_id) }));
 
-    if (!tgIds.length) return res.json({ success: true, total: 0, sent: 0, failed: 0 });
+    // Count how many were skipped due to bot_blocked
+    const { rows: blockedRows } = await pool.query(`SELECT COUNT(*) as c FROM users WHERE bot_blocked = true`);
+    const blockedSkipped = parseInt(blockedRows[0].c);
+
+    if (!users.length) return res.json({ success: true, total: 0, sent: 0, failed: 0, blocked_skipped: blockedSkipped });
 
     // Reset state & respond immediately
-    broadcastState = { status: 'sending', total: tgIds.length, sent: 0, failed: 0, errors: [], startedAt: Date.now() };
-    res.json({ success: true, status: 'started', total: tgIds.length });
+    broadcastState = { status: 'sending', total: users.length, sent: 0, failed: 0, blocked_auto: 0, blocked_skipped: blockedSkipped, errors: [], startedAt: Date.now() };
+    res.json({ success: true, status: 'started', total: users.length, blocked_skipped: blockedSkipped });
 
     // Build sendMessage options
     const msgOpts = { disable_web_page_preview: true };
@@ -718,18 +723,26 @@ router.post('/broadcast', async (req, res) => {
 
     // Send in background (fire-and-forget)
     (async () => {
-      for (let i = 0; i < tgIds.length; i++) {
+      for (let i = 0; i < users.length; i++) {
         try {
-          await tgApi.sendMessage(tgIds[i], message.trim(), msgOpts);
+          await tgApi.sendMessage(users[i].tgId, message.trim(), msgOpts);
           broadcastState.sent++;
         } catch (e) {
           broadcastState.failed++;
-          if (broadcastState.errors.length < 5) broadcastState.errors.push(`TG:${tgIds[i]} → ${e.message}`);
+          const errMsg = (e.message || '').toLowerCase();
+          // Auto-detect blocked/deactivated users → mark as bot_blocked
+          if (errMsg.includes('forbidden') || errMsg.includes('deactivated') || errMsg.includes('blocked') || errMsg.includes('chat not found')) {
+            try {
+              await pool.query(`UPDATE users SET bot_blocked = true WHERE id = $1`, [users[i].id]);
+              broadcastState.blocked_auto++;
+            } catch (dbErr) {}
+          }
+          if (broadcastState.errors.length < 5) broadcastState.errors.push(`TG:${users[i].tgId} → ${e.message}`);
         }
         if ((i + 1) % 25 === 0) await new Promise(r => setTimeout(r, 1000));
       }
       broadcastState.status = 'done';
-      console.log(`[Broadcast] Done: ${broadcastState.sent}/${broadcastState.total} sent, ${broadcastState.failed} failed`);
+      console.log(`[Broadcast] Done: ${broadcastState.sent}/${broadcastState.total} sent, ${broadcastState.failed} failed, ${broadcastState.blocked_auto} auto-blocked`);
     })().catch(e => {
       broadcastState.status = 'error';
       broadcastState.errors.push('Fatal: ' + e.message);
@@ -745,6 +758,25 @@ router.post('/broadcast', async (req, res) => {
 // Poll broadcast progress
 router.get('/broadcast/status', async (req, res) => {
   res.json(broadcastState);
+});
+
+// View bot_blocked stats
+router.get('/broadcast/blocked', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT id, tg_id, username, first_name, bot_blocked, created_at
+      FROM users WHERE bot_blocked = true ORDER BY created_at DESC LIMIT 100
+    `);
+    res.json({ total: rows.length, users: rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Reset bot_blocked for all users (re-enable for next broadcast)
+router.post('/broadcast/reset-blocked', async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(`UPDATE users SET bot_blocked = false WHERE bot_blocked = true`);
+    res.json({ success: true, reset: rowCount });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ── Multi-Account Detection ──

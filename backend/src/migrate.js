@@ -234,6 +234,11 @@ const migrate = async () => {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS ads_watched INTEGER DEFAULT 0;
     `);
 
+    // Add bot_blocked — auto-detected when broadcast fails (user blocked bot / deactivated)
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS bot_blocked BOOLEAN DEFAULT FALSE;
+    `);
+
     // ── Ambassador / Partnership tables ──
     await client.query(`
       CREATE TABLE IF NOT EXISTS ambassador_channels (
