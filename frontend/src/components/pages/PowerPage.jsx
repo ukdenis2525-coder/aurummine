@@ -108,7 +108,7 @@ export default function PowerPage() {
       }} />
 
       {/* ── Header ── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28, position: 'relative', zIndex: 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28, position: 'relative', zIndex: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{
             width: 42, height: 42, borderRadius: 14,
@@ -143,7 +143,7 @@ export default function PowerPage() {
                 position: 'absolute', top: '100%', right: 0, marginTop: 6,
                 background: 'rgba(18,18,26,0.98)', backdropFilter: 'blur(20px)',
                 border: '1px solid var(--border-gold)', borderRadius: 12,
-                padding: 4, zIndex: 50, minWidth: 80,
+                padding: 4, zIndex: 100, minWidth: 80,
                 animation: 'fadeIn 0.2s ease'
               }}>
                 {LANGS.map(l => (
