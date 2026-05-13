@@ -103,7 +103,12 @@ function Dashboard() {
   const [topLoading, setTopLoading] = useState(false);
 
   const loadStats = async () => {
-    try { const { data } = await api.get('/admin/stats'); setStats(data); } catch (e) {}
+    try {
+      const { data } = await api.get('/admin/stats');
+      setStats(data);
+    } catch (e) {
+      console.error('[Admin] Stats error:', e.message);
+    }
   };
 
   useEffect(() => { loadStats(); }, []);
@@ -677,24 +682,43 @@ function WithdrawalsPanel() {
   const [filter, setFilter] = useState('pending');
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [txHashInputs, setTxHashInputs] = useState({});
+  const [msg, setMsg] = useState(null);
 
   const load = async () => {
-    const { data } = await api.get(`/admin/withdrawals?status=${filter}`);
-    setItems(data);
+    try {
+      const { data } = await api.get(`/admin/withdrawals?status=${filter}`);
+      setItems(data);
+    } catch (e) {
+      setMsg('❌ Ошибка загрузки выводов');
+      setTimeout(() => setMsg(null), 3000);
+    }
   };
   useEffect(() => { load(); }, [filter]);
 
   const approve = async (id) => {
     setLoading(true);
-    await api.post(`/admin/withdrawals/${id}/approve`, { tx_hash: 'manual_' + Date.now() });
-    load();
+    try {
+      const txHash = txHashInputs[id]?.trim() || ('manual_' + Date.now());
+      await api.post(`/admin/withdrawals/${id}/approve`, { tx_hash: txHash });
+      setTxHashInputs(prev => { const n = {...prev}; delete n[id]; return n; });
+      load();
+    } catch (e) {
+      setMsg('❌ Ошибка одобрения');
+      setTimeout(() => setMsg(null), 3000);
+    }
     setLoading(false);
   };
 
   const reject = async (id) => {
     setLoading(true);
-    await api.post(`/admin/withdrawals/${id}/reject`);
-    load();
+    try {
+      await api.post(`/admin/withdrawals/${id}/reject`);
+      load();
+    } catch (e) {
+      setMsg('❌ Ошибка отклонения');
+      setTimeout(() => setMsg(null), 3000);
+    }
     setLoading(false);
   };
 
@@ -712,6 +736,13 @@ function WithdrawalsPanel() {
           </button>
         ))}
       </div>
+
+      {msg && (
+        <div style={{ padding: '10px 14px', borderRadius: 10, marginBottom: 12,
+          background: msg.startsWith('✅') ? 'rgba(52,211,153,0.1)' : 'var(--red-bg)',
+          color: msg.startsWith('✅') ? 'var(--green)' : 'var(--red)',
+          fontSize: 12, fontWeight: 600, textAlign: 'center' }}>{msg}</div>
+      )}
 
       {items.length === 0 && (
         <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>Пусто</div>
@@ -742,17 +773,25 @@ function WithdrawalsPanel() {
             </div>
 
             {filter === 'pending' && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                <button onClick={() => approve(w.id)} disabled={loading} style={{
-                  padding: 10, borderRadius: 10, border: 'none',
-                  background: 'var(--green-bg)', color: 'var(--green)',
-                  fontWeight: 700, fontSize: 13, cursor: 'pointer'
-                }}>✅ Одобрить</button>
-                <button onClick={() => reject(w.id)} disabled={loading} style={{
-                  padding: 10, borderRadius: 10, border: 'none',
-                  background: 'var(--red-bg)', color: 'var(--red)',
-                  fontWeight: 700, fontSize: 13, cursor: 'pointer'
-                }}>❌ Отклонить</button>
+              <div>
+                <div style={{ marginBottom: 8 }}>
+                  <input type="text" value={txHashInputs[w.id] || ''}
+                    onChange={e => setTxHashInputs({...txHashInputs, [w.id]: e.target.value})}
+                    placeholder="TX hash (опционально)"
+                    style={{ fontSize: 11, padding: '6px 10px', fontFamily: 'monospace' }} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <button onClick={() => approve(w.id)} disabled={loading} style={{
+                    padding: 10, borderRadius: 10, border: 'none',
+                    background: 'var(--green-bg)', color: 'var(--green)',
+                    fontWeight: 700, fontSize: 13, cursor: 'pointer'
+                  }}>✅ Одобрить</button>
+                  <button onClick={() => reject(w.id)} disabled={loading} style={{
+                    padding: 10, borderRadius: 10, border: 'none',
+                    background: 'var(--red-bg)', color: 'var(--red)',
+                    fontWeight: 700, fontSize: 13, cursor: 'pointer'
+                  }}>❌ Отклонить</button>
+                </div>
               </div>
             )}
           </div>
@@ -769,8 +808,12 @@ function TasksPanel() {
   const [form, setForm] = useState({ title: '', description: '', reward_power: '', type: 'other', link: '', visibility: 'admin' });
 
   const load = async () => {
-    const { data } = await api.get('/admin/tasks');
-    setTasks(data);
+    try {
+      const { data } = await api.get('/admin/tasks');
+      setTasks(data);
+    } catch (e) {
+      console.error('[Admin] Tasks load error:', e.message);
+    }
   };
   useEffect(() => { load(); }, []);
 
@@ -1070,7 +1113,14 @@ function PackagesPanel() {
   const [form, setForm] = useState({ name: '', power_amount: '', price_ton: '' });
   const [msg, setMsg] = useState(null);
 
-  const load = async () => { const { data } = await api.get('/admin/packages'); setPackages(data); };
+  const load = async () => {
+    try {
+      const { data } = await api.get('/admin/packages');
+      setPackages(data);
+    } catch (e) {
+      console.error('[Admin] Packages load error:', e.message);
+    }
+  };
   useEffect(() => { load(); }, []);
 
   const resetForm = () => {
@@ -1579,21 +1629,16 @@ function AdsPanel() {
           📡 ПОДКЛЮЧЁННЫЕ ПРОВАЙДЕРЫ
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {[
-            { name: 'Adsgram Reward', id: '29776', status: 'Watch & Earn' },
-            { name: 'Adsgram Task', id: 'task-29788', status: 'Sponsored Tasks' },
-            { name: 'Monetag', id: '10984603', status: 'Watch & Earn' },
-            { name: 'Publishers/RichAds', id: '7369', status: 'Авто (Push/Video)' },
-          ].map(p => (
-            <div key={p.id} style={{
+          {[...settings, ...monetagSettings, ...richadsSettings].map(p => (
+            <div key={p.key} style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               padding: '8px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: 10
             }}>
               <div>
-                <div style={{ fontSize: 12, fontWeight: 700 }}>{p.name}</div>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace' }}>{p.id}</div>
+                <div style={{ fontSize: 12, fontWeight: 700 }}>{p.label}</div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace' }}>{p.value}</div>
               </div>
-              <div style={{ fontSize: 10, color: 'var(--green)', fontWeight: 600 }}>{p.status}</div>
+              <div style={{ fontSize: 10, color: 'var(--green)', fontWeight: 600 }}>✓ Настроено</div>
             </div>
           ))}
         </div>
@@ -1621,7 +1666,7 @@ function MultiAccountPanel() {
 
   const blockUser = async (userId) => {
     try {
-      await api.post(`/admin/users/${userId}/block`);
+      await api.post(`/admin/users/${userId}/block`, { blocked: true });
       showMsg('🚫 Пользователь заблокирован');
       load();
     } catch (e) { showMsg(`❌ ${e.response?.data?.error || 'Ошибка'}`); }

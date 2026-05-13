@@ -44,6 +44,7 @@ app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 // Rate limiters
 const generalLimit = rateLimit(100, 60000);   // 100 req/min per IP
 const strictLimit = rateLimit(10, 60000);      // 10 req/min per IP
+const adminLimit  = rateLimit(80, 60000);      // 80 req/min for admin panel
 
 // Routes
 app.use('/api/auth', generalLimit, authRoutes);
@@ -53,7 +54,7 @@ app.use('/api/withdraw', strictLimit, withdrawRoutes);
 app.use('/api/referrals', generalLimit, referralRoutes);
 app.use('/api/tasks', generalLimit, tasksRoutes);
 app.use('/api/leaderboard', generalLimit, leaderboardRoutes);
-app.use('/api/admin', strictLimit, adminRoutes);
+app.use('/api/admin', adminLimit, adminRoutes);
 app.use('/api/ambassador', generalLimit, ambassadorRoutes);
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
