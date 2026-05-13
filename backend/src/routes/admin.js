@@ -742,6 +742,54 @@ router.delete('/packages/:id', async (req, res) => {
   res.json({ success: true });
 });
 
+// ── Deposits (Recent Purchases) ──
+router.get('/deposits', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = 50;
+    const offset = (page - 1) * limit;
+
+    // Recent purchases with user + package info
+    const { rows: deposits } = await pool.query(`
+      SELECT p.id, p.user_id, p.power_amount, p.ton_paid, p.tx_hash, p.created_at,
+             u.tg_id, u.username, u.first_name, u.power, u.ton_balance, u.is_blocked, u.is_premium,
+             pp.name as package_name
+      FROM purchases p
+      JOIN users u ON p.user_id = u.id
+      LEFT JOIN power_packages pp ON p.package_id = pp.id
+      ORDER BY p.created_at DESC
+      LIMIT $1 OFFSET $2
+    `, [limit, offset]);
+
+    // Total count
+    const { rows: countRows } = await pool.query(`SELECT COUNT(*) as c FROM purchases`);
+
+    // Summary stats
+    const [today, week, month] = await Promise.all([
+      pool.query(`SELECT COUNT(*) as c, COALESCE(SUM(ton_paid), 0) as s FROM purchases WHERE created_at > NOW() - INTERVAL '24 hours'`),
+      pool.query(`SELECT COUNT(*) as c, COALESCE(SUM(ton_paid), 0) as s FROM purchases WHERE created_at > NOW() - INTERVAL '7 days'`),
+      pool.query(`SELECT COUNT(*) as c, COALESCE(SUM(ton_paid), 0) as s FROM purchases WHERE created_at > NOW() - INTERVAL '30 days'`),
+    ]);
+
+    res.json({
+      deposits,
+      total: parseInt(countRows[0].c),
+      page,
+      summary: {
+        today_count: parseInt(today.rows[0].c),
+        today_ton: parseFloat(today.rows[0].s),
+        week_count: parseInt(week.rows[0].c),
+        week_ton: parseFloat(week.rows[0].s),
+        month_count: parseInt(month.rows[0].c),
+        month_ton: parseFloat(month.rows[0].s),
+      }
+    });
+  } catch (e) {
+    console.error('[Deposits] Error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Ad Settings ──
 router.get('/ad-settings', async (req, res) => {
   const { rows } = await pool.query(

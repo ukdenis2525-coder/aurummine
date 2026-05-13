@@ -9,6 +9,7 @@ let _searchFromMulti = '';
 const ALL_TABS = [
   { id: 'dashboard', icon: '📊', label: 'Обзор' },
   { id: 'users', icon: '👥', label: 'Юзеры' },
+  { id: 'deposits', icon: '💳', label: 'Депозиты' },
   { id: 'withdrawals', icon: '💸', label: 'Выводы' },
   { id: 'tasks', icon: '📋', label: 'Задания' },
   { id: 'orders', icon: '🛒', label: 'Заказы' },
@@ -91,6 +92,7 @@ export default function AdminPage() {
       {tab === 'admins' && <AdminsPanel />}
       {tab === 'ambassador' && <AmbassadorAdminPanel />}
       {tab === 'promo' && <PromoCodesPanel />}
+      {tab === 'deposits' && <DepositsPanel onGoToUser={(tgId) => { _searchFromMulti = String(tgId); setTab('users'); }} />}
     </div>
   );
 }
@@ -3421,6 +3423,131 @@ function Btn({ children, ...props }) {
       fontWeight: 600, fontSize: 12, cursor: props.disabled ? 'default' : 'pointer',
       opacity: props.disabled ? 0.4 : 1
     }}>{children}</button>
+  );
+}
+
+// ═══════════════════ DEPOSITS ═══════════════════
+function DepositsPanel({ onGoToUser }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+
+  const load = async (p) => {
+    setLoading(true);
+    try {
+      const { data: d } = await api.get(`/admin/deposits?page=${p || page}`);
+      setData(d);
+    } catch (e) {}
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, [page]);
+
+  if (loading && !data) return <Loading />;
+  if (!data) return <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)' }}>Ошибка загрузки</div>;
+
+  const s = data.summary;
+  const totalPages = Math.ceil(data.total / 50);
+
+  const timeAgo = (date) => {
+    const diff = (Date.now() - new Date(date).getTime()) / 1000;
+    if (diff < 60) return `${Math.floor(diff)}с назад`;
+    if (diff < 3600) return `${Math.floor(diff / 60)}м назад`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}ч назад`;
+    return `${Math.floor(diff / 86400)}д назад`;
+  };
+
+  return (
+    <div>
+      {/* Header */}
+      <div className="card" style={{ padding: 14, marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          <span style={{ fontSize: 24 }}>💳</span>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 800 }}>Депозиты</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Всего {data.total} пополнений</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Summary cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 14 }}>
+        {[
+          { label: 'Сегодня', count: s.today_count, ton: s.today_ton, color: 'var(--green)' },
+          { label: 'Неделя', count: s.week_count, ton: s.week_ton, color: 'var(--gold)' },
+          { label: 'Месяц', count: s.month_count, ton: s.month_ton, color: 'var(--orange)' },
+        ].map(c => (
+          <div key={c.label} className="card" style={{ padding: 10, textAlign: 'center' }}>
+            <div style={{ fontSize: 16, fontWeight: 900, color: c.color }}>{c.count}</div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{c.label}</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: c.color, marginTop: 2 }}>{fmt(c.ton, 4)} TON</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Refresh */}
+      <button onClick={() => load(page)} className="btn-gold" style={{ marginBottom: 14, padding: 10, fontSize: 13 }}>
+        🔄 Обновить
+      </button>
+
+      {/* Deposits list */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {data.deposits.map((d, i) => (
+          <div key={d.id} className="card" style={{
+            padding: 12, animation: `fadeIn 0.2s ease ${i * 0.03}s both`,
+            border: d.is_blocked ? '1px solid rgba(248,113,113,0.2)' : '1px solid var(--border)',
+            opacity: d.is_blocked ? 0.6 : 1,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <span style={{ fontSize: 13, fontWeight: 800 }}>
+                    {d.first_name || d.username || 'Noname'}
+                  </span>
+                  {d.is_premium && <span style={{ fontSize: 8 }}>⭐</span>}
+                  {d.is_blocked && <span style={{ fontSize: 8, padding: '1px 5px', borderRadius: 4, background: 'var(--red-bg)', color: 'var(--red)', fontWeight: 700 }}>BAN</span>}
+                  <span style={{ fontSize: 9, color: 'var(--text-muted)', marginLeft: 'auto' }}>{timeAgo(d.created_at)}</span>
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace', marginBottom: 4 }}>
+                  TG: {d.tg_id}{d.username ? ` • @${d.username}` : ''}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 13, fontWeight: 900, color: 'var(--green)' }}>+{fmt(d.ton_paid, 4)} TON</span>
+                  <span style={{ fontSize: 10, color: 'var(--gold)' }}>⚡ +{fmtK(d.power_amount)}</span>
+                  {d.package_name && (
+                    <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 6, background: 'rgba(212,175,55,0.1)', color: 'var(--gold)', fontWeight: 600 }}>
+                      📦 {d.package_name}
+                    </span>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: 10, marginTop: 4, fontSize: 9, color: 'var(--text-muted)' }}>
+                  <span>Итого: ⚡ {fmtK(d.power)}</span>
+                  <span>💰 {fmt(parseFloat(d.ton_balance || 0), 4)} TON</span>
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0, marginLeft: 8 }}>
+                {onGoToUser && (
+                  <button onClick={() => onGoToUser(d.tg_id)} style={{
+                    background: 'rgba(212,175,55,0.1)', border: 'none', borderRadius: 8,
+                    padding: '6px 10px', color: 'var(--gold)', fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                  }}>👤</button>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 14 }}>
+          <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page <= 1}
+            style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer' }}>←</button>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{page} / {totalPages}</span>
+          <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page >= totalPages}
+            style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer' }}>→</button>
+        </div>
+      )}
+    </div>
   );
 }
 
