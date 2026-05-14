@@ -3463,7 +3463,7 @@ function AmbassadorPosts({ posts, channels, onUpdate, showMsg }) {
           <input type="text" value={title} onChange={e => setTitle(e.target.value)}
             placeholder="Заголовок" style={{ marginBottom: 8, fontSize: 13 }} />
           <textarea value={text} onChange={e => setText(e.target.value)}
-            placeholder="Текст поста (поддерживается HTML)&#10;&#10;Спец. символы:&#10;{REF_LINK} — реф. ссылка партнёра&#10;{REF_CODE} — реф. код партнёра"
+            placeholder="Текст поста (поддерживается HTML)&#10;&#10;Спец. символы:&#10;{REF_LINK} — реф. ссылка партнёра&#10;{REF_CODE} — реф. код партнёра&#10;{promo} — партнёрский промокод"
             style={{
               width: '100%', minHeight: 100, padding: 12, borderRadius: 12,
               background: 'var(--bg-card)', border: '1px solid var(--border)',
@@ -3478,6 +3478,7 @@ function AmbassadorPosts({ posts, channels, onUpdate, showMsg }) {
             <div style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.6 }}>
               <code style={{ background: 'rgba(255,255,255,0.06)', padding: '1px 5px', borderRadius: 4, color: 'var(--green)' }}>{'{REF_LINK}'}</code> — ссылка партнёра (авто для каждого канала)<br/>
               <code style={{ background: 'rgba(255,255,255,0.06)', padding: '1px 5px', borderRadius: 4, color: 'var(--green)' }}>{'{REF_CODE}'}</code> — TG ID партнёра<br/>
+              <code style={{ background: 'rgba(255,255,255,0.06)', padding: '1px 5px', borderRadius: 4, color: '#3b82f6' }}>{'{promo}'}</code> — 🎁 партнёрский промокод (уникальный для каждого канала)<br/>
               <span style={{ color: 'var(--gold)' }}>🔘 Кнопка «Открыть»</span> — автоматически добавляется к каждому посту
             </div>
           </div>
