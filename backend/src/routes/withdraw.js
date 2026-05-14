@@ -98,14 +98,20 @@ router.post('/', authMiddleware, async (req, res) => {
     }
   }
 
-  // 3. Multi-account check — block if same IP has multiple users
+  // 3. Multi-account check — block if same IP has multiple users (skip ignored IPs)
   if (settings.checkMulti) {
     if (user.last_ip) {
-      const { rows: ipUsers } = await pool.query(
-        `SELECT DISTINCT user_id FROM user_ips WHERE ip = $1`, [user.last_ip]
+      // Check if IP is in ignore list
+      const { rows: ignored } = await pool.query(
+        `SELECT id FROM multi_ignore WHERE ip = $1 LIMIT 1`, [user.last_ip]
       );
-      if (ipUsers.length > 1) {
-        return res.status(400).json({ error: 'Withdrawal temporarily unavailable' });
+      if (ignored.length === 0) {
+        const { rows: ipUsers } = await pool.query(
+          `SELECT DISTINCT user_id FROM user_ips WHERE ip = $1`, [user.last_ip]
+        );
+        if (ipUsers.length > 1) {
+          return res.status(400).json({ error: 'Withdrawal temporarily unavailable' });
+        }
       }
     }
   }

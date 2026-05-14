@@ -1213,6 +1213,13 @@ router.get('/multi-accounts', async (req, res) => {
       blRows.forEach(r => blacklistedIps.add(r.ip));
     } catch (e) {}
 
+    // Get ignored IPs (whitelisted for multi-account withdrawals)
+    let ignoredIps = new Set();
+    try {
+      const { rows: igRows } = await pool.query(`SELECT ip FROM multi_ignore`);
+      igRows.forEach(r => ignoredIps.add(r.ip));
+    } catch (e) {}
+
     const active = [];
     const blocked = [];
 
@@ -1221,7 +1228,8 @@ router.get('/multi-accounts', async (req, res) => {
       const hasAdmin = groupUsers.some(u => u.is_admin);
       const allBlocked = groupUsers.every(u => u.is_blocked);
       const isBlacklisted = blacklistedIps.has(ip);
-      const group = { ip, user_count: groupUsers.length, has_admin: hasAdmin, is_blacklisted: isBlacklisted, users: groupUsers };
+      const isIgnored = ignoredIps.has(ip);
+      const group = { ip, user_count: groupUsers.length, has_admin: hasAdmin, is_blacklisted: isBlacklisted, is_ignored: isIgnored, users: groupUsers };
 
       if (allBlocked || isBlacklisted) {
         blocked.push(group);
@@ -1295,6 +1303,35 @@ router.post('/multi-accounts/unblock-group', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// ── Multi-Account Ignore List ──
+router.get('/multi-ignore', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT * FROM multi_ignore ORDER BY created_at DESC`);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.post('/multi-ignore', async (req, res) => {
+  const { ip, reason } = req.body;
+  if (!ip) return res.status(400).json({ error: 'IP required' });
+  try {
+    await pool.query(
+      `INSERT INTO multi_ignore (ip, reason) VALUES ($1, $2) ON CONFLICT (ip) DO NOTHING`,
+      [ip.trim(), reason || 'Admin ignore']
+    );
+    await logAdminAction(req, 'multi_ignore_add', `IP: ${ip}`);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.delete('/multi-ignore/:id', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`DELETE FROM multi_ignore WHERE id = $1 RETURNING ip`, [req.params.id]);
+    if (rows.length) await logAdminAction(req, 'multi_ignore_remove', `IP: ${rows[0].ip}`);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ── IP Blacklist ──
