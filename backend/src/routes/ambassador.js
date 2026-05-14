@@ -399,6 +399,41 @@ router.post('/admin/posts/:id/publish', ambassadorAdminMiddleware, async (req, r
         caption = caption.replace(/\{REF_LINK\}/gi, refLink);
         caption = caption.replace(/\{REF_CODE\}/gi, ownerTgId || '');
 
+        // Replace {promo} with unused partner promo code for this channel owner
+        if (caption.includes('{promo}')) {
+          try {
+            const { rows: promos } = await pool.query(
+              `SELECT pc.id, pc.code, pc.discount_pct, pc.max_uses, pc.used_count 
+               FROM promo_codes pc
+               WHERE pc.is_partner = TRUE AND pc.is_active = TRUE 
+               AND (pc.max_uses = 0 OR pc.used_count < pc.max_uses)
+               AND (pc.expires_at IS NULL OR pc.expires_at > NOW())
+               AND NOT EXISTS (SELECT 1 FROM promo_code_uses pcu WHERE pcu.promo_id = pc.id AND pcu.user_id = $1)
+               ORDER BY pc.id ASC LIMIT 1`,
+              [channel.user_id]
+            );
+            if (promos.length) {
+              const promo = promos[0];
+              const promoText = `🎁 Промокод на покупку -${promo.discount_pct}%: <b>${promo.code}</b>`;
+              caption = caption.replace('{promo}', promoText);
+              // Record usage for channel owner
+              await pool.query(
+                `INSERT INTO promo_code_uses (promo_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+                [promo.id, channel.user_id]
+              );
+              await pool.query(
+                `UPDATE promo_codes SET used_count = used_count + 1 WHERE id = $1`,
+                [promo.id]
+              );
+            } else {
+              caption = caption.replace('{promo}', '');
+            }
+          } catch (promoErr) {
+            caption = caption.replace('{promo}', '');
+            console.error('[Ambassador] Promo assignment error:', promoErr.message);
+          }
+        }
+
         // Inline button with referral link
         const replyMarkup = {
           inline_keyboard: [[
