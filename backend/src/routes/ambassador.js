@@ -203,6 +203,40 @@ router.get('/my-channels', authMiddleware, async (req, res) => {
   }
 });
 
+// List all approved ambassadors (public — for users to see promo codes)
+router.get('/list', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT ac.channel_username, ac.channel_title, ac.subscribers_count,
+              u.username, u.first_name,
+              pc.code AS promo_code, pc.discount_pct
+       FROM ambassador_channels ac
+       JOIN users u ON u.id = ac.user_id
+       LEFT JOIN promo_code_uses pcu ON pcu.user_id = ac.user_id AND pcu.source = 'ambassador'
+       LEFT JOIN promo_codes pc ON pc.id = pcu.promo_id AND pc.is_active = TRUE
+       WHERE ac.status = 'approved'
+       ORDER BY ac.subscribers_count DESC`
+    );
+    res.json(rows);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+// Cancel own partnership
+router.post('/cancel', authMiddleware, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      `DELETE FROM ambassador_channels WHERE user_id = $1 AND status IN ('approved', 'pending')`,
+      [req.user.id]
+    );
+    if (rowCount === 0) return res.status(404).json({ error: 'No active partnership found' });
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to cancel partnership' });
+  }
+});
+
 // ══════════════════════════════════════════════════
 // ADMIN ROUTES
 // ══════════════════════════════════════════════════
