@@ -102,12 +102,12 @@ export default function PowerPage() {
 
       {/* ── Ambient background effects ── */}
       <div style={{
-        position: 'fixed', top: 0, left: 0, right: 0, height: '100vh',
+        position: 'absolute', top: 0, left: 0, right: 0, height: '100%',
         background: 'radial-gradient(ellipse at 50% 0%, rgba(212,175,55,0.08) 0%, transparent 50%)',
         pointerEvents: 'none', zIndex: 0,
       }} />
       <div style={{
-        position: 'fixed', top: '30%', left: '-20%', width: '140%', height: '60vh',
+        position: 'absolute', top: '30%', left: '-20%', width: '140%', height: '60%',
         background: 'radial-gradient(ellipse at 50% 50%, rgba(212,175,55,0.03) 0%, transparent 60%)',
         pointerEvents: 'none', zIndex: 0,
       }} />
