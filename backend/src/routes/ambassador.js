@@ -416,14 +416,10 @@ router.post('/admin/posts/:id/publish', ambassadorAdminMiddleware, async (req, r
               const promo = promos[0];
               const promoText = `🎁 Промокод на покупку -${promo.discount_pct}%: <b>${promo.code}</b>`;
               caption = caption.replace('{promo}', promoText);
-              // Record usage for channel owner
+              // Record distribution (not actual usage — doesn't count toward max_uses)
               await pool.query(
                 `INSERT INTO promo_code_uses (promo_id, user_id, source) VALUES ($1, $2, 'ambassador') ON CONFLICT DO NOTHING`,
                 [promo.id, channel.user_id]
-              );
-              await pool.query(
-                `UPDATE promo_codes SET used_count = used_count + 1 WHERE id = $1`,
-                [promo.id]
               );
             } else {
               caption = caption.replace('{promo}', '');

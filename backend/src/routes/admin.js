@@ -1130,17 +1130,12 @@ router.post('/broadcast', async (req, res) => {
             if (assignedPromo) {
               const promoText = `🎁 Промокод на покупку -${assignedPromo.discount_pct}%: <b>${assignedPromo.code}</b>`;
               userMessage = userMessage.replace('{promo}', promoText);
-              // Record usage
+              // Record distribution (not actual usage — doesn't count toward max_uses)
               try {
                 await pool.query(
                   `INSERT INTO promo_code_uses (promo_id, user_id, source) VALUES ($1, $2, 'broadcast') ON CONFLICT DO NOTHING`,
                   [assignedPromo.id, users[i].id]
                 );
-                await pool.query(
-                  `UPDATE promo_codes SET used_count = used_count + 1 WHERE id = $1`,
-                  [assignedPromo.id]
-                );
-                assignedPromo.used_count++;
               } catch (dbErr) {}
             } else {
               // No promo available — remove placeholder
