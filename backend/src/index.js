@@ -158,5 +158,15 @@ app.listen(PORT, async () => {
         reason VARCHAR(500), created_at TIMESTAMP DEFAULT NOW()
       )
     `);
+    // Partner promo codes
+    await pool.query(`ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS is_partner BOOLEAN DEFAULT FALSE`);
+    // Source column for promo_code_uses (distinguish broadcast/ambassador vs purchase)
+    await pool.query(`ALTER TABLE promo_code_uses ADD COLUMN IF NOT EXISTS source VARCHAR(20) DEFAULT 'purchase'`);
+    // Cache telegram file_id for ambassador images
+    await pool.query(`ALTER TABLE ambassador_posts ADD COLUMN IF NOT EXISTS tg_file_id TEXT`);
+    // Update unique index to include source
+    await pool.query(`DROP INDEX IF EXISTS idx_promo_uses_unique`);
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_promo_uses_unique_src ON promo_code_uses(promo_id, user_id, source)`);
+    console.log('[Auto-migrate] Done');
   } catch (e) { console.error('Auto-migrate error:', e.message); }
 });
