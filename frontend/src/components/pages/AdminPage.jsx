@@ -1999,7 +1999,8 @@ function AdsPanel() {
     api.get('/admin/ad-settings').then(r => {
       // Adsgram defaults
       const adsgramDefaults = [
-        { key: 'adsgram_block_id', value: '29776', label: 'Adsgram Block ID' },
+        { key: 'adsgram_block_id', value: '29776', label: 'Adsgram Block ID (Rewarded)' },
+        { key: 'adsgram_interstitial_block_id', value: '', label: 'Adsgram Interstitial Block ID' },
         { key: 'adsgram_task_id', value: 'task-29788', label: 'Adsgram Task ID' },
         { key: 'ad_reward_power', value: '500', label: 'Power за просмотр (Adsgram)' },
         { key: 'ad_cooldown_seconds', value: '60', label: 'Кулдаун между рекламами (сек)' },
@@ -2056,7 +2057,8 @@ function AdsPanel() {
   };
 
   const adsgramFieldMeta = {
-    adsgram_block_id: { icon: '🎯', unit: 'ID', desc: 'Block ID из личного кабинета Adsgram' },
+    adsgram_block_id: { icon: '🎯', unit: 'ID', desc: 'Block ID для rewarded видео (задания)' },
+    adsgram_interstitial_block_id: { icon: '📺', unit: 'ID', desc: 'Block ID для interstitial (при клике на баланс)' },
     adsgram_task_id: { icon: '📋', unit: 'ID', desc: 'Task ID для спонсорских заданий Adsgram' },
     ad_reward_power: { icon: '⚡', unit: 'POWER', desc: 'Сколько Power юзер получает за один просмотр Adsgram' },
     ad_cooldown_seconds: { icon: '⏱️', unit: 'сек', desc: 'Минимальное время между просмотрами (общее)' },

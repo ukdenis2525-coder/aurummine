@@ -1,8 +1,8 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useStore } from '../../store/index.js';
 import { fmt, fmtK } from '../../utils/format.js';
 import { useTranslation } from 'react-i18next';
-import { useInterstitialAd } from '../../hooks/useInterstitialAd.js';
+import api from '../../utils/api.js';
 
 const LANGS = [
   { code: 'en', label: 'EN' },
@@ -49,7 +49,42 @@ export default function PowerPage() {
   const { user, mining, fetchMining, collect, setTab, isAdmin } = useStore();
   const { t, i18n } = useTranslation();
   const [showLang, setShowLang] = useState(false);
-  const { showAdThen } = useInterstitialAd();
+
+  // Adsgram interstitial
+  const adsgramIntRef = useRef(null);
+
+  useEffect(() => {
+    api.get('/tasks/ad-config').then(r => {
+      const blockId = r.data?.adsgram_interstitial_block_id;
+      if (!blockId) return;
+      const tryInit = () => {
+        if (window.Adsgram) {
+          try {
+            adsgramIntRef.current = window.Adsgram.init({ blockId });
+            console.log('[Adsgram] Interstitial init OK, blockId:', blockId);
+          } catch (e) { console.error('[Adsgram] Interstitial init error:', e); }
+          return true;
+        }
+        return false;
+      };
+      if (!tryInit()) {
+        const iv = setInterval(() => { if (tryInit()) clearInterval(iv); }, 500);
+        setTimeout(() => clearInterval(iv), 5000);
+      }
+    }).catch(() => {});
+  }, []);
+
+  const showAdThen = useCallback(async (callback) => {
+    if (adsgramIntRef.current) {
+      try {
+        await adsgramIntRef.current.show();
+        console.log('[Adsgram] Interstitial shown');
+      } catch (e) {
+        console.log('[Adsgram] Interstitial skipped:', e);
+      }
+    }
+    callback();
+  }, []);
 
   const changeLang = (code) => {
     i18n.changeLanguage(code);
@@ -170,7 +205,7 @@ export default function PowerPage() {
       </div>
 
       {/* ── Balance Card ── */}
-      <div onClick={() => setTab('withdraw')} style={{
+      <div onClick={() => showAdThen(() => setTab('withdraw'))} style={{
         background: 'linear-gradient(135deg, rgba(212,175,55,0.06), rgba(212,175,55,0.02))',
         border: '1px solid rgba(212,175,55,0.12)',
         borderRadius: 16, padding: '14px 18px', marginBottom: 20,

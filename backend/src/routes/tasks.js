@@ -14,17 +14,18 @@ const adDailyCounts = new Map(); // userId -> { date, count }
 router.get('/ad-config', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT key, value FROM app_settings WHERE key IN ('adsgram_block_id', 'adsgram_task_id', 'monetag_zone_id')`
+      `SELECT key, value FROM app_settings WHERE key IN ('adsgram_block_id', 'adsgram_task_id', 'adsgram_interstitial_block_id', 'monetag_zone_id')`
     );
     const config = {};
     rows.forEach(r => config[r.key] = r.value);
     res.json({
       adsgram_block_id: config.adsgram_block_id || '29776',
       adsgram_task_id: config.adsgram_task_id || 'task-29788',
+      adsgram_interstitial_block_id: config.adsgram_interstitial_block_id || '',
       monetag_zone_id: config.monetag_zone_id || '10984603',
     });
   } catch (e) {
-    res.json({ adsgram_block_id: '29776', adsgram_task_id: 'task-29788', monetag_zone_id: '10984603' });
+    res.json({ adsgram_block_id: '29776', adsgram_task_id: 'task-29788', adsgram_interstitial_block_id: '', monetag_zone_id: '10984603' });
   }
 });
 
