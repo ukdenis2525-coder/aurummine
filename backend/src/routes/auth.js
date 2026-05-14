@@ -5,6 +5,13 @@ import { TON_PER_HASH, getHashesPerMinute } from '../services/mining.js';
 
 const router = Router();
 
+// All settings keys needed by frontend
+const SETTINGS_KEYS = [
+  'min_withdraw_ton', 'withdraw_fee_mode', 'withdraw_fee_fixed',
+  'withdraw_fee_percent', 'withdraw_fee_hybrid_threshold',
+  'withdraw_processing_hours'
+];
+
 router.post('/init', authMiddleware, async (req, res) => {
   const user = req.user;
   const power = parseFloat(user.power || 0);
@@ -18,14 +25,18 @@ router.post('/init', authMiddleware, async (req, res) => {
     withdraw_fee_fixed: 0.01,
     withdraw_fee_percent: 5,
     withdraw_fee_hybrid_threshold: 1,
+    withdraw_processing_hours: '1-24',
   };
   try {
     const { rows } = await pool.query(
-      `SELECT key, value FROM app_settings WHERE key IN ('min_withdraw_ton', 'withdraw_fee_mode', 'withdraw_fee_fixed', 'withdraw_fee_percent', 'withdraw_fee_hybrid_threshold')`
+      `SELECT key, value FROM app_settings WHERE key = ANY($1)`, [SETTINGS_KEYS]
     );
     rows.forEach(r => {
-      if (r.key === 'withdraw_fee_mode') settings.withdraw_fee_mode = r.value;
-      else settings[r.key] = parseFloat(r.value);
+      if (r.key === 'withdraw_fee_mode' || r.key === 'withdraw_processing_hours') {
+        settings[r.key] = r.value;
+      } else {
+        settings[r.key] = parseFloat(r.value);
+      }
     });
   } catch (e) {}
 

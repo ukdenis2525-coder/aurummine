@@ -293,7 +293,11 @@ const migrate = async () => {
         ('withdraw_fee_mode', 'none', 'Режим комиссии (none/fixed/percent/hybrid)'),
         ('withdraw_fee_fixed', '0.01', 'Фиксированная комиссия (TON)'),
         ('withdraw_fee_percent', '5', 'Процентная комиссия (%)'),
-        ('withdraw_fee_hybrid_threshold', '1', 'Порог гибрида (TON) — ниже фикс, выше процент')
+        ('withdraw_fee_hybrid_threshold', '1', 'Порог гибрида (TON) — ниже фикс, выше процент'),
+        ('withdraw_processing_hours', '1-24', 'Время обработки вывода (текст)'),
+        ('withdraw_require_deposit', '0', 'Требовать покупку пакета для вывода (0/1)'),
+        ('withdraw_check_bot', '0', 'Блокировать вывод для ботов (0/1)'),
+        ('withdraw_check_multi', '0', 'Блокировать вывод для мультиаккаунтов (0/1)')
       ON CONFLICT (key) DO NOTHING;
     `);
 

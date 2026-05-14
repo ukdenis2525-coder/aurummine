@@ -176,7 +176,7 @@
     "wallet_address": "Wallet address",
     "amount": "Amount",
     "min_amount": "Min. {{min}}",
-    "processing_time": "Minimum: {{min}} TON • Processing: 1–24 hours",
+    "processing_time": "Minimum: {{min}} TON • Processing: {{hours}} hours",
     "withdraw_btn": "💎 Withdraw TON",
     "processing": "⏳ Processing...",
     "request_created": "✅ Request for {{amount}} TON created!",

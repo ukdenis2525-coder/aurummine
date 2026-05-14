@@ -592,10 +592,17 @@ router.post('/withdrawals/:id/reject', async (req, res) => {
 });
 
 // ── Withdraw Settings ──
+const WS_KEYS = [
+  'min_withdraw_ton', 'withdraw_fee_mode', 'withdraw_fee_fixed',
+  'withdraw_fee_percent', 'withdraw_fee_hybrid_threshold',
+  'withdraw_processing_hours', 'withdraw_require_deposit',
+  'withdraw_check_bot', 'withdraw_check_multi'
+];
+
 router.get('/withdraw-settings', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT key, value FROM app_settings WHERE key IN ('min_withdraw_ton', 'withdraw_fee_mode', 'withdraw_fee_fixed', 'withdraw_fee_percent', 'withdraw_fee_hybrid_threshold')`
+      `SELECT key, value FROM app_settings WHERE key = ANY($1)`, [WS_KEYS]
     );
     const map = {};
     rows.forEach(r => { map[r.key] = r.value; });
@@ -605,6 +612,10 @@ router.get('/withdraw-settings', async (req, res) => {
       withdraw_fee_fixed: parseFloat(map.withdraw_fee_fixed || '0.01'),
       withdraw_fee_percent: parseFloat(map.withdraw_fee_percent || '5'),
       withdraw_fee_hybrid_threshold: parseFloat(map.withdraw_fee_hybrid_threshold || '1'),
+      withdraw_processing_hours: map.withdraw_processing_hours || '1-24',
+      withdraw_require_deposit: map.withdraw_require_deposit || '0',
+      withdraw_check_bot: map.withdraw_check_bot || '0',
+      withdraw_check_multi: map.withdraw_check_multi || '0',
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -613,14 +624,15 @@ router.get('/withdraw-settings', async (req, res) => {
 
 router.put('/withdraw-settings', async (req, res) => {
   const {
-    min_withdraw_ton,
-    withdraw_fee_mode,
-    withdraw_fee_fixed,
-    withdraw_fee_percent,
-    withdraw_fee_hybrid_threshold,
+    min_withdraw_ton, withdraw_fee_mode, withdraw_fee_fixed,
+    withdraw_fee_percent, withdraw_fee_hybrid_threshold,
+    withdraw_processing_hours, withdraw_require_deposit,
+    withdraw_check_bot, withdraw_check_multi,
   } = req.body;
 
   const updates = [];
+
+  // Fee & min settings
   if (min_withdraw_ton !== undefined) {
     if (isNaN(parseFloat(min_withdraw_ton)) || parseFloat(min_withdraw_ton) < 0) return res.status(400).json({ error: 'Invalid min_withdraw_ton' });
     updates.push({ key: 'min_withdraw_ton', value: String(min_withdraw_ton), label: 'Минимальная сумма вывода (TON)' });
@@ -640,6 +652,20 @@ router.put('/withdraw-settings', async (req, res) => {
   if (withdraw_fee_hybrid_threshold !== undefined) {
     if (isNaN(parseFloat(withdraw_fee_hybrid_threshold)) || parseFloat(withdraw_fee_hybrid_threshold) < 0) return res.status(400).json({ error: 'Invalid hybrid threshold' });
     updates.push({ key: 'withdraw_fee_hybrid_threshold', value: String(withdraw_fee_hybrid_threshold), label: 'Порог гибрида (TON)' });
+  }
+
+  // Processing time & protection settings
+  if (withdraw_processing_hours !== undefined) {
+    updates.push({ key: 'withdraw_processing_hours', value: String(withdraw_processing_hours), label: 'Время обработки вывода (текст)' });
+  }
+  if (withdraw_require_deposit !== undefined) {
+    updates.push({ key: 'withdraw_require_deposit', value: String(withdraw_require_deposit), label: 'Требовать покупку пакета для вывода (0/1)' });
+  }
+  if (withdraw_check_bot !== undefined) {
+    updates.push({ key: 'withdraw_check_bot', value: String(withdraw_check_bot), label: 'Блокировать вывод для ботов (0/1)' });
+  }
+  if (withdraw_check_multi !== undefined) {
+    updates.push({ key: 'withdraw_check_multi', value: String(withdraw_check_multi), label: 'Блокировать вывод для мультиаккаунтов (0/1)' });
   }
 
   if (!updates.length) return res.status(400).json({ error: 'Nothing to update' });

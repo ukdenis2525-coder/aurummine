@@ -924,6 +924,10 @@ function WithdrawalsPanel() {
     withdraw_fee_fixed: '0.01',
     withdraw_fee_percent: '5',
     withdraw_fee_hybrid_threshold: '1',
+    withdraw_processing_hours: '1-24',
+    withdraw_require_deposit: '0',
+    withdraw_check_bot: '0',
+    withdraw_check_multi: '0',
   });
   const [wsSaving, setWsSaving] = useState(false);
 
@@ -946,6 +950,10 @@ function WithdrawalsPanel() {
         withdraw_fee_fixed: String(r.data.withdraw_fee_fixed ?? '0.01'),
         withdraw_fee_percent: String(r.data.withdraw_fee_percent ?? '5'),
         withdraw_fee_hybrid_threshold: String(r.data.withdraw_fee_hybrid_threshold ?? '1'),
+        withdraw_processing_hours: r.data.withdraw_processing_hours || '1-24',
+        withdraw_require_deposit: String(r.data.withdraw_require_deposit ?? '0'),
+        withdraw_check_bot: String(r.data.withdraw_check_bot ?? '0'),
+        withdraw_check_multi: String(r.data.withdraw_check_multi ?? '0'),
       });
     }).catch(() => {});
   }, []);
@@ -987,6 +995,10 @@ function WithdrawalsPanel() {
         withdraw_fee_fixed: parseFloat(ws.withdraw_fee_fixed),
         withdraw_fee_percent: parseFloat(ws.withdraw_fee_percent),
         withdraw_fee_hybrid_threshold: parseFloat(ws.withdraw_fee_hybrid_threshold),
+        withdraw_processing_hours: ws.withdraw_processing_hours,
+        withdraw_require_deposit: ws.withdraw_require_deposit,
+        withdraw_check_bot: ws.withdraw_check_bot,
+        withdraw_check_multi: ws.withdraw_check_multi,
       });
       setMsg('✅ Настройки вывода сохранены');
     } catch (e) {
@@ -1167,6 +1179,67 @@ function WithdrawalsPanel() {
             </div>
           </div>
         )}
+
+        {/* ═══ Processing time ═══ */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 6, color: 'var(--text-muted)' }}>⏱️ ВРЕМЯ ОБРАБОТКИ (текст)</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input type="text" value={ws.withdraw_processing_hours}
+              onChange={e => setWs({...ws, withdraw_processing_hours: e.target.value})}
+              placeholder="1-24"
+              style={{ flex: 1, padding: '10px 12px', fontSize: 16, fontWeight: 700, textAlign: 'center' }} />
+            <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>часов</span>
+          </div>
+          <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 4 }}>
+            Отображается юзеру на странице вывода (напр. 1-24, 12-48, до 72)
+          </div>
+        </div>
+
+        {/* ═══ Protection settings ═══ */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 8, color: 'var(--text-muted)' }}>🛡️ СКРЫТЫЕ ПРОВЕРКИ</div>
+          <div style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 8 }}>
+            Юзер не видит эти требования — при нарушении получит "Вывод временно недоступен"
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {[
+              { key: 'withdraw_require_deposit', icon: '💰', label: 'Обязательный депозит', desc: 'Юзер должен купить хотя бы 1 пакет' },
+              { key: 'withdraw_check_bot', icon: '🤖', label: 'Проверка на бота', desc: 'Блокировка если юзер помечен как бот' },
+              { key: 'withdraw_check_multi', icon: '👥', label: 'Мультиаккаунт', desc: 'Блокировка если IP используется другими аккаунтами' },
+            ].map(item => (
+              <div key={item.key} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '10px 12px', borderRadius: 10,
+                background: ws[item.key] === '1' ? 'rgba(52,211,153,0.06)' : 'rgba(255,255,255,0.02)',
+                border: ws[item.key] === '1' ? '1px solid rgba(52,211,153,0.2)' : '1px solid var(--border)',
+                transition: 'all 0.2s ease'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 16 }}>{item.icon}</span>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700 }}>{item.label}</div>
+                    <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{item.desc}</div>
+                  </div>
+                </div>
+                <button onClick={() => setWs({...ws, [item.key]: ws[item.key] === '1' ? '0' : '1'})} style={{
+                  width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
+                  background: ws[item.key] === '1'
+                    ? 'linear-gradient(135deg, var(--green), #059669)'
+                    : 'rgba(255,255,255,0.1)',
+                  position: 'relative', transition: 'all 0.2s ease',
+                }}>
+                  <div style={{
+                    width: 18, height: 18, borderRadius: '50%', background: '#fff',
+                    position: 'absolute', top: 3,
+                    left: ws[item.key] === '1' ? 23 : 3,
+                    transition: 'left 0.2s ease',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
+                  }} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
 
         {/* Save button */}
         <button className="btn-gold" onClick={saveWithdrawSettings} disabled={wsSaving}

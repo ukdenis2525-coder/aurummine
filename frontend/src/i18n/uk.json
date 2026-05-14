@@ -176,7 +176,7 @@
     "wallet_address": "Адреса гаманця",
     "amount": "Сума",
     "min_amount": "Мін. {{min}}",
-    "processing_time": "Мінімум: {{min}} TON • Обробка: 1–24 години",
+    "processing_time": "Мінімум: {{min}} TON • Обробка: {{hours}} годин",
     "withdraw_btn": "💎 Вивести TON",
     "processing": "⏳ Обробка...",
     "request_created": "✅ Заявку на {{amount}} TON створено!",

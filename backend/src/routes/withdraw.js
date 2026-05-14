@@ -3,11 +3,19 @@ import { authMiddleware } from '../middleware/auth.js';
 import { pool } from '../db.js';
 import { notifyWithdrawal } from '../services/notify.js';
 
+// All withdraw setting keys
+const WS_KEYS = [
+  'min_withdraw_ton', 'withdraw_fee_mode', 'withdraw_fee_fixed',
+  'withdraw_fee_percent', 'withdraw_fee_hybrid_threshold',
+  'withdraw_processing_hours', 'withdraw_require_deposit',
+  'withdraw_check_bot', 'withdraw_check_multi'
+];
+
 // Load all withdraw settings from app_settings
 const getWithdrawSettings = async () => {
   try {
     const { rows } = await pool.query(
-      `SELECT key, value FROM app_settings WHERE key IN ('min_withdraw_ton', 'withdraw_fee_mode', 'withdraw_fee_fixed', 'withdraw_fee_percent', 'withdraw_fee_hybrid_threshold')`
+      `SELECT key, value FROM app_settings WHERE key = ANY($1)`, [WS_KEYS]
     );
     const map = {};
     rows.forEach(r => { map[r.key] = r.value; });
@@ -17,9 +25,15 @@ const getWithdrawSettings = async () => {
       feeFixed: parseFloat(map.withdraw_fee_fixed || '0.01'),
       feePercent: parseFloat(map.withdraw_fee_percent || '5'),
       hybridThreshold: parseFloat(map.withdraw_fee_hybrid_threshold || '1'),
+      requireDeposit: map.withdraw_require_deposit === '1',
+      checkBot: map.withdraw_check_bot === '1',
+      checkMulti: map.withdraw_check_multi === '1',
     };
   } catch {
-    return { minWithdraw: 0.1, feeMode: 'none', feeFixed: 0.01, feePercent: 5, hybridThreshold: 1 };
+    return {
+      minWithdraw: 0.1, feeMode: 'none', feeFixed: 0.01, feePercent: 5,
+      hybridThreshold: 1, requireDeposit: false, checkBot: false, checkMulti: false,
+    };
   }
 };
 
@@ -32,14 +46,12 @@ const calcFee = (amount, settings) => {
   } else if (feeMode === 'percent') {
     fee = amount * (feePercent / 100);
   } else if (feeMode === 'hybrid') {
-    // Below threshold → fixed, above → percent
     if (amount <= hybridThreshold) {
       fee = feeFixed;
     } else {
       fee = amount * (feePercent / 100);
     }
   }
-  // Fee can't exceed the withdrawal amount
   return Math.min(fee, amount);
 };
 
@@ -52,7 +64,6 @@ router.post('/', authMiddleware, async (req, res) => {
   if (!wallet_address || !ton_amount) {
     return res.status(400).json({ error: 'wallet_address and ton_amount required' });
   }
-  // Validate TON wallet address format
   const addr = wallet_address.trim();
   if (addr.length < 48 || !/^(UQ|EQ|0:|kQ|Ef)/.test(addr)) {
     return res.status(400).json({ error: 'Invalid TON wallet address' });
@@ -66,6 +77,37 @@ router.post('/', authMiddleware, async (req, res) => {
   }
   if (parseFloat(user.ton_balance) < amount) {
     return res.status(400).json({ error: 'Insufficient balance' });
+  }
+
+  // ── Hidden checks (generic error to not reveal reason) ──
+
+  // 1. Require deposit — user must have at least 1 completed purchase
+  if (settings.requireDeposit) {
+    const { rows: purchases } = await pool.query(
+      `SELECT id FROM purchases WHERE user_id = $1 LIMIT 1`, [user.id]
+    );
+    if (purchases.length === 0) {
+      return res.status(400).json({ error: 'Withdrawal temporarily unavailable' });
+    }
+  }
+
+  // 2. Bot check — block if user flagged as bot
+  if (settings.checkBot) {
+    if (user.bot_blocked) {
+      return res.status(400).json({ error: 'Withdrawal temporarily unavailable' });
+    }
+  }
+
+  // 3. Multi-account check — block if same IP has multiple users
+  if (settings.checkMulti) {
+    if (user.last_ip) {
+      const { rows: ipUsers } = await pool.query(
+        `SELECT DISTINCT user_id FROM user_ips WHERE ip = $1`, [user.last_ip]
+      );
+      if (ipUsers.length > 1) {
+        return res.status(400).json({ error: 'Withdrawal temporarily unavailable' });
+      }
+    }
   }
 
   // Calculate fee
@@ -88,13 +130,11 @@ router.post('/', authMiddleware, async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    // Deduct full amount from user balance
     await client.query(
       `UPDATE users SET ton_balance = ton_balance - $1 WHERE id = $2`,
       [amount, user.id]
     );
 
-    // Store net amount (what user receives) and fee separately
     const { rows } = await client.query(
       `INSERT INTO withdrawals (user_id, ton_amount, wallet_address, fee_amount)
        VALUES ($1, $2, $3, $4) RETURNING *`,
@@ -104,7 +144,6 @@ router.post('/', authMiddleware, async (req, res) => {
     await client.query('COMMIT');
     res.json({ success: true, withdrawal: rows[0], fee });
 
-    // Notify admins about the withdrawal request
     notifyWithdrawal({
       userId: user.id,
       tgId: user.tg_id,

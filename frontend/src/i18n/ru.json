@@ -176,7 +176,7 @@
     "wallet_address": "Адрес кошелька",
     "amount": "Сумма",
     "min_amount": "Мин. {{min}}",
-    "processing_time": "Минимум: {{min}} TON • Обработка: 1–24 часа",
+    "processing_time": "Минимум: {{min}} TON • Обработка: {{hours}} часов",
     "withdraw_btn": "💎 Вывести TON",
     "processing": "⏳ Обработка...",
     "request_created": "✅ Заявка на {{amount}} TON создана!",

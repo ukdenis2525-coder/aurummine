@@ -167,7 +167,7 @@ export default function WithdrawPage() {
         )}
 
         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 16 }}>
-          {t('withdraw.processing_time', { min: MIN_WITHDRAW })}
+          {t('withdraw.processing_time', { min: MIN_WITHDRAW, hours: appSettings?.withdraw_processing_hours || '1-24' })}
         </div>
 
         <button className="btn-gold" onClick={() => showAdThen(handleSubmit)}

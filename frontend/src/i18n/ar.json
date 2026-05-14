@@ -176,7 +176,7 @@
     "wallet_address": "عنوان المحفظة",
     "amount": "المبلغ",
     "min_amount": "الحد الأدنى {{min}}",
-    "processing_time": "الحد الأدنى: {{min}} TON • المعالجة: 1-24 ساعة",
+    "processing_time": "الحد الأدنى: {{min}} TON • المعالجة: {{hours}} ساعة",
     "withdraw_btn": "💎 سحب TON",
     "processing": "⏳ جارٍ المعالجة...",
     "request_created": "✅ تم إنشاء طلب سحب {{amount}} TON!",
