@@ -358,6 +358,11 @@ const migrate = async () => {
       ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS is_partner BOOLEAN DEFAULT FALSE;
     `);
 
+    // ── Cache telegram file_id for ambassador post images ──
+    await client.query(`
+      ALTER TABLE ambassador_posts ADD COLUMN IF NOT EXISTS tg_file_id TEXT;
+    `);
+
     // ── Admin Activity Log ──
     await client.query(`
       CREATE TABLE IF NOT EXISTS admin_activity_log (

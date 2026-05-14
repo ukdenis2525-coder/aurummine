@@ -443,12 +443,36 @@ router.post('/admin/posts/:id/publish', ambassadorAdminMiddleware, async (req, r
 
         if (post.image_path) {
           const imagePath = path.join(__dirname, '..', '..', post.image_path);
-          if (fs.existsSync(imagePath)) {
-            await tgApi.sendPhoto(chatId, new InputFile(imagePath), {
+          const fileExists = fs.existsSync(imagePath);
+
+          // Use cached telegram file_id if local file is gone (e.g. after redeploy)
+          let photoSource = null;
+          if (fileExists) {
+            photoSource = new InputFile(imagePath);
+          } else if (post.tg_file_id) {
+            photoSource = post.tg_file_id;
+          }
+
+          if (photoSource) {
+            const result = await tgApi.sendPhoto(chatId, photoSource, {
               caption: caption || undefined,
               parse_mode: 'HTML',
               reply_markup: replyMarkup,
             });
+            // Cache telegram file_id for future use (after redeploy)
+            if (!post.tg_file_id && result?.photo?.length) {
+              const fileId = result.photo[result.photo.length - 1].file_id;
+              post.tg_file_id = fileId;
+              try {
+                await pool.query(
+                  `ALTER TABLE ambassador_posts ADD COLUMN IF NOT EXISTS tg_file_id TEXT`
+                );
+                await pool.query(
+                  `UPDATE ambassador_posts SET tg_file_id = $1 WHERE id = $2`,
+                  [fileId, post.id]
+                );
+              } catch (e) {}
+            }
           } else {
             if (caption) {
               await tgApi.sendMessage(chatId, caption, { parse_mode: 'HTML', reply_markup: replyMarkup });
