@@ -1656,6 +1656,21 @@ router.delete('/promo-codes/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'Failed' }); }
 });
 
+// Get promo code uses (who used it)
+router.get('/promo-codes/:id/uses', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT pcu.id, pcu.source, pcu.used_at, u.tg_id, u.username, u.first_name
+       FROM promo_code_uses pcu
+       JOIN users u ON u.id = pcu.user_id
+       WHERE pcu.promo_id = $1
+       ORDER BY pcu.used_at DESC`,
+      [req.params.id]
+    );
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+
 export { getAllAdminIds };
 export default router;
 

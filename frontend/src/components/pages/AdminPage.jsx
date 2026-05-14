@@ -3718,6 +3718,9 @@ function PromoCodesPanel() {
   const [creating, setCreating] = useState(false);
   const [isPartner, setIsPartner] = useState(false);
   const [msg, setMsg] = useState(null);
+  const [usesId, setUsesId] = useState(null);
+  const [uses, setUses] = useState([]);
+  const [usesLoading, setUsesLoading] = useState(false);
 
   const load = async () => {
     try { const { data } = await api.get('/admin/promo-codes'); setPromos(data); }
@@ -3738,6 +3741,14 @@ function PromoCodesPanel() {
   };
   const toggle = async (id) => { try { await api.post(`/admin/promo-codes/${id}/toggle`); load(); } catch (e) { showMsg('❌ Ошибка'); } };
   const remove = async (id) => { try { await api.delete(`/admin/promo-codes/${id}`); showMsg('🗑 Удалён'); load(); } catch (e) { showMsg('❌ Ошибка'); } };
+
+  const toggleUses = async (id) => {
+    if (usesId === id) { setUsesId(null); return; }
+    setUsesId(id); setUsesLoading(true);
+    try { const { data } = await api.get(`/admin/promo-codes/${id}/uses`); setUses(data); }
+    catch { setUses([]); }
+    setUsesLoading(false);
+  };
 
   if (loading) return <Loading />;
 
@@ -3869,8 +3880,36 @@ function PromoCodesPanel() {
                   background: p.is_active ? 'rgba(251,191,36,0.1)' : 'rgba(52,211,153,0.1)', color: p.is_active ? 'var(--orange)' : 'var(--green)' }}>
                   {p.is_active ? '⏸ Выключить' : '▶ Включить'}
                 </button>
+                {p.used_count > 0 && (
+                  <button onClick={() => toggleUses(p.id)} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(59,130,246,0.2)',
+                    background: usesId === p.id ? 'rgba(59,130,246,0.1)' : 'transparent', color: '#3b82f6', fontSize: 11, cursor: 'pointer', fontWeight: 700 }}>
+                    👥 {p.used_count}
+                  </button>
+                )}
                 <button onClick={() => remove(p.id)} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(248,113,113,0.2)', background: 'transparent', color: 'var(--red)', fontSize: 11, cursor: 'pointer' }}>🗑</button>
               </div>
+
+              {/* Uses list */}
+              {usesId === p.id && (
+                <div style={{ marginTop: 10, padding: 10, borderRadius: 10, background: 'rgba(59,130,246,0.05)', border: '1px solid rgba(59,130,246,0.12)', animation: 'fadeIn 0.2s ease' }}>
+                  <div style={{ fontSize: 10, color: '#3b82f6', fontWeight: 700, marginBottom: 8 }}>👥 Кто использовал:</div>
+                  {usesLoading ? <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>⏳ Загрузка...</div> : uses.length === 0 ? (
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Нет данных</div>
+                  ) : uses.map((u, j) => (
+                    <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: j < uses.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700 }}>{u.first_name || u.username || `ID:${u.tg_id}`}</div>
+                        {u.username && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>@{u.username}</div>}
+                      </div>
+                      <span style={{ fontSize: 8, padding: '2px 5px', borderRadius: 4, fontWeight: 700,
+                        background: u.source === 'purchase' ? 'rgba(52,211,153,0.15)' : u.source === 'broadcast' ? 'rgba(251,191,36,0.15)' : 'rgba(59,130,246,0.15)',
+                        color: u.source === 'purchase' ? 'var(--green)' : u.source === 'broadcast' ? 'var(--orange)' : '#3b82f6',
+                      }}>{u.source === 'purchase' ? '💰 Покупка' : u.source === 'broadcast' ? '📢 Рассылка' : '🤝 Амбассадор'}</span>
+                      <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{new Date(u.used_at).toLocaleDateString()}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           );
         })}
