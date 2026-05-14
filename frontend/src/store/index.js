@@ -13,6 +13,7 @@ export const useStore = create((set, get) => ({
   isAdmin: false,
   adminPerms: null, // '*' = full access, [] = array of tab IDs
   ambassadorVisible: false, // whether ambassador tab is shown
+  appSettings: { min_withdraw_ton: 0.1, withdraw_fee_mode: 'none', withdraw_fee_fixed: 0.01, withdraw_fee_percent: 5, withdraw_fee_hybrid_threshold: 1 },
 
   setTab: (tab) => set({ activeTab: tab }),
 
@@ -48,7 +49,7 @@ export const useStore = create((set, get) => ({
         // vis === 0 → hidden for all
       } catch (e) {}
 
-      set({ user, isAdmin, adminPerms, ambassadorVisible, mining: data.mining || null });
+      set({ user, isAdmin, adminPerms, ambassadorVisible, mining: data.mining || null, appSettings: data.settings || get().appSettings });
     } catch (e) {
       // 403 = blocked user (silent block)
       if (e.response?.status === 403) {

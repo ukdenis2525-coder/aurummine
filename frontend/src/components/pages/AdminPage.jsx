@@ -917,6 +917,16 @@ function WithdrawalsPanel() {
   const [txHashInputs, setTxHashInputs] = useState({});
   const [msg, setMsg] = useState(null);
 
+  // Withdraw settings state
+  const [ws, setWs] = useState({
+    min_withdraw_ton: '0.1',
+    withdraw_fee_mode: 'none',
+    withdraw_fee_fixed: '0.01',
+    withdraw_fee_percent: '5',
+    withdraw_fee_hybrid_threshold: '1',
+  });
+  const [wsSaving, setWsSaving] = useState(false);
+
   const load = async () => {
     try {
       const { data } = await api.get(`/admin/withdrawals?status=${filter}`);
@@ -926,6 +936,20 @@ function WithdrawalsPanel() {
       setTimeout(() => setMsg(null), 3000);
     }
   };
+
+  // Load withdraw settings
+  useEffect(() => {
+    api.get('/admin/withdraw-settings').then(r => {
+      setWs({
+        min_withdraw_ton: String(r.data.min_withdraw_ton ?? '0.1'),
+        withdraw_fee_mode: r.data.withdraw_fee_mode || 'none',
+        withdraw_fee_fixed: String(r.data.withdraw_fee_fixed ?? '0.01'),
+        withdraw_fee_percent: String(r.data.withdraw_fee_percent ?? '5'),
+        withdraw_fee_hybrid_threshold: String(r.data.withdraw_fee_hybrid_threshold ?? '1'),
+      });
+    }).catch(() => {});
+  }, []);
+
   useEffect(() => { load(); }, [filter]);
 
   const approve = async (id) => {
@@ -954,8 +978,204 @@ function WithdrawalsPanel() {
     setLoading(false);
   };
 
+  const saveWithdrawSettings = async () => {
+    setWsSaving(true);
+    try {
+      await api.put('/admin/withdraw-settings', {
+        min_withdraw_ton: parseFloat(ws.min_withdraw_ton),
+        withdraw_fee_mode: ws.withdraw_fee_mode,
+        withdraw_fee_fixed: parseFloat(ws.withdraw_fee_fixed),
+        withdraw_fee_percent: parseFloat(ws.withdraw_fee_percent),
+        withdraw_fee_hybrid_threshold: parseFloat(ws.withdraw_fee_hybrid_threshold),
+      });
+      setMsg('✅ Настройки вывода сохранены');
+    } catch (e) {
+      setMsg('❌ Ошибка сохранения: ' + (e.response?.data?.error || e.message));
+    }
+    setWsSaving(false);
+    setTimeout(() => setMsg(null), 2500);
+  };
+
+  // Fee preview calculator
+  const previewFee = (amount) => {
+    const mode = ws.withdraw_fee_mode;
+    if (mode === 'none' || !amount) return 0;
+    const fixed = parseFloat(ws.withdraw_fee_fixed) || 0;
+    const pct = parseFloat(ws.withdraw_fee_percent) || 0;
+    const threshold = parseFloat(ws.withdraw_fee_hybrid_threshold) || 1;
+    if (mode === 'fixed') return fixed;
+    if (mode === 'percent') return amount * (pct / 100);
+    if (mode === 'hybrid') return amount <= threshold ? fixed : amount * (pct / 100);
+    return 0;
+  };
+
+  const modeLabels = {
+    none: '❌ Без комиссии',
+    fixed: '💰 Фиксированная',
+    percent: '📊 Процентная',
+    hybrid: '🔀 Гибридная',
+  };
+
+  const modeDescs = {
+    none: 'Юзер получает 100% от суммы вывода',
+    fixed: 'Фиксированная сумма вычитается при каждом выводе',
+    percent: 'Процент от суммы вывода',
+    hybrid: 'До порога — фикс, после порога — процент',
+  };
+
   return (
     <div>
+      {/* ═══ Withdraw Settings Card ═══ */}
+      <div className="card" style={{ padding: 16, marginBottom: 16, border: '1px solid rgba(212,175,55,0.2)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+          <span style={{ fontSize: 22 }}>⚙️</span>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 800 }}>Настройки вывода</div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Минимум, комиссия, режим</div>
+          </div>
+        </div>
+
+        {/* Min withdraw */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 6, color: 'var(--text-muted)' }}>💎 МИНИМАЛЬНАЯ СУММА ВЫВОДА</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input type="number" value={ws.min_withdraw_ton}
+              onChange={e => setWs({...ws, min_withdraw_ton: e.target.value})}
+              step="0.01" min="0"
+              style={{ flex: 1, padding: '10px 12px', fontSize: 16, fontWeight: 700, textAlign: 'center' }} />
+            <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>TON</span>
+          </div>
+        </div>
+
+        {/* Fee mode selector */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 8, color: 'var(--text-muted)' }}>💸 РЕЖИМ КОМИССИИ</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+            {['none', 'fixed', 'percent', 'hybrid'].map(mode => (
+              <button key={mode} onClick={() => setWs({...ws, withdraw_fee_mode: mode})} style={{
+                padding: '10px 8px', borderRadius: 10, border: 'none',
+                background: ws.withdraw_fee_mode === mode
+                  ? 'linear-gradient(135deg, var(--gold-dark), var(--gold))'
+                  : 'rgba(255,255,255,0.04)',
+                color: ws.withdraw_fee_mode === mode ? '#000' : 'var(--text-muted)',
+                fontWeight: 700, fontSize: 11, cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                border: ws.withdraw_fee_mode === mode ? 'none' : '1px solid var(--border)',
+              }}>
+                {modeLabels[mode]}
+              </button>
+            ))}
+          </div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6, textAlign: 'center' }}>
+            {modeDescs[ws.withdraw_fee_mode]}
+          </div>
+        </div>
+
+        {/* Fee parameters — shown based on mode */}
+        {ws.withdraw_fee_mode !== 'none' && (
+          <div style={{
+            background: 'rgba(255,255,255,0.02)', borderRadius: 12, padding: 12, marginBottom: 14,
+            border: '1px solid var(--border)', animation: 'fadeIn 0.2s ease'
+          }}>
+            {/* Fixed fee — shown for fixed & hybrid */}
+            {(ws.withdraw_fee_mode === 'fixed' || ws.withdraw_fee_mode === 'hybrid') && (
+              <div style={{ marginBottom: ws.withdraw_fee_mode === 'hybrid' ? 12 : 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <span style={{ fontSize: 14 }}>💰</span>
+                  <div style={{ fontSize: 12, fontWeight: 700 }}>Фиксированная комиссия</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <input type="number" value={ws.withdraw_fee_fixed}
+                    onChange={e => setWs({...ws, withdraw_fee_fixed: e.target.value})}
+                    step="0.001" min="0"
+                    style={{ flex: 1, padding: '8px 12px', fontSize: 16, fontWeight: 700, textAlign: 'center' }} />
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>TON</span>
+                </div>
+                {ws.withdraw_fee_mode === 'hybrid' && (
+                  <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 4 }}>
+                    Применяется при выводе ≤ порога
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Percent fee — shown for percent & hybrid */}
+            {(ws.withdraw_fee_mode === 'percent' || ws.withdraw_fee_mode === 'hybrid') && (
+              <div style={{ marginBottom: ws.withdraw_fee_mode === 'hybrid' ? 12 : 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <span style={{ fontSize: 14 }}>📊</span>
+                  <div style={{ fontSize: 12, fontWeight: 700 }}>Процент комиссии</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <input type="number" value={ws.withdraw_fee_percent}
+                    onChange={e => setWs({...ws, withdraw_fee_percent: e.target.value})}
+                    step="0.1" min="0" max="100"
+                    style={{ flex: 1, padding: '8px 12px', fontSize: 16, fontWeight: 700, textAlign: 'center' }} />
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>%</span>
+                </div>
+                {ws.withdraw_fee_mode === 'hybrid' && (
+                  <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 4 }}>
+                    Применяется при выводе &gt; порога
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Hybrid threshold */}
+            {ws.withdraw_fee_mode === 'hybrid' && (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <span style={{ fontSize: 14 }}>🔀</span>
+                  <div style={{ fontSize: 12, fontWeight: 700 }}>Порог переключения</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <input type="number" value={ws.withdraw_fee_hybrid_threshold}
+                    onChange={e => setWs({...ws, withdraw_fee_hybrid_threshold: e.target.value})}
+                    step="0.1" min="0"
+                    style={{ flex: 1, padding: '8px 12px', fontSize: 16, fontWeight: 700, textAlign: 'center' }} />
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>TON</span>
+                </div>
+                <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 4 }}>
+                  ≤ порога → фикс ({ws.withdraw_fee_fixed} TON) • &gt; порога → процент ({ws.withdraw_fee_percent}%)
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Fee preview examples */}
+        {ws.withdraw_fee_mode !== 'none' && (
+          <div style={{
+            background: 'rgba(52,211,153,0.04)', borderRadius: 10, padding: 10, marginBottom: 14,
+            border: '1px solid rgba(52,211,153,0.12)'
+          }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6 }}>📋 ПРЕВЬЮ КОМИССИИ</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>
+              {[0.1, 0.5, 1, 2, 5, 10].map(amount => {
+                const fee = previewFee(amount);
+                return (
+                  <div key={amount} style={{
+                    padding: '6px 4px', borderRadius: 6, textAlign: 'center',
+                    background: 'rgba(255,255,255,0.03)', fontSize: 10
+                  }}>
+                    <div style={{ fontWeight: 700, color: 'var(--gold)' }}>{amount} TON</div>
+                    <div style={{ color: 'var(--orange)', fontSize: 9 }}>−{fmt(fee, 4)}</div>
+                    <div style={{ color: 'var(--green)', fontWeight: 700, fontSize: 9 }}>={fmt(amount - fee, 4)}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Save button */}
+        <button className="btn-gold" onClick={saveWithdrawSettings} disabled={wsSaving}
+          style={{ padding: 12, fontSize: 13, width: '100%' }}>
+          {wsSaving ? '⏳ Сохраняю...' : '💾 Сохранить настройки вывода'}
+        </button>
+      </div>
+
+      {/* ═══ Withdrawals list ═══ */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
         {['pending', 'completed', 'rejected'].map(s => (
           <button key={s} onClick={() => setFilter(s)} style={{
@@ -988,6 +1208,11 @@ function WithdrawalsPanel() {
                 <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--gold-light)' }}>
                   {fmt(w.ton_amount, 4)} TON
                 </div>
+                {parseFloat(w.fee_amount || 0) > 0 && (
+                  <div style={{ fontSize: 10, color: 'var(--orange)', fontWeight: 600 }}>
+                    💸 Комиссия: {fmt(w.fee_amount, 4)} TON
+                  </div>
+                )}
                 <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                   {w.first_name || w.username} (TG:{w.tg_id})
                 </div>

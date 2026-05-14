@@ -286,6 +286,22 @@ const migrate = async () => {
       ON CONFLICT (key) DO NOTHING;
     `);
 
+    // Seed withdrawal settings
+    await client.query(`
+      INSERT INTO app_settings (key, value, label) VALUES
+        ('min_withdraw_ton', '0.1', 'Минимальная сумма вывода (TON)'),
+        ('withdraw_fee_mode', 'none', 'Режим комиссии (none/fixed/percent/hybrid)'),
+        ('withdraw_fee_fixed', '0.01', 'Фиксированная комиссия (TON)'),
+        ('withdraw_fee_percent', '5', 'Процентная комиссия (%)'),
+        ('withdraw_fee_hybrid_threshold', '1', 'Порог гибрида (TON) — ниже фикс, выше процент')
+      ON CONFLICT (key) DO NOTHING;
+    `);
+
+    // Add fee_amount column to withdrawals
+    await client.query(`
+      ALTER TABLE withdrawals ADD COLUMN IF NOT EXISTS fee_amount NUMERIC(10,8) DEFAULT 0;
+    `);
+
     // ── Promo codes ──
     await client.query(`
       CREATE TABLE IF NOT EXISTS promo_codes (

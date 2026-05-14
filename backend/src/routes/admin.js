@@ -591,6 +591,74 @@ router.post('/withdrawals/:id/reject', async (req, res) => {
   } finally { client.release(); }
 });
 
+// ── Withdraw Settings ──
+router.get('/withdraw-settings', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT key, value FROM app_settings WHERE key IN ('min_withdraw_ton', 'withdraw_fee_mode', 'withdraw_fee_fixed', 'withdraw_fee_percent', 'withdraw_fee_hybrid_threshold')`
+    );
+    const map = {};
+    rows.forEach(r => { map[r.key] = r.value; });
+    res.json({
+      min_withdraw_ton: parseFloat(map.min_withdraw_ton || '0.1'),
+      withdraw_fee_mode: map.withdraw_fee_mode || 'none',
+      withdraw_fee_fixed: parseFloat(map.withdraw_fee_fixed || '0.01'),
+      withdraw_fee_percent: parseFloat(map.withdraw_fee_percent || '5'),
+      withdraw_fee_hybrid_threshold: parseFloat(map.withdraw_fee_hybrid_threshold || '1'),
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.put('/withdraw-settings', async (req, res) => {
+  const {
+    min_withdraw_ton,
+    withdraw_fee_mode,
+    withdraw_fee_fixed,
+    withdraw_fee_percent,
+    withdraw_fee_hybrid_threshold,
+  } = req.body;
+
+  const updates = [];
+  if (min_withdraw_ton !== undefined) {
+    if (isNaN(parseFloat(min_withdraw_ton)) || parseFloat(min_withdraw_ton) < 0) return res.status(400).json({ error: 'Invalid min_withdraw_ton' });
+    updates.push({ key: 'min_withdraw_ton', value: String(min_withdraw_ton), label: 'Минимальная сумма вывода (TON)' });
+  }
+  if (withdraw_fee_mode !== undefined) {
+    if (!['none', 'fixed', 'percent', 'hybrid'].includes(withdraw_fee_mode)) return res.status(400).json({ error: 'Invalid fee mode' });
+    updates.push({ key: 'withdraw_fee_mode', value: withdraw_fee_mode, label: 'Режим комиссии (none/fixed/percent/hybrid)' });
+  }
+  if (withdraw_fee_fixed !== undefined) {
+    if (isNaN(parseFloat(withdraw_fee_fixed)) || parseFloat(withdraw_fee_fixed) < 0) return res.status(400).json({ error: 'Invalid fee fixed' });
+    updates.push({ key: 'withdraw_fee_fixed', value: String(withdraw_fee_fixed), label: 'Фиксированная комиссия (TON)' });
+  }
+  if (withdraw_fee_percent !== undefined) {
+    if (isNaN(parseFloat(withdraw_fee_percent)) || parseFloat(withdraw_fee_percent) < 0 || parseFloat(withdraw_fee_percent) > 100) return res.status(400).json({ error: 'Invalid fee percent' });
+    updates.push({ key: 'withdraw_fee_percent', value: String(withdraw_fee_percent), label: 'Процентная комиссия (%)' });
+  }
+  if (withdraw_fee_hybrid_threshold !== undefined) {
+    if (isNaN(parseFloat(withdraw_fee_hybrid_threshold)) || parseFloat(withdraw_fee_hybrid_threshold) < 0) return res.status(400).json({ error: 'Invalid hybrid threshold' });
+    updates.push({ key: 'withdraw_fee_hybrid_threshold', value: String(withdraw_fee_hybrid_threshold), label: 'Порог гибрида (TON)' });
+  }
+
+  if (!updates.length) return res.status(400).json({ error: 'Nothing to update' });
+
+  try {
+    for (const u of updates) {
+      await pool.query(
+        `INSERT INTO app_settings (key, value, label) VALUES ($1, $2, $3) ON CONFLICT (key) DO UPDATE SET value = $2`,
+        [u.key, u.value, u.label]
+      );
+    }
+    const details = updates.map(u => `${u.key}=${u.value}`).join(', ');
+    await logAdminAction(req, 'update_withdraw_settings', details);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Tasks CRUD ──
 router.get('/tasks', async (req, res) => {
   const { rows } = await pool.query(`SELECT * FROM tasks ORDER BY id DESC`);
