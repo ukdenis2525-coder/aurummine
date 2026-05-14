@@ -1085,20 +1085,76 @@ router.post('/broadcast', async (req, res) => {
     }
 
     const hasPhoto = photo_url && photo_url.trim();
+    const hasPromoPlaceholder = message.includes('{promo}');
+
+    // Preload available partner promo codes if placeholder is used
+    let partnerPromos = [];
+    if (hasPromoPlaceholder) {
+      const { rows: promos } = await pool.query(
+        `SELECT id, code, discount_pct, max_uses, used_count FROM promo_codes 
+         WHERE is_partner = TRUE AND is_active = TRUE 
+         AND (max_uses = 0 OR used_count < max_uses)
+         AND (expires_at IS NULL OR expires_at > NOW())
+         ORDER BY id ASC`
+      );
+      partnerPromos = promos;
+      console.log(`[Broadcast] Found ${partnerPromos.length} partner promo codes for {promo} placeholder`);
+    }
+    let promoIndex = 0;
 
     // Send in background (fire-and-forget)
     (async () => {
       for (let i = 0; i < users.length; i++) {
         try {
+          let userMessage = message.trim();
+
+          // Replace {promo} with an unused partner promo code
+          if (hasPromoPlaceholder && partnerPromos.length > 0) {
+            // Find a promo code not used by this user
+            let assignedPromo = null;
+            for (let p = 0; p < partnerPromos.length; p++) {
+              const idx = (promoIndex + p) % partnerPromos.length;
+              const promo = partnerPromos[idx];
+              // Check if user already used this promo
+              const { rows: used } = await pool.query(
+                `SELECT id FROM promo_code_uses WHERE promo_id = $1 AND user_id = $2`,
+                [promo.id, users[i].id]
+              );
+              if (!used.length && (promo.max_uses === 0 || promo.used_count < promo.max_uses)) {
+                assignedPromo = promo;
+                promoIndex = (idx + 1) % partnerPromos.length;
+                break;
+              }
+            }
+
+            if (assignedPromo) {
+              const promoText = `🎁 Промокод на покупку -${assignedPromo.discount_pct}%: <b>${assignedPromo.code}</b>`;
+              userMessage = userMessage.replace('{promo}', promoText);
+              // Record usage
+              try {
+                await pool.query(
+                  `INSERT INTO promo_code_uses (promo_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+                  [assignedPromo.id, users[i].id]
+                );
+                await pool.query(
+                  `UPDATE promo_codes SET used_count = used_count + 1 WHERE id = $1`,
+                  [assignedPromo.id]
+                );
+                assignedPromo.used_count++;
+              } catch (dbErr) {}
+            } else {
+              // No promo available — remove placeholder
+              userMessage = userMessage.replace('{promo}', '');
+            }
+          }
+
           if (hasPhoto) {
-            // Send photo with caption
             await tgApi.sendPhoto(users[i].tgId, photo_url.trim(), {
-              caption: message.trim(),
+              caption: userMessage,
               ...msgOpts,
             });
           } else {
-            // Send text only
-            await tgApi.sendMessage(users[i].tgId, message.trim(), {
+            await tgApi.sendMessage(users[i].tgId, userMessage, {
               disable_web_page_preview: true,
               ...msgOpts,
             });
@@ -1565,14 +1621,14 @@ router.get('/promo-codes', async (req, res) => {
 
 // Create promo code
 router.post('/promo-codes', async (req, res) => {
-  const { code, discount_pct, max_uses, expires_at } = req.body;
+  const { code, discount_pct, max_uses, expires_at, is_partner } = req.body;
   if (!code || !discount_pct) return res.status(400).json({ error: 'code and discount_pct required' });
 
   try {
     const { rows } = await pool.query(
-      `INSERT INTO promo_codes (code, discount_pct, max_uses, expires_at)
-       VALUES ($1, $2, $3, $4) RETURNING *`,
-      [code.trim().toUpperCase(), discount_pct, max_uses || 0, expires_at || null]
+      `INSERT INTO promo_codes (code, discount_pct, max_uses, expires_at, is_partner)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [code.trim().toUpperCase(), discount_pct, max_uses || 0, expires_at || null, is_partner || false]
     );
     res.json(rows[0]);
   } catch (e) {

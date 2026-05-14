@@ -341,6 +341,11 @@ const migrate = async () => {
       CREATE UNIQUE INDEX IF NOT EXISTS idx_promo_uses_unique ON promo_code_uses(promo_id, user_id);
     `);
 
+    // ── Partner flag for promo codes (for broadcast auto-insert) ──
+    await client.query(`
+      ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS is_partner BOOLEAN DEFAULT FALSE;
+    `);
+
     // ── Admin Activity Log ──
     await client.query(`
       CREATE TABLE IF NOT EXISTS admin_activity_log (

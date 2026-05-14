@@ -2632,6 +2632,9 @@ function BroadcastPanel() {
           Сообщение придёт всем незаблокированным юзерам через бота.
           Можно использовать HTML: &lt;b&gt;жирный&lt;/b&gt;, &lt;i&gt;курсив&lt;/i&gt;, &lt;code&gt;код&lt;/code&gt;
         </div>
+        <div style={{ fontSize: 10, color: '#3b82f6', lineHeight: 1.5, marginTop: 6, padding: '6px 8px', borderRadius: 8, background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.15)' }}>
+          💡 Вставь <b>{'{promo}'}</b> в текст — каждый юзер получит уникальный партнёрский промокод
+        </div>
       </div>
 
       {/* Format toggle */}
@@ -3681,6 +3684,7 @@ function PromoCodesPanel() {
   const [maxUses, setMaxUses] = useState(0);
   const [expiresAt, setExpiresAt] = useState('');
   const [creating, setCreating] = useState(false);
+  const [isPartner, setIsPartner] = useState(false);
   const [msg, setMsg] = useState(null);
 
   const load = async () => {
@@ -3694,9 +3698,9 @@ function PromoCodesPanel() {
     if (!code.trim()) return;
     setCreating(true);
     try {
-      await api.post('/admin/promo-codes', { code: code.trim(), discount_pct: discountPct, max_uses: maxUses, expires_at: expiresAt || null });
+      await api.post('/admin/promo-codes', { code: code.trim(), discount_pct: discountPct, max_uses: maxUses, expires_at: expiresAt || null, is_partner: isPartner });
       showMsg('✅ Промокод создан');
-      setCode(''); setDiscountPct(10); setMaxUses(0); setExpiresAt(''); setShowForm(false); load();
+      setCode(''); setDiscountPct(10); setMaxUses(0); setExpiresAt(''); setIsPartner(false); setShowForm(false); load();
     } catch (e) { showMsg(`❌ ${e.response?.data?.error || 'Ошибка'}`); }
     setCreating(false);
   };
@@ -3764,6 +3768,25 @@ function PromoCodesPanel() {
             <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>Срок действия (необязательно)</div>
             <input type="datetime-local" value={expiresAt} onChange={e => setExpiresAt(e.target.value)} style={{ fontSize: 12 }} />
           </div>
+          {/* Partner checkbox */}
+          <label onClick={() => setIsPartner(!isPartner)} style={{
+            display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12,
+            padding: '8px 12px', borderRadius: 10, cursor: 'pointer',
+            background: isPartner ? 'rgba(59,130,246,0.12)' : 'rgba(255,255,255,0.04)',
+            border: isPartner ? '1px solid rgba(59,130,246,0.3)' : '1px solid var(--border)',
+          }}>
+            <div style={{
+              width: 18, height: 18, borderRadius: 4, flexShrink: 0,
+              background: isPartner ? '#3b82f6' : 'transparent',
+              border: isPartner ? 'none' : '2px solid var(--border)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 11, color: '#fff', fontWeight: 800,
+            }}>{isPartner ? '✓' : ''}</div>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: isPartner ? '#3b82f6' : 'var(--text-muted)' }}>🤝 Партнёрский промокод</div>
+              <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>Будет автоматически вставляться в рассылку через {'{promo}'}</div>
+            </div>
+          </label>
           {code && (
             <div style={{ padding: 10, borderRadius: 10, marginBottom: 12, background: 'rgba(52,211,153,0.06)', border: '1px solid rgba(52,211,153,0.15)' }}>
               <div style={{ fontSize: 10, color: 'var(--green)', fontWeight: 700, marginBottom: 4 }}>ПРЕДПРОСМОТР</div>
@@ -3796,6 +3819,10 @@ function PromoCodesPanel() {
                 <div style={{ fontSize: 16, fontWeight: 800, background: 'linear-gradient(135deg, #22c55e, #16a34a)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>-{p.discount_pct}%</div>
               </div>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+                {p.is_partner && (
+                  <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 6, fontWeight: 700,
+                    background: 'rgba(59,130,246,0.15)', color: '#3b82f6' }}>🤝 Партнёр</span>
+                )}
                 <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 6, fontWeight: 700,
                   background: p.is_active && !expired && !exhausted ? 'rgba(52,211,153,0.15)' : 'rgba(248,113,113,0.15)',
                   color: p.is_active && !expired && !exhausted ? 'var(--green)' : 'var(--red)',
