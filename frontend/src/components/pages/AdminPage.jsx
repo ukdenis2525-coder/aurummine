@@ -3389,6 +3389,12 @@ function AmbassadorPosts({ posts, channels, onUpdate, showMsg }) {
   const [publishing, setPublishing] = useState(null);
   const [publishResult, setPublishResult] = useState(null);
   const [previewId, setPreviewId] = useState(null);
+  const [editId, setEditId] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editText, setEditText] = useState('');
+  const [editImageFile, setEditImageFile] = useState(null);
+  const [editImagePreview, setEditImagePreview] = useState(null);
+  const [saving, setSaving] = useState(false);
 
   const apiBase = (import.meta.env.VITE_API_URL || '/api').replace(/\/api$/, '');
 
@@ -3419,6 +3425,36 @@ function AmbassadorPosts({ posts, channels, onUpdate, showMsg }) {
       onUpdate();
     } catch (e) { showMsg('❌ Ошибка создания'); }
     setCreating(false);
+  };
+
+  const handleEditImage = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setEditImageFile(file);
+    const reader = new FileReader();
+    reader.onload = (ev) => setEditImagePreview(ev.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  const startEdit = (p) => {
+    setEditId(p.id); setEditTitle(p.title || ''); setEditText(p.text || '');
+    setEditImageFile(null); setEditImagePreview(p.image_path ? `${apiBase}${p.image_path}` : null);
+    setPreviewId(null);
+  };
+
+  const cancelEdit = () => { setEditId(null); setEditTitle(''); setEditText(''); setEditImageFile(null); setEditImagePreview(null); };
+
+  const saveEdit = async () => {
+    setSaving(true);
+    try {
+      const formData = new FormData();
+      formData.append('title', editTitle);
+      formData.append('text', editText);
+      if (editImageFile) formData.append('image', editImageFile);
+      await api.put(`/ambassador/admin/posts/${editId}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      showMsg('✅ Пост обновлён'); cancelEdit(); onUpdate();
+    } catch (e) { showMsg('❌ Ошибка сохранения'); }
+    setSaving(false);
   };
 
   const deletePost = async (id) => {
@@ -3575,77 +3611,72 @@ function AmbassadorPosts({ posts, channels, onUpdate, showMsg }) {
           <div key={p.id} className="card" style={{
             padding: 14, animation: `fadeIn 0.3s ease ${i * 0.04}s both`,
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, flex: 1 }}>{p.title}</div>
-              <button onClick={() => setPreviewId(previewId === p.id ? null : p.id)} style={{
-                padding: '4px 10px', borderRadius: 8, border: '1px solid rgba(212,175,55,0.2)',
-                background: previewId === p.id ? 'rgba(212,175,55,0.1)' : 'transparent',
-                color: 'var(--gold)', fontSize: 10, fontWeight: 700, cursor: 'pointer',
-              }}>
-                {previewId === p.id ? '✕ Закрыть' : '👁 Просмотр'}
-              </button>
-            </div>
-
-            {/* Expanded preview */}
-            {previewId === p.id && (
-              <div style={{
-                padding: 14, borderRadius: 12, marginBottom: 10,
-                background: 'linear-gradient(135deg, rgba(212,175,55,0.05), rgba(0,0,0,0.2))',
-                border: '1px solid rgba(212,175,55,0.15)',
-                animation: 'fadeIn 0.3s ease',
-              }}>
-                <div style={{ fontSize: 9, color: 'var(--gold)', letterSpacing: 1, fontWeight: 700, marginBottom: 8 }}>
-                  👁 ПРЕДПРОСМОТР (как в Telegram)
+            {editId === p.id ? (
+              <div style={{ animation: 'fadeIn 0.2s ease' }}>
+                <div style={{ fontSize: 11, color: '#3b82f6', fontWeight: 700, marginBottom: 10, letterSpacing: 1 }}>✏️ РЕДАКТИРОВАНИЕ</div>
+                <input type="text" value={editTitle} onChange={e => setEditTitle(e.target.value)}
+                  placeholder="Заголовок" style={{ marginBottom: 8, fontSize: 13 }} />
+                <textarea value={editText} onChange={e => setEditText(e.target.value)}
+                  placeholder="Текст поста..."
+                  style={{ width:'100%', minHeight:80, padding:12, borderRadius:12, background:'var(--bg-card)', border:'1px solid var(--border)', color:'var(--text)', fontSize:13, fontFamily:'inherit', resize:'vertical', outline:'none', boxSizing:'border-box', marginBottom:8 }} />
+                {editImagePreview && (
+                  <div style={{ marginBottom: 8, position: 'relative' }}>
+                    <img src={editImagePreview} alt="" style={{ width:'100%', borderRadius:10, maxHeight:150, objectFit:'cover' }} />
+                    <button onClick={() => { setEditImageFile(null); setEditImagePreview(null); }} style={{
+                      position:'absolute', top:6, right:6, background:'rgba(0,0,0,0.7)', border:'none', borderRadius:'50%', width:24, height:24, color:'#fff', fontSize:12, cursor:'pointer',
+                    }}>✕</button>
+                  </div>
+                )}
+                <label style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 12px', marginBottom:10, borderRadius:10, border:'1px dashed var(--border)', cursor:'pointer', background:'rgba(255,255,255,0.02)' }}>
+                  <span style={{ fontSize:16 }}>📷</span>
+                  <span style={{ fontSize:11, color:'var(--text-muted)' }}>{editImageFile ? editImageFile.name : 'Заменить картинку'}</span>
+                  <input type="file" accept="image/*" onChange={handleEditImage} style={{ display:'none' }} />
+                </label>
+                <div style={{ display:'flex', gap:6 }}>
+                  <button className="btn-gold" onClick={saveEdit} disabled={saving || (!editTitle && !editText)} style={{ flex:1, padding:8, fontSize:12 }}>
+                    {saving ? '⏳ Сохраняю...' : '💾 Сохранить'}
+                  </button>
+                  <button onClick={cancelEdit} style={{ padding:'8px 16px', borderRadius:10, border:'1px solid var(--border)', background:'transparent', color:'var(--text-muted)', fontSize:12, cursor:'pointer' }}>Отмена</button>
                 </div>
-                {p.image_path && (
-                  <img src={`${apiBase}${p.image_path}`} alt="" style={{
-                    width: '100%', borderRadius: 8, maxHeight: 250, objectFit: 'cover', marginBottom: 10,
-                  }} />
-                )}
-                {p.title && <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 6 }}>{p.title}</div>}
-                {p.text && (
-                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}
-                    dangerouslySetInnerHTML={{ __html: p.text }} />
-                )}
               </div>
+            ) : (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, flex: 1 }}>{p.title}</div>
+                  <button onClick={() => setPreviewId(previewId === p.id ? null : p.id)} style={{
+                    padding: '4px 10px', borderRadius: 8, border: '1px solid rgba(212,175,55,0.2)',
+                    background: previewId === p.id ? 'rgba(212,175,55,0.1)' : 'transparent',
+                    color: 'var(--gold)', fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                  }}>
+                    {previewId === p.id ? '✕ Закрыть' : '👁 Просмотр'}
+                  </button>
+                </div>
+                {previewId === p.id && (
+                  <div style={{ padding:14, borderRadius:12, marginBottom:10, background:'linear-gradient(135deg, rgba(212,175,55,0.05), rgba(0,0,0,0.2))', border:'1px solid rgba(212,175,55,0.15)', animation:'fadeIn 0.3s ease' }}>
+                    <div style={{ fontSize:9, color:'var(--gold)', letterSpacing:1, fontWeight:700, marginBottom:8 }}>👁 ПРЕДПРОСМОТР (как в Telegram)</div>
+                    {p.image_path && <img src={`${apiBase}${p.image_path}`} alt="" style={{ width:'100%', borderRadius:8, maxHeight:250, objectFit:'cover', marginBottom:10 }} />}
+                    {p.title && <div style={{ fontSize:15, fontWeight:800, marginBottom:6 }}>{p.title}</div>}
+                    {p.text && <div style={{ fontSize:13, color:'var(--text-secondary)', lineHeight:1.6, whiteSpace:'pre-wrap' }} dangerouslySetInnerHTML={{ __html: p.text }} />}
+                  </div>
+                )}
+                {previewId !== p.id && p.text && (
+                  <div style={{ fontSize:12, color:'var(--text-secondary)', marginBottom:8, lineHeight:1.4, maxHeight:40, overflow:'hidden' }}>{p.text}</div>
+                )}
+                <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:10 }}>
+                  <span style={{ fontSize:9, padding:'2px 6px', borderRadius:6, fontWeight:700, background: p.status==='published' ? 'rgba(52,211,153,0.15)' : 'rgba(251,191,36,0.15)', color: p.status==='published' ? 'var(--green)' : 'var(--orange)' }}>{p.status === 'published' ? '✅ Опубликован' : '📝 Черновик'}</span>
+                  {p.published_at && <span style={{ fontSize:9, color:'var(--text-muted)' }}>{new Date(p.published_at).toLocaleString()}</span>}
+                  {p.image_path && previewId !== p.id && <span style={{ fontSize:9, color:'var(--text-muted)' }}>📷 С картинкой</span>}
+                </div>
+                <div style={{ display:'flex', gap:6 }}>
+                  <button onClick={() => publish(p.id)} disabled={publishing === p.id || approvedCount === 0}
+                    style={{ flex:1, padding:8, borderRadius:8, border:'none', fontWeight:700, fontSize:11, cursor:'pointer', background:'linear-gradient(135deg, var(--gold-dark), var(--gold))', color:'#000', opacity: approvedCount===0 ? 0.4 : 1 }}>
+                    {publishing === p.id ? '⏳ Публикация...' : `📤 Опубликовать (${approvedCount} каналов)`}
+                  </button>
+                  <button onClick={() => startEdit(p)} style={{ padding:'8px 12px', borderRadius:8, border:'1px solid rgba(59,130,246,0.2)', background:'transparent', color:'#3b82f6', fontSize:11, cursor:'pointer', fontWeight:700 }}>✏️</button>
+                  <button onClick={() => deletePost(p.id)} style={{ padding:'8px 12px', borderRadius:8, border:'1px solid rgba(248,113,113,0.2)', background:'transparent', color:'var(--red)', fontSize:11, cursor:'pointer' }}>🗑</button>
+                </div>
+              </>
             )}
-
-            {/* Collapsed text preview */}
-            {previewId !== p.id && p.text && (
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8, lineHeight: 1.4,
-                maxHeight: 40, overflow: 'hidden',
-              }}>{p.text}</div>
-            )}
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-              <span style={{
-                fontSize: 9, padding: '2px 6px', borderRadius: 6, fontWeight: 700,
-                background: p.status === 'published' ? 'rgba(52,211,153,0.15)' : 'rgba(251,191,36,0.15)',
-                color: p.status === 'published' ? 'var(--green)' : 'var(--orange)',
-              }}>{p.status === 'published' ? '✅ Опубликован' : '📝 Черновик'}</span>
-              {p.published_at && (
-                <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>
-                  {new Date(p.published_at).toLocaleString()}
-                </span>
-              )}
-              {p.image_path && previewId !== p.id && (
-                <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>📷 С картинкой</span>
-              )}
-            </div>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <button onClick={() => publish(p.id)} disabled={publishing === p.id || approvedCount === 0}
-                style={{
-                  flex: 1, padding: 8, borderRadius: 8, border: 'none', fontWeight: 700, fontSize: 11, cursor: 'pointer',
-                  background: 'linear-gradient(135deg, var(--gold-dark), var(--gold))', color: '#000',
-                  opacity: approvedCount === 0 ? 0.4 : 1,
-                }}>
-                {publishing === p.id ? '⏳ Публикация...' : `📤 Опубликовать (${approvedCount} каналов)`}
-              </button>
-              <button onClick={() => deletePost(p.id)} style={{
-                padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(248,113,113,0.2)',
-                background: 'transparent', color: 'var(--red)', fontSize: 11, cursor: 'pointer',
-              }}>🗑</button>
-            </div>
           </div>
         ))}
       </div>
