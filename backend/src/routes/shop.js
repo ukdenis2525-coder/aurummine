@@ -36,9 +36,9 @@ router.post('/validate-promo', authMiddleware, async (req, res) => {
   if (promo.max_uses > 0 && promo.used_count >= promo.max_uses) {
     return res.json({ valid: false, error: 'Лимит использований исчерпан' });
   }
-  // Check if user already used this promo
+  // Check if user already used this promo (only actual purchases, not broadcast distributions)
   const { rows: uses } = await pool.query(
-    `SELECT id FROM promo_code_uses WHERE promo_id = $1 AND user_id = $2`,
+    `SELECT id FROM promo_code_uses WHERE promo_id = $1 AND user_id = $2 AND source = 'purchase'`,
     [promo.id, req.user.id]
   );
   if (uses.length) return res.json({ valid: false, error: 'Вы уже использовали этот промокод' });
@@ -75,9 +75,9 @@ router.post('/create-order', authMiddleware, async (req, res) => {
       const isValid = (!promo.expires_at || new Date(promo.expires_at) > new Date())
         && (promo.max_uses === 0 || promo.used_count < promo.max_uses);
       
-      // Check if user already used
+      // Check if user already used (only purchases)
       const { rows: uses } = await pool.query(
-        `SELECT id FROM promo_code_uses WHERE promo_id = $1 AND user_id = $2`,
+        `SELECT id FROM promo_code_uses WHERE promo_id = $1 AND user_id = $2 AND source = 'purchase'`,
         [promo.id, user.id]
       );
 

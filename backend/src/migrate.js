@@ -336,9 +336,21 @@ const migrate = async () => {
         id SERIAL PRIMARY KEY,
         promo_id INTEGER REFERENCES promo_codes(id) ON DELETE CASCADE,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        source VARCHAR(20) DEFAULT 'purchase',
         used_at TIMESTAMP DEFAULT NOW()
       );
       CREATE UNIQUE INDEX IF NOT EXISTS idx_promo_uses_unique ON promo_code_uses(promo_id, user_id);
+    `);
+
+    // Add source column if not exists
+    await client.query(`
+      ALTER TABLE promo_code_uses ADD COLUMN IF NOT EXISTS source VARCHAR(20) DEFAULT 'purchase';
+    `);
+
+    // Drop old unique index and create new one that allows same promo for same user with different sources
+    await client.query(`
+      DROP INDEX IF EXISTS idx_promo_uses_unique;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_promo_uses_unique_src ON promo_code_uses(promo_id, user_id, source);
     `);
 
     // ── Partner flag for promo codes (for broadcast auto-insert) ──

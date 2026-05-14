@@ -1133,7 +1133,7 @@ router.post('/broadcast', async (req, res) => {
               // Record usage
               try {
                 await pool.query(
-                  `INSERT INTO promo_code_uses (promo_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+                  `INSERT INTO promo_code_uses (promo_id, user_id, source) VALUES ($1, $2, 'broadcast') ON CONFLICT DO NOTHING`,
                   [assignedPromo.id, users[i].id]
                 );
                 await pool.query(

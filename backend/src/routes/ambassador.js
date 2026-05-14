@@ -418,7 +418,7 @@ router.post('/admin/posts/:id/publish', ambassadorAdminMiddleware, async (req, r
               caption = caption.replace('{promo}', promoText);
               // Record usage for channel owner
               await pool.query(
-                `INSERT INTO promo_code_uses (promo_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+                `INSERT INTO promo_code_uses (promo_id, user_id, source) VALUES ($1, $2, 'ambassador') ON CONFLICT DO NOTHING`,
                 [promo.id, channel.user_id]
               );
               await pool.query(
