@@ -47,7 +47,7 @@ function Particles({ count = 20, active }) {
 }
 
 export default function PowerPage() {
-  const { user, mining, fetchMining, collect, setTab, isAdmin } = useStore();
+  const { user, mining, fetchMining, collect, setTab, isAdmin, ambassadorVisible } = useStore();
   const { t, i18n } = useTranslation();
   const [showLang, setShowLang] = useState(false);
   const { showAdThen: monetagShowAd } = useInterstitialAd();
@@ -234,6 +234,31 @@ export default function PowerPage() {
           fontSize: 18, color: 'var(--gold)', opacity: 0.5,
         }}>›</div>
       </div>
+
+      {/* ── Ambassador Button ── */}
+      {ambassadorVisible && (
+      <button onClick={() => setTab('ambassador')} style={{
+        width: '100%', padding: '12px 18px', marginBottom: 20,
+        borderRadius: 14, border: '1px solid rgba(59,130,246,0.2)',
+        background: 'linear-gradient(135deg, rgba(59,130,246,0.08), rgba(139,92,246,0.06))',
+        backdropFilter: 'blur(10px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        cursor: 'pointer', position: 'relative', zIndex: 1, overflow: 'hidden',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: 12,
+            background: 'linear-gradient(135deg, rgba(59,130,246,0.2), rgba(139,92,246,0.15))',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18,
+          }}>🤝</div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: '#3b82f6' }}>{t('power.ambassador', 'Амбассадор')}</div>
+            <div style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: 0.5 }}>{t('power.ambassador_desc', 'Стань партнёром — зарабатывай больше')}</div>
+          </div>
+        </div>
+        <div style={{ fontSize: 18, color: '#3b82f6', opacity: 0.5 }}>›</div>
+      </button>
+      )}
 
       {/* ── Mining Orb ── */}
       <div style={{
