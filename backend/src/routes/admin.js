@@ -1056,7 +1056,7 @@ router.get('/ref-stats', async (req, res) => {
 let broadcastState = { status: 'idle', total: 0, sent: 0, failed: 0, blocked_auto: 0, errors: [], startedAt: null };
 
 router.post('/broadcast', async (req, res) => {
-  const { message, parse_mode } = req.body;
+  const { message, parse_mode, photo_url } = req.body;
   if (!message || !message.trim()) return res.status(400).json({ error: 'Message required' });
   if (!tgApi) return res.status(500).json({ error: 'BOT_TOKEN not configured' });
   if (broadcastState.status === 'sending') {
@@ -1078,17 +1078,31 @@ router.post('/broadcast', async (req, res) => {
     broadcastState = { status: 'sending', total: users.length, sent: 0, failed: 0, blocked_auto: 0, blocked_skipped: blockedSkipped, errors: [], startedAt: Date.now() };
     res.json({ success: true, status: 'started', total: users.length, blocked_skipped: blockedSkipped });
 
-    // Build sendMessage options
-    const msgOpts = { disable_web_page_preview: true };
+    // Build message options
+    const msgOpts = {};
     if (parse_mode && parse_mode.trim()) {
       msgOpts.parse_mode = parse_mode.trim();
     }
+
+    const hasPhoto = photo_url && photo_url.trim();
 
     // Send in background (fire-and-forget)
     (async () => {
       for (let i = 0; i < users.length; i++) {
         try {
-          await tgApi.sendMessage(users[i].tgId, message.trim(), msgOpts);
+          if (hasPhoto) {
+            // Send photo with caption
+            await tgApi.sendPhoto(users[i].tgId, photo_url.trim(), {
+              caption: message.trim(),
+              ...msgOpts,
+            });
+          } else {
+            // Send text only
+            await tgApi.sendMessage(users[i].tgId, message.trim(), {
+              disable_web_page_preview: true,
+              ...msgOpts,
+            });
+          }
           broadcastState.sent++;
         } catch (e) {
           broadcastState.failed++;

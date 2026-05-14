@@ -2562,6 +2562,7 @@ function BroadcastPanel() {
   const [confirm, setConfirm] = useState(false);
   const [isRtl, setIsRtl] = useState(false);
   const [progress, setProgress] = useState(null); // { status, total, sent, failed }
+  const [photoUrl, setPhotoUrl] = useState('');
   const pollRef = useRef(null);
 
   // Poll broadcast status every 2s while sending
@@ -2593,6 +2594,7 @@ function BroadcastPanel() {
       const finalMsg = isRtl ? '\u200F' + message : message;
       const opts = { message: finalMsg };
       if (parseMode) opts.parse_mode = parseMode;
+      if (photoUrl.trim()) opts.photo_url = photoUrl.trim();
       const { data } = await api.post('/admin/broadcast', opts);
       if (data.status === 'started') {
         setProgress({ status: 'sending', total: data.total, sent: 0, failed: 0 });
@@ -2681,6 +2683,32 @@ function BroadcastPanel() {
       />
       <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, marginBottom: 12, textAlign: 'right' }}>
         {message.length} символов
+      </div>
+
+      {/* Photo URL */}
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6 }}>🖼️ Картинка (необязательно)</div>
+        <input
+          type="text"
+          value={photoUrl}
+          onChange={e => setPhotoUrl(e.target.value)}
+          placeholder="https://example.com/image.jpg"
+          style={{
+            width: '100%', padding: '10px 12px', borderRadius: 10,
+            background: 'var(--bg-card)', border: '1px solid var(--border)',
+            color: 'var(--text)', fontSize: 12, fontFamily: 'monospace',
+            outline: 'none', boxSizing: 'border-box',
+          }}
+        />
+        <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 4 }}>
+          Вставьте прямую ссылку на картинку (URL). Текст станет подписью под фото.
+        </div>
+        {photoUrl.trim() && (
+          <div style={{ marginTop: 8, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border)', maxHeight: 150 }}>
+            <img src={photoUrl} alt="preview" onError={e => e.target.style.display='none'}
+              style={{ width: '100%', maxHeight: 150, objectFit: 'cover', display: 'block' }} />
+          </div>
+        )}
       </div>
 
       {/* Send button */}
