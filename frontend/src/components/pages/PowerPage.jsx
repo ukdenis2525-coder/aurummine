@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { useStore } from '../../store/index.js';
 import { fmt, fmtK } from '../../utils/format.js';
 import { useTranslation } from 'react-i18next';
+import { useInterstitialAd } from '../../hooks/useInterstitialAd.js';
 import api from '../../utils/api.js';
 
 const LANGS = [
@@ -49,6 +50,7 @@ export default function PowerPage() {
   const { user, mining, fetchMining, collect, setTab, isAdmin } = useStore();
   const { t, i18n } = useTranslation();
   const [showLang, setShowLang] = useState(false);
+  const { showAdThen: monetagShowAd } = useInterstitialAd();
 
   // Adsgram interstitial
   const adsgramIntRef = useRef(null);
@@ -124,7 +126,7 @@ export default function PowerPage() {
 
   const handleCollectAndWithdraw = () => {
     if (collecting) return;
-    showAdThen(doExchange);
+    monetagShowAd(doExchange);
   };
 
   const power = parseFloat(user?.power || 0);
