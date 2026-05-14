@@ -275,6 +275,23 @@ const completePurchase = async (client, purchase, txHash) => {
     await client.query('COMMIT');
     console.log(`✅ Purchase completed: user=${purchase.user_id} memo=${purchase.memo} power=+${purchase.power_amount}`);
 
+    // Record promo usage now that payment is confirmed
+    if (purchase.promo_id) {
+      try {
+        await pool.query(
+          `INSERT INTO promo_code_uses (promo_id, user_id, source) VALUES ($1, $2, 'purchase') ON CONFLICT DO NOTHING`,
+          [purchase.promo_id, purchase.user_id]
+        );
+        await pool.query(
+          `UPDATE promo_codes SET used_count = used_count + 1 WHERE id = $1`,
+          [purchase.promo_id]
+        );
+        console.log(`🎟️ Promo ${purchase.promo_id} recorded for user ${purchase.user_id}`);
+      } catch (pe) {
+        console.error('Promo usage record error:', pe.message);
+      }
+    }
+
     // Notify admins about the purchase
     try {
       const { rows: uRows } = await pool.query(

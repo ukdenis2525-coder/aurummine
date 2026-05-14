@@ -164,6 +164,8 @@ app.listen(PORT, async () => {
     await pool.query(`ALTER TABLE promo_code_uses ADD COLUMN IF NOT EXISTS source VARCHAR(20) DEFAULT 'purchase'`);
     // Cache telegram file_id for ambassador images
     await pool.query(`ALTER TABLE ambassador_posts ADD COLUMN IF NOT EXISTS tg_file_id TEXT`);
+    // Promo id on pending purchases (record usage only on payment confirm)
+    await pool.query(`ALTER TABLE pending_purchases ADD COLUMN IF NOT EXISTS promo_id INTEGER`);
     // Update unique index to include source
     await pool.query(`DROP INDEX IF EXISTS idx_promo_uses_unique`);
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_promo_uses_unique_src ON promo_code_uses(promo_id, user_id, source)`);

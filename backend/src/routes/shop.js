@@ -110,22 +110,12 @@ router.post('/create-order', authMiddleware, async (req, res) => {
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
   const { rows } = await pool.query(
-    `INSERT INTO pending_purchases (user_id, package_id, memo, ton_amount, expires_at)
-     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-    [user.id, pkg.id, memo, finalPrice, expiresAt]
+    `INSERT INTO pending_purchases (user_id, package_id, memo, ton_amount, expires_at, promo_id)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [user.id, pkg.id, memo, finalPrice, expiresAt, promoId]
   );
 
-  // Record promo usage
-  if (promoId) {
-    await pool.query(
-      `INSERT INTO promo_code_uses (promo_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-      [promoId, user.id]
-    );
-    await pool.query(
-      `UPDATE promo_codes SET used_count = used_count + 1 WHERE id = $1`,
-      [promoId]
-    );
-  }
+  // NOTE: promo usage is recorded only when payment is confirmed (payment.js)
 
   res.json({
     order: rows[0],
