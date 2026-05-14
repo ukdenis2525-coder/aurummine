@@ -171,23 +171,18 @@ export default function AmbassadorPage() {
                       </div>
                     </div>
                   </div>
-                  {/* Promo code */}
+                  {/* Hint — promo is in the channel */}
                   {amb.promo_code && (
                     <div style={{
                       marginTop: 10, padding: '8px 12px', borderRadius: 10,
-                      background: 'linear-gradient(135deg, rgba(52,211,153,0.08), rgba(52,211,153,0.02))',
-                      border: '1px solid rgba(52,211,153,0.15)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      background: 'rgba(212,175,55,0.06)',
+                      border: '1px dashed rgba(212,175,55,0.2)',
+                      display: 'flex', alignItems: 'center', gap: 8,
                     }}>
-                      <div>
-                        <div style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: 1 }}>ПРОМОКОД</div>
-                        <div style={{ fontSize: 16, fontWeight: 900, color: 'var(--green)', letterSpacing: 2 }}>{amb.promo_code}</div>
+                      <span style={{ fontSize: 16 }}>🎟</span>
+                      <div style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 600 }}>
+                        Промокод на скидку <span style={{ fontWeight: 900 }}>-{amb.discount_pct}%</span> в канале 👇
                       </div>
-                      <div style={{
-                        fontSize: 16, fontWeight: 900,
-                        background: 'linear-gradient(135deg, #22c55e, #16a34a)',
-                        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                      }}>-{amb.discount_pct}%</div>
                     </div>
                   )}
                   {/* Link to channel */}
