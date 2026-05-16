@@ -306,16 +306,12 @@ export default function PowerPage() {
         padding: '10px 0',
         isolation: 'isolate',
       }}>
-        {/* Multi-layer background glow */}
+        {/* Background glow — no filter:blur, use box-shadow instead */}
         <div className="anim-glow" style={{
-          position: 'absolute', width: 280, height: 280, borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(212,175,55,0.12) 0%, rgba(212,175,55,0.04) 40%, transparent 70%)',
-          filter: 'blur(40px)', top: -40,
-        }} />
-        <div style={{
-          position: 'absolute', width: 200, height: 200, borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(212,175,55,0.18) 0%, transparent 60%)',
-          filter: 'blur(25px)', top: 0,
+          position: 'absolute', width: 220, height: 220, borderRadius: '50%',
+          background: 'rgba(212,175,55,0.06)',
+          boxShadow: '0 0 60px 30px rgba(212,175,55,0.08)',
+          top: -10, left: '50%', transform: 'translateX(-50%)',
         }} />
 
         {/* Rotating ring — outer */}
@@ -397,9 +393,8 @@ export default function PowerPage() {
             </div>
             <div style={{
               fontSize: 42, fontWeight: 900, lineHeight: 1,
-              background: 'linear-gradient(180deg, var(--gold-light) 0%, var(--gold) 100%)',
-              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-              filter: 'drop-shadow(0 2px 10px rgba(212,175,55,0.35))',
+              color: 'var(--gold)',
+              textShadow: '0 2px 10px rgba(212,175,55,0.35)',
             }}>
               {fmtK(Math.floor(power))}
             </div>
