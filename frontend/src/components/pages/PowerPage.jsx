@@ -347,28 +347,39 @@ export default function PowerPage() {
           }} />
         )}
 
-        {/* Outer conic gradient ring */}
+        {/* Outer SVG ring (replaces conic-gradient — Android WebView safe) */}
         <div className={orbPulse ? 'anim-orb-collect' : (power > 0 ? 'anim-float' : '')} style={{
           width: 185, height: 185, borderRadius: '50%',
-          background: `conic-gradient(var(--gold) ${powerPct}%, rgba(255,255,255,0.03) 0)`,
-          padding: 5, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: power > 0
-            ? '0 0 40px rgba(212,175,55,0.15), 0 0 80px rgba(212,175,55,0.05), inset 0 0 30px rgba(212,175,55,0.05)'
-            : 'none',
           position: 'relative',
+          boxShadow: power > 0
+            ? '0 0 40px rgba(212,175,55,0.15), 0 0 80px rgba(212,175,55,0.05)'
+            : 'none',
           transition: 'box-shadow 0.5s ease',
           willChange: 'transform',
           transform: 'translateZ(0)',
         }}>
+          {/* SVG progress ring */}
+          <svg width="185" height="185" style={{ position: 'absolute', top: 0, left: 0, transform: 'rotate(-90deg)' }}>
+            {/* Background track */}
+            <circle cx="92.5" cy="92.5" r="88" fill="none"
+              stroke="rgba(255,255,255,0.03)" strokeWidth="5" />
+            {/* Progress arc */}
+            <circle cx="92.5" cy="92.5" r="88" fill="none"
+              stroke="var(--gold)" strokeWidth="5"
+              strokeDasharray={`${(powerPct / 100) * 2 * Math.PI * 88} ${2 * Math.PI * 88}`}
+              strokeLinecap="round"
+              style={{ transition: 'stroke-dasharray 0.5s ease' }} />
+          </svg>
+
           {/* Particles */}
           <Particles count={18} active={power > 0} />
 
           {/* Inner circle */}
           <div style={{
-            width: '100%', height: '100%', borderRadius: '50%',
+            position: 'absolute', inset: 5, borderRadius: '50%',
             background: 'linear-gradient(145deg, #0a0a12, #12121c)',
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            position: 'relative', zIndex: 1,
+            zIndex: 1,
           }}>
             {/* Inner subtle ring */}
             <div style={{
@@ -388,7 +399,6 @@ export default function PowerPage() {
               fontSize: 42, fontWeight: 900, lineHeight: 1,
               background: 'linear-gradient(180deg, var(--gold-light) 0%, var(--gold) 100%)',
               WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-              animation: 'countUp 0.5s ease',
               filter: 'drop-shadow(0 2px 10px rgba(212,175,55,0.35))',
             }}>
               {fmtK(Math.floor(power))}
