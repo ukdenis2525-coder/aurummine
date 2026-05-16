@@ -28,7 +28,7 @@ export default function AdminPage() {
   const { setTab: setAppTab, adminPerms } = useStore();
   const [pin, setPin] = useState('');
   const [isVerified, setIsVerified] = useState(!!sessionStorage.getItem('admin_pin'));
-  const [error, setError] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   // Filter tabs by permissions
   const visibleTabs = adminPerms === '*'
@@ -49,20 +49,19 @@ export default function AdminPage() {
     if (pin.length >= 4) return;
     const newPin = pin + num;
     setPin(newPin);
-    setError(false);
+    setErrorMsg('');
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
 
     if (newPin.length === 4) {
-      // Small delay for visual feedback before verification
       setTimeout(async () => {
         try {
-          // Verify PIN by calling a simple admin endpoint
           sessionStorage.setItem('admin_pin', newPin);
           await api.get('/admin/stats');
           setIsVerified(true);
           window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
         } catch (e) {
-          setError(true);
+          const msg = e.response?.data?.message || e.response?.data?.error || 'Ошибка доступа';
+          setErrorMsg(msg === 'Forbidden' ? 'Ваш ID не в списке админов' : msg);
           setPin('');
           sessionStorage.removeItem('admin_pin');
           window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('error');
@@ -73,7 +72,7 @@ export default function AdminPage() {
 
   const handleBackspace = () => {
     setPin(pin.slice(0, -1));
-    setError(false);
+    setErrorMsg('');
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
   };
 
@@ -86,8 +85,8 @@ export default function AdminPage() {
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: 40, marginBottom: 10 }}>🛡️</div>
           <div style={{ fontSize: 20, fontWeight: 800, color: '#fff' }}>Admin Access</div>
-          <div style={{ fontSize: 13, color: error ? 'var(--red)' : 'var(--text-muted)', marginTop: 4 }}>
-            {error ? 'Неверный ПИН-код' : 'Введите 4-значный ПИН'}
+          <div style={{ fontSize: 13, color: errorMsg ? 'var(--red)' : 'var(--text-muted)', marginTop: 4, minHeight: 18 }}>
+            {errorMsg || 'Введите 4-значный ПИН'}
           </div>
         </div>
 
