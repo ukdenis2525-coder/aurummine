@@ -75,6 +75,41 @@ const logAdminAction = async (req, action, details) => {
   } catch (e) {}
 };
 
+// Check if current user is admin + return their permissions
+// This endpoint is BEFORE adminMiddleware so DB-based admins can be discovered
+router.get('/check-admin', async (req, res) => {
+  const initData = req.headers['x-init-data'];
+  if (!initData) return res.status(403).json({ error: 'Forbidden' });
+
+  const tgUser = validateTelegramInitData(initData, process.env.BOT_TOKEN);
+  if (!tgUser) return res.status(403).json({ error: 'Forbidden' });
+
+  const tgId = String(tgUser.id);
+  const envIds = (process.env.ADMIN_TG_IDS || process.env.ADMIN_TG_ID || '')
+    .split(',').map(s => s.trim()).filter(Boolean);
+
+  // Super admin (env-based)
+  if (envIds.includes(tgId)) {
+    return res.json({ isAdmin: true, permissions: '*' });
+  }
+
+  // DB admin
+  const adminIds = await getAllAdminIds();
+  if (adminIds.includes(tgId)) {
+    try {
+      const { rows } = await pool.query(`SELECT permissions FROM admins WHERE tg_id = $1`, [tgId]);
+      if (rows.length) {
+        let perms = [];
+        try { perms = JSON.parse(rows[0].permissions || '[]'); } catch (e) {}
+        return res.json({ isAdmin: true, permissions: perms });
+      }
+    } catch (e) {}
+    return res.json({ isAdmin: true, permissions: [] });
+  }
+
+  return res.status(403).json({ error: 'Forbidden' });
+});
+
 router.use(adminMiddleware);
 
 // ── Admin Activity Logging ──
@@ -1528,34 +1563,6 @@ router.put('/admins/:tg_id/permissions', async (req, res) => {
   }
 });
 
-// Check if current user is admin + return their permissions
-router.get('/check-admin', async (req, res) => {
-  // If we got here, middleware already passed — user IS admin
-  // Get the user's tg_id to return their permissions
-  const envIds = (process.env.ADMIN_TG_IDS || process.env.ADMIN_TG_ID || '')
-    .split(',').map(s => s.trim()).filter(Boolean);
-
-  const tgId = req.adminTgId || null;
-
-  // Super admins have all permissions
-  if (tgId && envIds.includes(tgId)) {
-    return res.json({ isAdmin: true, permissions: '*' });
-  }
-
-  // DB admin — get their permissions
-  if (tgId) {
-    try {
-      const { rows } = await pool.query(`SELECT permissions FROM admins WHERE tg_id = $1`, [tgId]);
-      if (rows.length) {
-        let perms = [];
-        try { perms = JSON.parse(rows[0].permissions || '[]'); } catch (e) {}
-        return res.json({ isAdmin: true, permissions: perms });
-      }
-    } catch (e) {}
-  }
-
-  res.json({ isAdmin: true, permissions: [] });
-});
 
 // ══════════════════════════════════════════════════
 // PROMO CODES MANAGEMENT
