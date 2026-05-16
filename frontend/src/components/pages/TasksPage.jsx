@@ -146,10 +146,11 @@ export default function TasksPage() {
   // Open task link (step 1)
   const openTask = (task) => {
     if (task.link) {
-      if (task.type === 'start_bot') {
-        window.Telegram?.WebApp?.openTelegramLink(task.link);
-      } else if (task.type === 'subscribe_channel') {
-        window.Telegram?.WebApp?.openTelegramLink(task.link);
+      const isTelegramLink = task.link.includes('t.me/') || task.link.includes('telegram.me/');
+      if (isTelegramLink) {
+        // Ensure https:// prefix for openTelegramLink
+        const url = task.link.startsWith('http') ? task.link : `https://${task.link}`;
+        window.Telegram?.WebApp?.openTelegramLink(url);
       } else {
         window.Telegram?.WebApp?.openLink(task.link);
       }
