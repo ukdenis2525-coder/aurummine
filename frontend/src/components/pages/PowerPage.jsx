@@ -81,18 +81,18 @@ const LiveHashCounter = React.memo(function LiveHashCounter({ mining, tonPerHash
   );
 });
 
-// Isolated hash value for collect button logic
-function useHashValue(mining) {
-  const [val, setVal] = useState(0);
+// Track hash value via ref (no re-renders) for button logic
+function useHashRef(mining) {
+  const ref = useRef(0);
   useEffect(() => {
     if (!mining) return;
-    setVal(parseFloat(mining.hashes || 0));
+    ref.current = parseFloat(mining.hashes || 0);
     const hps = (mining.hashes_per_day || 0) / 86400;
     if (hps <= 0) return;
-    const iv = setInterval(() => setVal(prev => prev + hps), 1000);
+    const iv = setInterval(() => { ref.current += hps; }, 1000);
     return () => clearInterval(iv);
   }, [mining]);
-  return val;
+  return ref;
 }
 
 export default function PowerPage() {
@@ -145,13 +145,13 @@ export default function PowerPage() {
   const [collecting, setCollecting] = useState(false);
   const [collected, setCollected] = useState(null);
   const [orbPulse, setOrbPulse] = useState(false);
-  const liveHashes = useHashValue(mining);
+  const hashRef = useHashRef(mining);
 
   useEffect(() => { fetchMining(); }, []);
 
   const doExchange = async () => {
     if (collecting) return;
-    if (liveHashes <= 0) { setTab('withdraw'); return; }
+    if (hashRef.current <= 0) { setTab('withdraw'); return; }
     setCollecting(true);
     setOrbPulse(true);
     try {
@@ -521,14 +521,14 @@ export default function PowerPage() {
         <button
           className="btn-gold"
           onClick={handleCollectAndWithdraw}
-          disabled={collecting || (liveHashes <= 0 && tonBalance <= 0)}
+          disabled={collecting || (parseFloat(mining?.hashes || 0) <= 0 && tonBalance <= 0)}
           style={{
-            boxShadow: liveHashes > 0 ? '0 4px 24px rgba(212,175,55,0.25)' : 'none',
+            boxShadow: parseFloat(mining?.hashes || 0) > 0 ? '0 4px 24px rgba(212,175,55,0.25)' : 'none',
             position: 'relative', overflow: 'hidden', borderRadius: 14,
           }}
         >
           {/* Button shimmer */}
-          {liveHashes > 0 && (
+          {power > 0 && (
             <span style={{
               position: 'absolute', inset: 0,
               background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent)',
