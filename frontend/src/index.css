@@ -203,14 +203,16 @@ input::placeholder { color: var(--text-muted); }
   background: rgba(212,175,55,0.08);
 }
 
-/* ── Mining Orb Animation Classes ── */
-.anim-float { animation: float 6s ease-in-out infinite; }
-.anim-glow { animation: glow 4s ease-in-out infinite; }
-.anim-spin-slow { animation: spin 25s linear infinite; }
-.anim-spin-reverse { animation: spin 35s linear infinite reverse; }
+/* ── Safe Animation Classes (opacity/box-shadow only, NO transform) ── */
+@keyframes glowSafe {
+  0%, 100% { box-shadow: 0 0 40px 15px rgba(212,175,55,0.06); }
+  50% { box-shadow: 0 0 60px 25px rgba(212,175,55,0.1); }
+}
+@keyframes blinkSafe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+.anim-glow-safe { animation: glowSafe 4s ease-in-out infinite; }
+.anim-blink-safe { animation: blinkSafe 2s infinite; }
 .anim-shimmer { animation: shimmer 3s ease-in-out infinite; }
 .anim-shimmer-fast { animation: shimmer 2s ease-in-out infinite; }
-.anim-blink { animation: blink 2s infinite; }
-.anim-orb-collect { animation: orbCollect 0.6s ease; }
-.anim-particle { animation-name: particleRise; animation-timing-function: ease-in-out; animation-iteration-count: infinite; }
-

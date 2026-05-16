@@ -299,19 +299,27 @@ export default function PowerPage() {
       </button>
       )}
 
-      {/* ── Mining Orb (fully static — no animations) ── */}
+      {/* ── Mining Orb ── */}
       <div style={{
         display: 'flex', flexDirection: 'column', alignItems: 'center',
         marginBottom: 24, position: 'relative', zIndex: 1,
         padding: '10px 0',
       }}>
-        {/* Static glow */}
-        <div style={{
+        {/* Glow with gentle pulse (box-shadow only, no transform) */}
+        <div className="anim-glow-safe" style={{
           position: 'absolute', width: 220, height: 220, borderRadius: '50%',
           background: 'rgba(212,175,55,0.04)',
-          boxShadow: '0 0 60px 20px rgba(212,175,55,0.06)',
           top: -10, left: '50%', marginLeft: -110,
         }} />
+
+        {/* Static decorative ring */}
+        {power > 0 && (
+          <div style={{
+            position: 'absolute', width: 210, height: 210, borderRadius: '50%',
+            border: '1px solid rgba(212,175,55,0.06)',
+            top: -5, left: '50%', marginLeft: -105,
+          }} />
+        )}
 
         {/* SVG progress ring */}
         <div style={{
@@ -359,7 +367,7 @@ export default function PowerPage() {
                 background: 'rgba(52,211,153,0.08)',
                 border: '1px solid rgba(52,211,153,0.1)',
               }}>
-                <span style={{
+                <span className="anim-blink-safe" style={{
                   width: 5, height: 5, borderRadius: '50%',
                   background: 'var(--green)',
                 }} />
