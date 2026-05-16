@@ -176,11 +176,23 @@ router.get('/stats', async (req, res) => {
 
   const blockedCount = parseInt(users.rows[0].total) - parseInt(activeUsers.rows[0].total);
 
+  const totalPowerVal = parseFloat(power.rows[0].total);
+  const totalDailyForecast = (totalPowerVal / 100000) * 0.036;
+
+  if (buyers) {
+    buyers.buyers_daily_forecast = (buyers.buyers_power / 100000) * 0.036;
+    buyers.buyers_monthly_forecast = buyers.buyers_daily_forecast * 30;
+    buyers.free_daily_forecast = (buyers.free_power / 100000) * 0.036;
+    buyers.free_monthly_forecast = buyers.free_daily_forecast * 30;
+  }
+
   const stats = {
     total_users: parseInt(users.rows[0].total),
     active_users: parseInt(activeUsers.rows[0].total),
     blocked_users: blockedCount,
-    total_power: parseFloat(power.rows[0].total),
+    total_power: totalPowerVal,
+    total_daily_forecast: totalDailyForecast,
+    total_monthly_forecast: totalDailyForecast * 30,
     total_ton_balance: parseFloat(ton.rows[0].total),
     pending_withdrawals: parseInt(pending.rows[0].total),
     total_purchases: parseInt(completed.rows[0].total),

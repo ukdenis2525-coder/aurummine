@@ -258,6 +258,8 @@ function Dashboard() {
     { icon: '💵', label: 'Выручка', val: `${fmt(stats.total_revenue, 2)} TON`, color: 'var(--gold)', field: 'revenue' },
     { icon: '👥', label: 'Рефералы', val: stats.total_referrals || '▸', color: '#a855f7', field: 'referrals' },
     { icon: '🎥', label: 'Ads просмотры', val: stats.total_ads_watched || '▸', color: '#f59e0b', field: 'ads_watched' },
+    { icon: '⛏️', label: 'Прогноз (сутки)', val: `${fmt(stats.total_daily_forecast, 2)} TON`, color: 'var(--gold-light)' },
+    { icon: '📅', label: 'Прогноз (месяц)', val: `${fmt(stats.total_monthly_forecast, 1)} TON`, color: 'var(--gold)' },
     { icon: '⏳', label: 'Выводы (ожид)', val: stats.pending_withdrawals, color: stats.pending_withdrawals > 0 ? 'var(--red)' : 'var(--text-muted)' },
   ];
 
@@ -326,6 +328,17 @@ function Dashboard() {
                   <span style={{ color: 'var(--text-muted)' }}>💵 Потратили: </span>
                   <span style={{ color: 'var(--green)', fontWeight: 700 }}>{fmt(stats.buyers.buyers_spent, 4)} TON</span>
                 </div>
+                <div style={{ fontSize: 10, marginTop: 4, paddingTop: 4, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div style={{ color: 'var(--gold-light)', fontSize: 9 }}>Прогноз майнинга:</div>
+                  <div>
+                    <span style={{ color: 'var(--gold-light)', fontWeight: 700 }}>{fmt(stats.buyers.buyers_daily_forecast, 3)}</span>
+                    <span style={{ fontSize: 8, opacity: 0.6 }}> /сутки</span>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{fmt(stats.buyers.buyers_monthly_forecast, 2)}</span>
+                    <span style={{ fontSize: 8, opacity: 0.6 }}> /мес</span>
+                  </div>
+                </div>
               </div>
             </div>
             {/* Free */}
@@ -345,6 +358,17 @@ function Dashboard() {
                 <div style={{ fontSize: 10 }}>
                   <span style={{ color: 'var(--text-muted)' }}>💵 Потратили: </span>
                   <span style={{ fontWeight: 700 }}>0 TON</span>
+                </div>
+                <div style={{ fontSize: 10, marginTop: 4, paddingTop: 4, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div style={{ color: 'var(--text-muted)', fontSize: 9 }}>Прогноз майнинга:</div>
+                  <div>
+                    <span style={{ color: 'var(--text-muted)', fontWeight: 700 }}>{fmt(stats.buyers.free_daily_forecast, 3)}</span>
+                    <span style={{ fontSize: 8, opacity: 0.6 }}> /сутки</span>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--text-muted)', fontWeight: 700 }}>{fmt(stats.buyers.free_monthly_forecast, 2)}</span>
+                    <span style={{ fontSize: 8, opacity: 0.6 }}> /мес</span>
+                  </div>
                 </div>
               </div>
             </div>
