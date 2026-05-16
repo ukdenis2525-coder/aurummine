@@ -46,6 +46,55 @@ function Particles({ count = 20, active }) {
   );
 }
 
+// Isolated hash counter — updates every second WITHOUT re-rendering parent
+const LiveHashCounter = React.memo(function LiveHashCounter({ mining, tonPerHash }) {
+  const [liveHashes, setLiveHashes] = useState(0);
+
+  useEffect(() => {
+    if (!mining) return;
+    setLiveHashes(parseFloat(mining.hashes || 0));
+    const hps = (mining.hashes_per_day || 0) / 86400;
+    if (hps <= 0) return;
+    const interval = setInterval(() => setLiveHashes(prev => prev + hps), 1000);
+    return () => clearInterval(interval);
+  }, [mining]);
+
+  return (
+    <>
+      <div style={{
+        fontSize: 32, fontWeight: 900,
+        background: 'linear-gradient(135deg, var(--gold-light), var(--gold))',
+        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+        fontFamily: "'Inter', monospace", letterSpacing: -0.5, marginBottom: 4,
+        position: 'relative',
+      }}>
+        {liveHashes.toFixed(8)}
+        <span style={{
+          fontSize: 12, fontWeight: 500, marginLeft: 6,
+          WebkitTextFillColor: 'var(--text-muted)',
+        }}>hashes</span>
+      </div>
+      <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 18 }}>
+        ≈ {(liveHashes * (tonPerHash || 0)).toFixed(8)} TON
+      </div>
+    </>
+  );
+});
+
+// Isolated hash value for collect button logic
+function useHashValue(mining) {
+  const [val, setVal] = useState(0);
+  useEffect(() => {
+    if (!mining) return;
+    setVal(parseFloat(mining.hashes || 0));
+    const hps = (mining.hashes_per_day || 0) / 86400;
+    if (hps <= 0) return;
+    const iv = setInterval(() => setVal(prev => prev + hps), 1000);
+    return () => clearInterval(iv);
+  }, [mining]);
+  return val;
+}
+
 export default function PowerPage() {
   const { user, mining, fetchMining, collect, setTab, isAdmin, ambassadorVisible } = useStore();
   const { t, i18n } = useTranslation();
@@ -95,18 +144,10 @@ export default function PowerPage() {
   };
   const [collecting, setCollecting] = useState(false);
   const [collected, setCollected] = useState(null);
-  const [liveHashes, setLiveHashes] = useState(0);
   const [orbPulse, setOrbPulse] = useState(false);
+  const liveHashes = useHashValue(mining);
 
   useEffect(() => { fetchMining(); }, []);
-
-  useEffect(() => {
-    if (!mining) return;
-    setLiveHashes(parseFloat(mining.hashes || 0));
-    const hps = (mining.hashes_per_day || 0) / 86400;
-    const interval = setInterval(() => setLiveHashes(prev => prev + hps), 1000);
-    return () => clearInterval(interval);
-  }, [mining]);
 
   const doExchange = async () => {
     if (collecting) return;
@@ -116,7 +157,6 @@ export default function PowerPage() {
     try {
       const res = await collect();
       setCollected(res.ton_earned);
-      setLiveHashes(0);
       setTimeout(() => setTab('withdraw'), 1500);
     } finally {
       setCollecting(false);
@@ -462,22 +502,7 @@ export default function PowerPage() {
           </div>
         </div>
 
-        <div style={{
-          fontSize: 32, fontWeight: 900,
-          background: 'linear-gradient(135deg, var(--gold-light), var(--gold))',
-          WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-          fontFamily: "'Inter', monospace", letterSpacing: -0.5, marginBottom: 4,
-          position: 'relative',
-        }}>
-          {liveHashes.toFixed(8)}
-          <span style={{
-            fontSize: 12, fontWeight: 500, marginLeft: 6,
-            WebkitTextFillColor: 'var(--text-muted)',
-          }}>{t('power.hashes')}</span>
-        </div>
-        <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 18 }}>
-          ≈ {(liveHashes * (mining?.ton_per_hash || 0)).toFixed(8)} TON
-        </div>
+        <LiveHashCounter mining={mining} tonPerHash={mining?.ton_per_hash} />
 
         {/* Success toast */}
         {collected !== null && (
