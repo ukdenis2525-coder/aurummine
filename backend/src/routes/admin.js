@@ -490,11 +490,20 @@ router.get('/users/:id/details', async (req, res) => {
   const userPower = parseFloat(user.rows[0].power || 0);
   const dailyForecast = (userPower / 100000) * 0.036;
 
-  // IP History
-  const { rows: ips } = await pool.query(
-    `SELECT ip, last_seen_at FROM user_ips WHERE user_id = $1 ORDER BY last_seen_at DESC LIMIT 10`,
-    [uid]
-  );
+  // IP History (safely handled in case table doesn't exist)
+  let ips = [];
+  try {
+    const { rows } = await pool.query(
+      `SELECT ip, last_seen_at FROM user_ips WHERE user_id = $1 ORDER BY last_seen_at DESC LIMIT 10`,
+      [uid]
+    );
+    ips = rows;
+  } catch (e) {
+    console.warn(`[Admin] IP history table not found or error for user ${uid}`);
+    if (user.rows[0].last_ip) {
+      ips = [{ ip: user.rows[0].last_ip, last_seen_at: user.rows[0].last_seen_at || new Date() }];
+    }
+  }
 
   // Referrer info
   let referrer = null;
