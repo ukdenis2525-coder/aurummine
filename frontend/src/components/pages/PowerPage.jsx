@@ -304,6 +304,7 @@ export default function PowerPage() {
         display: 'flex', flexDirection: 'column', alignItems: 'center',
         marginBottom: 24, position: 'relative', zIndex: 1,
         padding: '10px 0',
+        isolation: 'isolate',
       }}>
         {/* Multi-layer background glow */}
         <div className="anim-glow" style={{
@@ -356,6 +357,8 @@ export default function PowerPage() {
             : 'none',
           position: 'relative',
           transition: 'box-shadow 0.5s ease',
+          willChange: 'transform',
+          transform: 'translateZ(0)',
         }}>
           {/* Particles */}
           <Particles count={18} active={power > 0} />
