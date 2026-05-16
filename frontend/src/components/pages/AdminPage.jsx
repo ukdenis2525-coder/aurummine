@@ -781,12 +781,12 @@ function UsersPanel() {
   if (detail && detailData) {
     const u = detailData.user;
     const statCards = [
-      { icon: '⚡', label: 'POWER', val: fmtK(Math.floor(u.power)), color: 'var(--gold)' },
-      { icon: '💰', label: 'TON', val: fmt(u.ton_balance, 4), color: 'var(--gold-light)' },
-      { icon: '🛒', label: 'Покупок', val: detailData.purchases.length, color: 'var(--green)' },
-      { icon: '💵', label: 'Потрачено', val: `${fmt(detailData.purchases_total, 2)}`, color: 'var(--orange)' },
-      { icon: '👥', label: 'Рефералов', val: detailData.referrals.length, color: 'var(--gold)' },
-      { icon: '💸', label: 'Выведено', val: `${fmt(detailData.withdrawals_total, 4)}`, color: 'var(--red)' },
+      { icon: '⚡', label: 'POWER', val: fmtK(Math.floor(u.power || 0)), color: 'var(--gold)' },
+      { icon: '💰', label: 'TON', val: fmt(u.ton_balance || 0, 4), color: 'var(--gold-light)' },
+      { icon: '🛒', label: 'Покупок', val: (detailData.purchases || []).length, color: 'var(--green)' },
+      { icon: '💵', label: 'Потрачено', val: `${fmt(detailData.purchases_total || 0, 2)}`, color: 'var(--orange)' },
+      { icon: '👥', label: 'Рефералов', val: (detailData.referrals || []).length, color: 'var(--gold)' },
+      { icon: '💸', label: 'Выведено', val: `${fmt(detailData.withdrawals_total || 0, 4)}`, color: 'var(--red)' },
     ];
     return (
       <div>
@@ -848,7 +848,7 @@ function UsersPanel() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
             <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>🎁 РЕФЕРАЛЬНЫЙ ДОХОД</div>
             <div style={{ fontSize: 9, color: 'var(--green)', fontWeight: 700 }}>
-              Конверсия: {detailData.referrals.length > 0 ? ((detailData.referrals.filter(r=>r.is_confirmed).length / detailData.referrals.length) * 100).toFixed(0) : 0}%
+              Конверсия: {Array.isArray(detailData.referrals) && detailData.referrals.length > 0 ? ((detailData.referrals.filter(r=>r.is_confirmed).length / detailData.referrals.length) * 100).toFixed(0) : 0}%
             </div>
           </div>
           <div style={{ display: 'flex', gap: 16 }}>
@@ -878,14 +878,17 @@ function UsersPanel() {
           </div>
         )}
 
-        {/* Referrals */}
-        {detailData.referrals.length > 0 && (
+        {/* Referrals list */}
+        {Array.isArray(detailData.referrals) && detailData.referrals.length > 0 && (
           <div style={{ marginBottom: 10 }}>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: 1, marginBottom: 6, fontWeight: 600 }}>👥 РЕФЕРАЛЫ ({detailData.referrals.length})</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {detailData.referrals.slice(0, 20).map(r => (
+              {detailData.referrals.slice(0, 50).map(r => (
                 <div key={r.id} className="card" style={{ padding: '8px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ fontSize: 12, fontWeight: 600 }}>{r.first_name || r.username || `TG:${r.tg_id}`}</div>
+                  <div style={{ fontSize: 12, fontWeight: 600 }}>
+                    {r.first_name || r.username || `TG:${r.tg_id}`}
+                    {r.is_premium && <span style={{ color: 'var(--gold)', marginLeft: 4 }}>★</span>}
+                  </div>
                   <div style={{ fontSize: 11, color: r.is_confirmed ? 'var(--green)' : 'var(--text-muted)', fontWeight: 600 }}>
                     {r.is_confirmed ? '✓ Актив' : '⏳ Ожид'}
                   </div>
