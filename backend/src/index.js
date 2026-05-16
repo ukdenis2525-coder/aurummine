@@ -36,7 +36,16 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'x-init-data', 'x-admin-key', 'x-ref-id', 'x-admin-pin']
 }));
-app.use(express.json());
+app.use(express.json({ limit: '100kb' }));
+
+// Security headers
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
 
 // Serve uploaded files (ambassador images etc.)
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));

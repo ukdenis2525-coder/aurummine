@@ -124,22 +124,39 @@ router.post('/', authMiddleware, async (req, res) => {
     return res.status(400).json({ error: 'Amount too small after fee deduction' });
   }
 
-  // Check for existing pending withdrawal
-  const { rows: pending } = await pool.query(
-    `SELECT id FROM withdrawals WHERE user_id = $1 AND status = 'pending'`, [user.id]
-  );
-  if (pending.length > 0) {
-    return res.status(400).json({ error: 'You already have a pending withdrawal' });
-  }
-
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    await client.query(
-      `UPDATE users SET ton_balance = ton_balance - $1 WHERE id = $2`,
+    // Lock user row to prevent concurrent withdrawals
+    const { rows: [freshUser] } = await client.query(
+      `SELECT ton_balance FROM users WHERE id = $1 FOR UPDATE`, [user.id]
+    );
+
+    if (parseFloat(freshUser.ton_balance) < amount) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Insufficient balance' });
+    }
+
+    // Check pending inside transaction (after lock)
+    const { rows: pending } = await client.query(
+      `SELECT id FROM withdrawals WHERE user_id = $1 AND status = 'pending'`, [user.id]
+    );
+    if (pending.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'You already have a pending withdrawal' });
+    }
+
+    // Deduct balance with safety check
+    const { rowCount } = await client.query(
+      `UPDATE users SET ton_balance = ton_balance - $1 WHERE id = $2 AND ton_balance >= $1`,
       [amount, user.id]
     );
+
+    if (rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Insufficient balance' });
+    }
 
     const { rows } = await client.query(
       `INSERT INTO withdrawals (user_id, ton_amount, wallet_address, fee_amount)

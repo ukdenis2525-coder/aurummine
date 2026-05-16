@@ -1,4 +1,5 @@
 import { pool } from '../db.js';
+import crypto from 'crypto';
 import { validateTelegramInitData, parseInitData } from '../utils/telegram.js';
 
 export const authMiddleware = async (req, res, next) => {

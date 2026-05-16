@@ -40,8 +40,17 @@ router.post('/init', authMiddleware, async (req, res) => {
     });
   } catch (e) {}
 
+  // Whitelist safe fields (never expose last_ip, is_blocked, bot_blocked etc.)
+  const safeUser = {
+    id: user.id, tg_id: user.tg_id, username: user.username,
+    first_name: user.first_name, is_premium: user.is_premium,
+    power: parseFloat(user.power || 0), hashes: parseFloat(user.hashes || 0),
+    ton_balance: parseFloat(user.ton_balance || 0), ads_watched: parseInt(user.ads_watched || 0),
+    created_at: user.created_at, ref_id: user.ref_id,
+  };
+
   res.json({
-    user,
+    user: safeUser,
     mining: {
       power,
       hashes: parseFloat(user.hashes || 0),

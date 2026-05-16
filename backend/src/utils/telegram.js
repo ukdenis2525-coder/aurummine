@@ -14,6 +14,13 @@ export const validateTelegramInitData = (initData, botToken) => {
     const hash = params.get('hash');
     params.delete('hash');
 
+    // Check auth_date freshness (reject if older than 24 hours)
+    const authDate = parseInt(params.get('auth_date') || '0');
+    if (authDate > 0 && (Date.now() / 1000 - authDate) > 86400) {
+      console.warn('[TelegramAuth] initData expired (auth_date too old)');
+      return null;
+    }
+
     const dataCheckString = Array.from(params.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([k, v]) => `${k}=${v}`)
@@ -29,8 +36,8 @@ export const validateTelegramInitData = (initData, botToken) => {
       .update(dataCheckString)
       .digest('hex');
 
-    // Skip validation only if explicitly in non-production AND hash is 'dev'
-    if (hash === 'dev' && process.env.NODE_ENV !== 'production') {
+    // Dev bypass ONLY if explicitly enabled via env flag (never in production)
+    if (hash === 'dev' && process.env.ALLOW_DEV_AUTH === 'true' && process.env.NODE_ENV !== 'production') {
       const userParam = params.get('user');
       return userParam ? JSON.parse(userParam) : null;
     }
