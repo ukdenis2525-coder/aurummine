@@ -722,7 +722,14 @@ function UsersPanel() {
   // Clear module-level search after using it
   useEffect(() => { if (_searchFromMulti) { _searchFromMulti = ''; } }, []);
   const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [sort, setSort] = useState('newest');
+  const [editing, setEditing] = useState(null);
+  const [detail, setDetail] = useState(null);
+  const [detailData, setDetailData] = useState(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [msg, setMsg] = useState(null);
 
   const load = useCallback(async () => {
     const { data } = await api.get(`/admin/users?page=${page}&search=${search}&sort=${sort}`);
