@@ -265,7 +265,7 @@ router.get('/stats', async (req, res) => {
     resStats.finance = null;
   }
 
-  res.json({ stats: resStats });
+  res.json(resStats);
 });
 
 // Charts route removed as requested to simplify dashboard
