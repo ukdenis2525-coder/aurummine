@@ -3,14 +3,11 @@ import { authMiddleware } from '../middleware/auth.js';
 import { pool } from '../db.js';
 import crypto from 'crypto';
 import { checkPendingPayments } from '../services/payment.js';
+import { checkCooldown } from '../services/cooldown.js';
 
 const router = Router();
 
 const generateMemo = () => crypto.randomBytes(6).toString('hex').toUpperCase(); // e.g. A1B2C3D4E5F6
-
-// Per-user cooldown map for manual check (30s)
-const checkCooldowns = new Map();
-
 router.get('/packages', authMiddleware, async (req, res) => {
   const { rows } = await pool.query(
     `SELECT * FROM power_packages WHERE is_active = TRUE ORDER BY power_amount ASC`
@@ -141,23 +138,20 @@ router.get('/order-status', authMiddleware, async (req, res) => {
   res.json(rows[0] || null);
 });
 
-// Manual payment check — user-facing, with 30s cooldown
+// Manual payment check — user-facing, with 30s persistent cooldown
 router.post('/check-payment', authMiddleware, async (req, res) => {
   const userId = req.user.id;
 
-  // Cooldown check
-  const lastCheck = checkCooldowns.get(userId);
-  if (lastCheck && Date.now() - lastCheck < 30000) {
-    const wait = Math.ceil((30000 - (Date.now() - lastCheck)) / 1000);
-    return res.status(429).json({ error: 'cooldown', wait });
+  // Cooldown check (persistent)
+  const status = await checkCooldown(userId, 'payment_check', 30, 0);
+  if (!status.allowed) {
+    return res.status(429).json({ error: 'cooldown', wait: status.remaining });
   }
-  checkCooldowns.set(userId, Date.now());
 
   try {
     await checkPendingPayments();
 
     // Return updated order status for this user
-    const { data: hist } = { data: null };
     const { rows } = await pool.query(
       `SELECT pp.status, pp.memo, pp.ton_amount, pkg.power_amount
        FROM pending_purchases pp

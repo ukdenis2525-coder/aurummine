@@ -1,48 +1,22 @@
-import crypto from 'crypto';
 import { pool } from '../db.js';
+import { validateTelegramInitData, parseInitData } from '../utils/telegram.js';
 
 export const authMiddleware = async (req, res, next) => {
   try {
     const initData = req.headers['x-init-data'];
     if (!initData) return res.status(401).json({ error: 'No init data' });
 
-    // Parse initData
-    const params = new URLSearchParams(initData);
-    const hash = params.get('hash');
-    params.delete('hash');
-
-    // Validate Telegram signature
-    const dataCheckString = Array.from(params.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([k, v]) => `${k}=${v}`)
-      .join('\n');
-
-    const secretKey = crypto
-      .createHmac('sha256', 'WebAppData')
-      .update(process.env.BOT_TOKEN)
-      .digest();
-
-    const expectedHash = crypto
-      .createHmac('sha256', secretKey)
-      .update(dataCheckString)
-      .digest('hex');
-
-    if (process.env.NODE_ENV === 'production' && expectedHash !== hash) {
-      return res.status(401).json({ error: 'Invalid hash' });
+    // Validate signature
+    const tgUser = validateTelegramInitData(initData, process.env.BOT_TOKEN);
+    if (!tgUser) {
+      return res.status(401).json({ error: 'Invalid auth signature' });
     }
 
-    const userParam = params.get('user');
-    if (!userParam) return res.status(401).json({ error: 'No user data' });
-
-    const tgUser = JSON.parse(userParam);
-
-    // Extract referral tg_id from multiple sources (most reliable first):
-    // 1. start_param from signed initData (from Telegram directly)
-    // 2. x-ref-id header (from frontend)
-    const startParam = params.get('start_param') || req.headers['x-ref-id'] || null;
+    // Extract referral from SIGNED data only
+    const { startParam } = parseInitData(initData);
     const refTgId = startParam ? parseInt(startParam, 10) : null;
 
-    console.log(`[Auth] tg:${tgUser.id} | start_param: ${params.get('start_param')} | x-ref-id: ${req.headers['x-ref-id']} | refTgId: ${refTgId}`);
+    console.log(`[Auth] tg:${tgUser.id} | refTgId: ${refTgId}`);
 
     // Get or create user
     let { rows } = await pool.query(

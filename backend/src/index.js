@@ -121,19 +121,24 @@ cron.schedule('0 4 * * *', async () => {
   }
 });
 
+import { validateTelegramInitData } from './utils/telegram.js';
+
 // Admin: manual payment check trigger
 app.post('/api/admin/check-payments', async (req, res) => {
   const key = req.headers['x-admin-key'];
   const initData = req.headers['x-init-data'];
-  let auth = key && key === process.env.ADMIN_KEY;
-  if (!auth && initData) {
-    try {
-      const params = new URLSearchParams(initData);
-      const u = JSON.parse(params.get('user') || '{}');
+  
+  let auth = false;
+  if (key && process.env.ADMIN_KEY && key === process.env.ADMIN_KEY) {
+    auth = true;
+  } else if (initData) {
+    const tgUser = validateTelegramInitData(initData, process.env.BOT_TOKEN);
+    if (tgUser) {
       const ids = await getAllAdminIds();
-      auth = ids.includes(String(u.id));
-    } catch {}
+      auth = ids.includes(String(tgUser.id));
+    }
   }
+
   if (!auth) return res.status(403).json({ error: 'Forbidden' });
 
   try {
@@ -169,6 +174,17 @@ app.listen(PORT, async () => {
     // Update unique index to include source
     await pool.query(`DROP INDEX IF EXISTS idx_promo_uses_unique`);
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_promo_uses_unique_src ON promo_code_uses(promo_id, user_id, source)`);
+    // Cooldowns table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_cooldowns (
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        cooldown_type VARCHAR(50) NOT NULL,
+        last_at TIMESTAMP NOT NULL,
+        daily_count INTEGER DEFAULT 0,
+        last_date DATE,
+        PRIMARY KEY (user_id, cooldown_type)
+      )
+    `);
     console.log('[Auto-migrate] Done');
   } catch (e) { console.error('Auto-migrate error:', e.message); }
 });

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { Api } from 'grammy';
 import { pool } from '../db.js';
+import { validateTelegramInitData } from '../utils/telegram.js';
 
 const tgApi = process.env.BOT_TOKEN ? new Api(process.env.BOT_TOKEN) : null;
 
@@ -24,31 +25,28 @@ const getAllAdminIds = async () => {
   }
 };
 
-// Admin auth: either x-admin-key header OR Telegram user with matching tg_id (env + DB)
+// Admin auth: Telegram user with matching tg_id (env + DB) AND valid signature
 const adminMiddleware = async (req, res, next) => {
+  // Allow system/API access via x-admin-key (keep for non-UI bots/scripts if needed, but UI MUST be signed)
   const key = req.headers['x-admin-key'];
-  if (key && key === process.env.ADMIN_KEY) {
+  if (key && process.env.ADMIN_KEY && key === process.env.ADMIN_KEY) {
     req.adminTgId = 'API_KEY';
-    req.adminName = 'API';
+    req.adminName = 'SYSTEM';
     return next();
   }
 
-  // TG-based admin auth
+  // UI-based admin auth (WebApp)
   const initData = req.headers['x-init-data'];
   if (initData) {
-    try {
-      const params = new URLSearchParams(initData);
-      const userParam = params.get('user');
-      if (userParam) {
-        const tgUser = JSON.parse(userParam);
-        const adminIds = await getAllAdminIds();
-        if (adminIds.includes(String(tgUser.id))) {
-          req.adminTgId = String(tgUser.id);
-          req.adminName = tgUser.first_name || tgUser.username || String(tgUser.id);
-          return next();
-        }
+    const tgUser = validateTelegramInitData(initData, process.env.BOT_TOKEN);
+    if (tgUser) {
+      const adminIds = await getAllAdminIds();
+      if (adminIds.includes(String(tgUser.id))) {
+        req.adminTgId = String(tgUser.id);
+        req.adminName = tgUser.first_name || tgUser.username || String(tgUser.id);
+        return next();
       }
-    } catch (e) {}
+    }
   }
 
   return res.status(403).json({ error: 'Forbidden' });

@@ -3,12 +3,9 @@ import { authMiddleware } from '../middleware/auth.js';
 import { pool } from '../db.js';
 import axios from 'axios';
 import { getAllAdminIds } from './admin.js';
+import { checkCooldown, getCooldownStatus } from '../services/cooldown.js';
 
 const router = Router();
-
-// Ad tracking (in-memory per user)
-const adCooldowns = new Map();
-const adDailyCounts = new Map(); // userId -> { date, count }
 
 // Public: get ad config (block IDs from DB)
 router.get('/ad-config', async (req, res) => {
@@ -199,19 +196,13 @@ router.post('/ad-reward', authMiddleware, async (req, res) => {
   const cooldownSec = settings.ad_cooldown_seconds || 60;
   const dailyLimit = settings.ad_daily_limit || 50;
 
-  // Check cooldown
-  const lastWatch = adCooldowns.get(userId);
-  const now = Date.now();
-  if (lastWatch && (now - lastWatch) < cooldownSec * 1000) {
-    const remaining = Math.ceil((cooldownSec * 1000 - (now - lastWatch)) / 1000);
-    return res.status(429).json({ error: 'Cooldown', cooldown: remaining });
-  }
-
-  // Check daily limit
-  const today = new Date().toISOString().slice(0, 10);
-  const daily = adDailyCounts.get(userId);
-  if (daily && daily.date === today && daily.count >= dailyLimit) {
-    return res.status(429).json({ error: 'Daily limit reached', daily_limit: dailyLimit });
+  // Check persistent cooldown
+  const status = await checkCooldown(userId, 'adsgram', cooldownSec, dailyLimit);
+  if (!status.allowed) {
+    if (status.limitReached) {
+      return res.status(429).json({ error: 'Daily limit reached', daily_limit: dailyLimit });
+    }
+    return res.status(429).json({ error: 'Cooldown', cooldown: status.remaining });
   }
 
   // Give ad reward to user + increment ads_watched
@@ -256,19 +247,8 @@ router.post('/ad-reward', authMiddleware, async (req, res) => {
     console.log(`✅ Referral activated: referrer=${referrerId} +${refReward} POWER (user ${userId} watched first ad)`);
   }
 
-  // Set cooldown
-  adCooldowns.set(userId, now);
-
-  // Update daily count
-  if (daily && daily.date === today) {
-    daily.count++;
-  } else {
-    adDailyCounts.set(userId, { date: today, count: 1 });
-  }
-
-  const dailyCurrent = adDailyCounts.get(userId);
-  console.log(`[Ad] User ${userId} watched ad, +${rewardPower} POWER (${dailyCurrent.count}/${dailyLimit} today)`);
-  res.json({ success: true, reward: rewardPower, cooldown: cooldownSec, ref_activated: refActivated, daily_count: dailyCurrent.count, daily_limit: dailyLimit });
+  console.log(`[Ad] User ${userId} watched ad, +${rewardPower} POWER (${status.dailyCount}/${dailyLimit} today)`);
+  res.json({ success: true, reward: rewardPower, cooldown: cooldownSec, ref_activated: refActivated, daily_count: status.dailyCount, daily_limit: dailyLimit });
 });
 
 // ── Adsgram: Check ad cooldown ──
@@ -281,20 +261,12 @@ router.get('/ad-status', authMiddleware, async (req, res) => {
   const cooldownSec = s.ad_cooldown_seconds || 60;
   const dailyLimit = s.ad_daily_limit || 50;
 
-  const lastWatch = adCooldowns.get(req.user.id);
-  const cooldown = lastWatch ? Math.max(0, cooldownSec - Math.floor((Date.now() - lastWatch) / 1000)) : 0;
+  const status = await getCooldownStatus(req.user.id, 'adsgram', cooldownSec, dailyLimit);
 
-  const today = new Date().toISOString().slice(0, 10);
-  const daily = adDailyCounts.get(req.user.id);
-  const dailyCount = (daily && daily.date === today) ? daily.count : 0;
-
-  res.json({ cooldown, daily_count: dailyCount, daily_limit: dailyLimit });
+  res.json({ cooldown: status.cooldown, daily_count: status.dailyCount, daily_limit: dailyLimit });
 });
 
 // ── Monetag: separate cooldown/daily tracking ──
-const monetagCooldowns = new Map();
-const monetagDailyCounts = new Map();
-
 router.post('/monetag-reward', authMiddleware, async (req, res) => {
   const userId = req.user.id;
 
@@ -308,19 +280,13 @@ router.post('/monetag-reward', authMiddleware, async (req, res) => {
   const cooldownSec = settings.ad_cooldown_seconds || 60;
   const dailyLimit = settings.ad_daily_limit || 50;
 
-  // Check cooldown
-  const lastWatch = monetagCooldowns.get(userId);
-  const now = Date.now();
-  if (lastWatch && (now - lastWatch) < cooldownSec * 1000) {
-    const remaining = Math.ceil((cooldownSec * 1000 - (now - lastWatch)) / 1000);
-    return res.status(429).json({ error: 'Cooldown', cooldown: remaining });
-  }
-
-  // Check daily limit
-  const today = new Date().toISOString().slice(0, 10);
-  const daily = monetagDailyCounts.get(userId);
-  if (daily && daily.date === today && daily.count >= dailyLimit) {
-    return res.status(429).json({ error: 'Daily limit reached', daily_limit: dailyLimit });
+  // Check persistent cooldown
+  const status = await checkCooldown(userId, 'monetag', cooldownSec, dailyLimit);
+  if (!status.allowed) {
+    if (status.limitReached) {
+      return res.status(429).json({ error: 'Daily limit reached', daily_limit: dailyLimit });
+    }
+    return res.status(429).json({ error: 'Cooldown', cooldown: status.remaining });
   }
 
   // Give reward + increment ads_watched
@@ -359,19 +325,8 @@ router.post('/monetag-reward', authMiddleware, async (req, res) => {
     console.log(`✅ Referral activated via Monetag: referrer=${referrerId} +${refReward} POWER (user ${userId})`);
   }
 
-  // Set cooldown
-  monetagCooldowns.set(userId, now);
-
-  // Update daily count
-  if (daily && daily.date === today) {
-    daily.count++;
-  } else {
-    monetagDailyCounts.set(userId, { date: today, count: 1 });
-  }
-
-  const dailyCurrent = monetagDailyCounts.get(userId);
-  console.log(`[Monetag] User ${userId} watched ad, +${rewardPower} POWER (${dailyCurrent.count}/${dailyLimit} today)`);
-  res.json({ success: true, reward: rewardPower, cooldown: cooldownSec, ref_activated: refActivated, daily_count: dailyCurrent.count, daily_limit: dailyLimit });
+  console.log(`[Monetag] User ${userId} watched ad, +${rewardPower} POWER (${status.dailyCount}/${dailyLimit} today)`);
+  res.json({ success: true, reward: rewardPower, cooldown: cooldownSec, ref_activated: refActivated, daily_count: status.dailyCount, daily_limit: dailyLimit });
 });
 
 router.get('/monetag-status', authMiddleware, async (req, res) => {
@@ -383,14 +338,9 @@ router.get('/monetag-status', authMiddleware, async (req, res) => {
   const cooldownSec = s.ad_cooldown_seconds || 60;
   const dailyLimit = s.ad_daily_limit || 50;
 
-  const lastWatch = monetagCooldowns.get(req.user.id);
-  const cooldown = lastWatch ? Math.max(0, cooldownSec - Math.floor((Date.now() - lastWatch) / 1000)) : 0;
+  const status = await getCooldownStatus(req.user.id, 'monetag', cooldownSec, dailyLimit);
 
-  const today = new Date().toISOString().slice(0, 10);
-  const daily = monetagDailyCounts.get(req.user.id);
-  const dailyCount = (daily && daily.date === today) ? daily.count : 0;
-
-  res.json({ cooldown, daily_count: dailyCount, daily_limit: dailyLimit });
+  res.json({ cooldown: status.cooldown, daily_count: status.dailyCount, daily_limit: dailyLimit });
 });
 
 // ═══════════════ TASK ORDERS (Advertising) ═══════════════
@@ -556,16 +506,15 @@ router.get('/order-payment-status', authMiddleware, async (req, res) => {
   });
 });
 
-// Manual check for order payment
-const orderCheckCooldowns = new Map();
+// Manual check for order payment with persistent cooldown
 router.post('/check-order-payment', authMiddleware, async (req, res) => {
   const userId = req.user.id;
-  const lastCheck = orderCheckCooldowns.get(userId);
-  if (lastCheck && Date.now() - lastCheck < 30000) {
-    const wait = Math.ceil((30000 - (Date.now() - lastCheck)) / 1000);
-    return res.status(429).json({ error: 'cooldown', wait });
+  
+  // 30s persistent cooldown
+  const status = await checkCooldown(userId, 'order_check', 30, 0);
+  if (!status.allowed) {
+    return res.status(429).json({ error: 'cooldown', wait: status.remaining });
   }
-  orderCheckCooldowns.set(userId, Date.now());
 
   try {
     const { checkPendingPayments } = await import('../services/payment.js');
@@ -577,8 +526,8 @@ router.post('/check-order-payment', authMiddleware, async (req, res) => {
        ORDER BY created_at DESC LIMIT 1`,
       [userId]
     );
-    const status = rows[0]?.status || null;
-    res.json({ checked: true, status });
+    const orderStatus = rows[0]?.status || null;
+    res.json({ checked: true, status: orderStatus });
   } catch (e) {
     console.error('Order manual check error:', e.message);
     res.status(500).json({ error: 'Check failed' });

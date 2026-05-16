@@ -378,6 +378,18 @@ const migrate = async () => {
       CREATE INDEX IF NOT EXISTS idx_admin_activity_tg ON admin_activity_log(admin_tg_id);
     `);
 
+    // ── User Cooldowns (persist across restarts) ──
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS user_cooldowns (
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        cooldown_type VARCHAR(50) NOT NULL,
+        last_at TIMESTAMP NOT NULL,
+        daily_count INTEGER DEFAULT 0,
+        last_date DATE,
+        PRIMARY KEY (user_id, cooldown_type)
+      );
+    `);
+
     console.log('Migration complete');
   } catch (e) {
     console.error('Migration error:', e);
