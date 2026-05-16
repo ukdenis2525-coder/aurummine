@@ -102,6 +102,7 @@ router.get('/activity', async (req, res) => {
 router.get('/stats', async (req, res) => {
   const result = {
     total_users: 0, active_users: 0, blocked_users: 0, total_power: 0,
+    total_ton_balance: 0,
     total_revenue: 0, total_purchases: 0, total_ads_watched: 0, total_referrals: 0,
     online_5min: 0, online_1h: 0, total_daily_forecast: 0, total_monthly_forecast: 0,
     new_users_24h: 0, pending_withdrawals: 0, active_today: 0,
@@ -167,11 +168,15 @@ router.get('/stats', async (req, res) => {
       result.buyers = {
         buyers_count: parseInt(buyerStats.rows[0].count),
         buyers_power: parseFloat(buyerStats.rows[0].power),
+        buyers_balance: parseFloat(buyerStats.rows[0].balance),
         buyers_spent: parseFloat(buyerSpent.rows[0].spent),
+        buyers_daily_forecast: (parseFloat(buyerStats.rows[0].power) / 100000) * 0.036,
+        buyers_monthly_forecast: ((parseFloat(buyerStats.rows[0].power) / 100000) * 0.036) * 30,
         free_count: parseInt(nonBuyerStats.rows[0].count),
         free_power: parseFloat(nonBuyerStats.rows[0].power),
-        buyers_daily_forecast: (parseFloat(buyerStats.rows[0].power) / 100000) * 0.036,
+        free_balance: parseFloat(nonBuyerStats.rows[0].balance),
         free_daily_forecast: (parseFloat(nonBuyerStats.rows[0].power) / 100000) * 0.036,
+        free_monthly_forecast: ((parseFloat(nonBuyerStats.rows[0].power) / 100000) * 0.036) * 30,
       };
     } catch(e) {}
 
@@ -180,7 +185,7 @@ router.get('/stats', async (req, res) => {
         pool.query(`SELECT COUNT(p.id) as count, COALESCE(SUM(p.ton_paid), 0) as sum FROM purchases p JOIN users u ON p.user_id = u.id WHERE u.is_blocked = true`),
         pool.query(`SELECT COALESCE(SUM(ton_balance), 0) as total FROM users`),
         pool.query(`SELECT COALESCE(SUM(ton_balance), 0) as total FROM users WHERE is_blocked = false`),
-        pool.query(`SELECT COALESCE(SUM(ton_amount), 0) as total FROM withdrawals WHERE status = 'approved'`),
+        pool.query(`SELECT COALESCE(SUM(ton_amount), 0) as total FROM withdrawals WHERE status = 'completed'`),
         pool.query(`SELECT COALESCE(SUM(ton_amount), 0) as total FROM withdrawals WHERE status = 'pending'`),
         pool.query(`SELECT COUNT(*) as c FROM users WHERE is_blocked = true`),
         pool.query(`SELECT COALESCE(SUM(power), 0) as p, COALESCE(SUM(ton_balance), 0) as b FROM users WHERE is_blocked = true`),
@@ -190,9 +195,14 @@ router.get('/stats', async (req, res) => {
       result.total_users = result.active_users + result.blocked_users;
       result.pending_withdrawals = parseFloat(pendingWithdrawals.rows[0].total || 0);
 
+      result.total_ton_balance = parseFloat(totalBalances.rows[0].total || 0);
+
       result.finance = {
         banned_users: result.blocked_users,
+        banned_purchases_count: parseInt(bannedPurchases.rows[0].count || 0),
         banned_purchases_ton: parseFloat(bannedPurchases.rows[0].sum || 0),
+        banned_power: parseFloat(bannedStats.rows[0].p || 0),
+        banned_balance: parseFloat(bannedStats.rows[0].b || 0),
         total_liability: parseFloat(totalBalances.rows[0].total || 0),
         active_liability: parseFloat(activeBalances.rows[0].total || 0),
         total_withdrawn: parseFloat(approvedWithdrawals.rows[0].total || 0),
@@ -204,6 +214,7 @@ router.get('/stats', async (req, res) => {
         mining_ton_per_month: result.total_monthly_forecast,
         liability_7d: parseFloat(activeBalances.rows[0].total || 0) + (result.total_daily_forecast * 7),
         liability_30d: parseFloat(activeBalances.rows[0].total || 0) + (result.total_daily_forecast * 30),
+        liability_90d: parseFloat(activeBalances.rows[0].total || 0) + (result.total_daily_forecast * 90),
       };
     } catch(e) { console.error('Stats[Finance]:', e.message); }
 
