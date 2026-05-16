@@ -103,19 +103,11 @@ router.post('/:id/complete', authMiddleware, async (req, res) => {
 
   const task = tasks[0];
 
-  // Check already completed
-  const { rows: existing } = await pool.query(
-    `SELECT id FROM user_tasks WHERE user_id = $1 AND task_id = $2`,
-    [user.id, taskId]
-  );
-  if (existing.length) return res.status(400).json({ error: 'Already completed' });
-
   // ── Verify subscription for subscribe_channel tasks ──
   if (task.type === 'subscribe_channel' && task.link) {
     const chatId = extractChatId(task.link);
     
     if (!chatId) {
-      // Invite link — can't verify, allow completion (trust-based)
       console.log(`[SubCheck] Invite link — skipping verification for task ${taskId}, user ${user.tg_id}`);
     } else {
       const isSubscribed = await checkTgSubscription(chatId, user.tg_id);
@@ -139,10 +131,16 @@ router.post('/:id/complete', authMiddleware, async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    await client.query(
-      `INSERT INTO user_tasks (user_id, task_id) VALUES ($1, $2)`,
+    // Atomic insert — prevents double-completion race condition
+    const { rowCount } = await client.query(
+      `INSERT INTO user_tasks (user_id, task_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
       [user.id, taskId]
     );
+    if (rowCount === 0) {
+      await client.query('ROLLBACK');
+      client.release();
+      return res.status(400).json({ error: 'Already completed' });
+    }
 
     await client.query(
       `UPDATE users SET power = power + $1 WHERE id = $2`,
@@ -211,7 +209,7 @@ router.post('/ad-reward', authMiddleware, async (req, res) => {
     [rewardPower, userId]
   );
 
-  // ── Activate referral on first ad watch ──
+  // ── Activate referral on first ad watch (atomic) ──
   const { rows: pendingRef } = await pool.query(
     `SELECT r.id, r.referrer_id FROM referrals r WHERE r.referee_id = $1 AND r.is_confirmed = FALSE`,
     [userId]
@@ -222,29 +220,29 @@ router.post('/ad-reward', authMiddleware, async (req, res) => {
     const ref = pendingRef[0];
     const referrerId = ref.referrer_id;
 
-    // Check if referrer is premium
-    const { rows: referrerRows } = await pool.query(
-      `SELECT is_premium FROM users WHERE id = $1`, [referrerId]
-    );
-    const isPremium = referrerRows[0]?.is_premium;
-    const refReward = isPremium
-      ? (settings.ref_power_premium || 6000)
-      : (settings.ref_power_normal || 3000);
-
-    // Confirm referral
-    await pool.query(`UPDATE referrals SET is_confirmed = TRUE WHERE id = $1`, [ref.id]);
-
-    // Give referrer their reward
-    await pool.query(`UPDATE users SET power = power + $1 WHERE id = $2`, [refReward, referrerId]);
-
-    // Log reward
-    await pool.query(
-      `INSERT INTO referral_rewards (referrer_id, referee_id, reward_type, power_amount) VALUES ($1, $2, 'signup', $3)`,
-      [referrerId, userId, refReward]
+    // Atomic confirm — only one request can succeed
+    const { rowCount } = await pool.query(
+      `UPDATE referrals SET is_confirmed = TRUE WHERE id = $1 AND is_confirmed = FALSE`, [ref.id]
     );
 
-    refActivated = true;
-    console.log(`✅ Referral activated: referrer=${referrerId} +${refReward} POWER (user ${userId} watched first ad)`);
+    if (rowCount > 0) {
+      const { rows: referrerRows } = await pool.query(
+        `SELECT is_premium FROM users WHERE id = $1`, [referrerId]
+      );
+      const isPremium = referrerRows[0]?.is_premium;
+      const refReward = isPremium
+        ? (settings.ref_power_premium || 6000)
+        : (settings.ref_power_normal || 3000);
+
+      await pool.query(`UPDATE users SET power = power + $1 WHERE id = $2`, [refReward, referrerId]);
+      await pool.query(
+        `INSERT INTO referral_rewards (referrer_id, referee_id, reward_type, power_amount) VALUES ($1, $2, 'signup', $3) ON CONFLICT DO NOTHING`,
+        [referrerId, userId, refReward]
+      );
+
+      refActivated = true;
+      console.log(`✅ Referral activated: referrer=${referrerId} +${refReward} POWER (user ${userId} watched first ad)`);
+    }
   }
 
   console.log(`[Ad] User ${userId} watched ad, +${rewardPower} POWER (${status.dailyCount}/${dailyLimit} today)`);
@@ -295,7 +293,7 @@ router.post('/monetag-reward', authMiddleware, async (req, res) => {
     [rewardPower, userId]
   );
 
-  // ── Activate referral on first monetag watch ──
+  // ── Activate referral on first monetag watch (atomic) ──
   const { rows: pendingRef } = await pool.query(
     `SELECT r.id, r.referrer_id FROM referrals r WHERE r.referee_id = $1 AND r.is_confirmed = FALSE`,
     [userId]
@@ -306,23 +304,29 @@ router.post('/monetag-reward', authMiddleware, async (req, res) => {
     const ref = pendingRef[0];
     const referrerId = ref.referrer_id;
 
-    const { rows: referrerRows } = await pool.query(
-      `SELECT is_premium FROM users WHERE id = $1`, [referrerId]
-    );
-    const isPremium = referrerRows[0]?.is_premium;
-    const refReward = isPremium
-      ? (settings.ref_power_premium || 6000)
-      : (settings.ref_power_normal || 3000);
-
-    await pool.query(`UPDATE referrals SET is_confirmed = TRUE WHERE id = $1`, [ref.id]);
-    await pool.query(`UPDATE users SET power = power + $1 WHERE id = $2`, [refReward, referrerId]);
-    await pool.query(
-      `INSERT INTO referral_rewards (referrer_id, referee_id, reward_type, power_amount) VALUES ($1, $2, 'signup', $3)`,
-      [referrerId, userId, refReward]
+    // Atomic confirm — only one request can succeed
+    const { rowCount } = await pool.query(
+      `UPDATE referrals SET is_confirmed = TRUE WHERE id = $1 AND is_confirmed = FALSE`, [ref.id]
     );
 
-    refActivated = true;
-    console.log(`✅ Referral activated via Monetag: referrer=${referrerId} +${refReward} POWER (user ${userId})`);
+    if (rowCount > 0) {
+      const { rows: referrerRows } = await pool.query(
+        `SELECT is_premium FROM users WHERE id = $1`, [referrerId]
+      );
+      const isPremium = referrerRows[0]?.is_premium;
+      const refReward = isPremium
+        ? (settings.ref_power_premium || 6000)
+        : (settings.ref_power_normal || 3000);
+
+      await pool.query(`UPDATE users SET power = power + $1 WHERE id = $2`, [refReward, referrerId]);
+      await pool.query(
+        `INSERT INTO referral_rewards (referrer_id, referee_id, reward_type, power_amount) VALUES ($1, $2, 'signup', $3) ON CONFLICT DO NOTHING`,
+        [referrerId, userId, refReward]
+      );
+
+      refActivated = true;
+      console.log(`✅ Referral activated via Monetag: referrer=${referrerId} +${refReward} POWER (user ${userId})`);
+    }
   }
 
   console.log(`[Monetag] User ${userId} watched ad, +${rewardPower} POWER (${status.dailyCount}/${dailyLimit} today)`);

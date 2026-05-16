@@ -194,6 +194,10 @@ app.listen(PORT, async () => {
         PRIMARY KEY (user_id, cooldown_type)
       )
     `);
+    // Unique constraint for task completion (prevents double-complete race condition)
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_user_tasks_unique ON user_tasks(user_id, task_id)`);
+    // Unique constraint for referral signup rewards (prevents double-activation)
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_ref_rewards_signup ON referral_rewards(referrer_id, referee_id, reward_type)`);
     console.log('[Auto-migrate] Done');
   } catch (e) { console.error('Auto-migrate error:', e.message); }
 });

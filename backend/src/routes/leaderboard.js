@@ -8,7 +8,7 @@ router.get('/', authMiddleware, async (req, res) => {
   const { rows } = await pool.query(
     `SELECT id, username, first_name, power,
       RANK() OVER (ORDER BY power DESC) as rank
-     FROM users ORDER BY power DESC LIMIT 50`
+     FROM users WHERE (is_blocked IS NOT TRUE) ORDER BY power DESC LIMIT 50`
   );
 
   const { rows: myRank } = await pool.query(

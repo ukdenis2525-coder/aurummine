@@ -49,15 +49,14 @@ const upload = multer({
   }
 });
 
-// ── Helper: check if user is admin ──
+// ── Helper: check if user is admin (uses HMAC validation) ──
 const isAdmin = async (req) => {
   const initData = req.headers['x-init-data'];
   if (!initData) return false;
   try {
-    const params = new URLSearchParams(initData);
-    const userParam = params.get('user');
-    if (!userParam) return false;
-    const tgUser = JSON.parse(userParam);
+    const { validateTelegramInitData } = await import('../utils/telegram.js');
+    const tgUser = validateTelegramInitData(initData, process.env.BOT_TOKEN);
+    if (!tgUser) return false;
     const adminIds = await getAllAdminIds();
     return adminIds.includes(String(tgUser.id));
   } catch { return false; }
