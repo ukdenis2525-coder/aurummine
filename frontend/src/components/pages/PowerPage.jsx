@@ -30,7 +30,7 @@ function Particles({ count = 20, active }) {
   return (
     <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', borderRadius: '50%' }}>
       {particles.map(p => (
-        <div key={p.id} style={{
+        <div key={p.id} className="anim-particle" style={{
           position: 'absolute',
           left: `${p.left}%`,
           bottom: '-10%',
@@ -39,7 +39,8 @@ function Particles({ count = 20, active }) {
           borderRadius: '50%',
           background: 'var(--gold)',
           opacity: p.opacity,
-          animation: `particleRise ${p.duration}s ease-in-out ${p.delay}s infinite`,
+          animationDuration: `${p.duration}s`,
+          animationDelay: `${p.delay}s`,
         }} />
       ))}
     </div>
@@ -307,11 +308,10 @@ export default function PowerPage() {
         padding: '10px 0',
       }}>
         {/* Multi-layer background glow */}
-        <div style={{
+        <div className="anim-glow" style={{
           position: 'absolute', width: 280, height: 280, borderRadius: '50%',
           background: 'radial-gradient(circle, rgba(212,175,55,0.12) 0%, rgba(212,175,55,0.04) 40%, transparent 70%)',
           filter: 'blur(40px)', top: -40,
-          animation: 'glow 4s ease-in-out infinite',
         }} />
         <div style={{
           position: 'absolute', width: 200, height: 200, borderRadius: '50%',
@@ -321,10 +321,9 @@ export default function PowerPage() {
 
         {/* Rotating ring — outer */}
         {power > 0 && (
-          <div style={{
+          <div className="anim-spin-slow" style={{
             position: 'absolute', width: 210, height: 210, borderRadius: '50%',
             border: '1px solid rgba(212,175,55,0.06)',
-            animation: 'spin 25s linear infinite',
             top: -5,
           }}>
             <div style={{
@@ -342,16 +341,15 @@ export default function PowerPage() {
 
         {/* Rotating ring — inner dashed */}
         {power > 0 && (
-          <div style={{
+          <div className="anim-spin-reverse" style={{
             position: 'absolute', width: 230, height: 230, borderRadius: '50%',
             border: '1px dashed rgba(212,175,55,0.04)',
-            animation: 'spin 35s linear infinite reverse',
             top: -15,
           }} />
         )}
 
         {/* Outer conic gradient ring */}
-        <div style={{
+        <div className={orbPulse ? 'anim-orb-collect' : (power > 0 ? 'anim-float' : '')} style={{
           width: 185, height: 185, borderRadius: '50%',
           background: `conic-gradient(var(--gold) ${powerPct}%, rgba(255,255,255,0.03) 0)`,
           padding: 5, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -359,7 +357,6 @@ export default function PowerPage() {
             ? '0 0 40px rgba(212,175,55,0.15), 0 0 80px rgba(212,175,55,0.05), inset 0 0 30px rgba(212,175,55,0.05)'
             : 'none',
           position: 'relative',
-          animation: orbPulse ? 'orbCollect 0.6s ease' : (power > 0 ? 'float 6s ease-in-out infinite' : 'none'),
           transition: 'box-shadow 0.5s ease',
         }}>
           {/* Particles */}
@@ -403,10 +400,9 @@ export default function PowerPage() {
                 background: 'rgba(52,211,153,0.08)',
                 border: '1px solid rgba(52,211,153,0.1)',
               }}>
-                <span style={{
+                <span className="anim-blink" style={{
                   width: 5, height: 5, borderRadius: '50%',
                   background: 'var(--green)',
-                  animation: 'blink 2s infinite',
                   boxShadow: '0 0 6px var(--green)',
                 }} />
                 {t('power.mining_active')}
@@ -473,11 +469,10 @@ export default function PowerPage() {
       }}>
         {/* Shimmer effect on card */}
         {power > 0 && (
-          <div style={{
+          <div className="anim-shimmer" style={{
             position: 'absolute', inset: 0,
             background: 'linear-gradient(90deg, transparent, rgba(212,175,55,0.03), transparent)',
             backgroundSize: '200% 100%',
-            animation: 'shimmer 3s ease-in-out infinite',
             pointerEvents: 'none',
           }} />
         )}
@@ -529,11 +524,10 @@ export default function PowerPage() {
         >
           {/* Button shimmer */}
           {power > 0 && (
-            <span style={{
+            <span className="anim-shimmer-fast" style={{
               position: 'absolute', inset: 0,
               background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent)',
               backgroundSize: '200% 100%',
-              animation: 'shimmer 2s ease-in-out infinite',
             }} />
           )}
           <span style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
