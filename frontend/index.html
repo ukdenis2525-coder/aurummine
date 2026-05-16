@@ -11,10 +11,12 @@
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
+    html, body, #root {
       background: #08080C;
       overscroll-behavior: none;
       overflow-x: hidden;
+      touch-action: pan-y;
+      -ms-touch-action: pan-y;
     }
   </style>
 </head>
