@@ -479,9 +479,17 @@ router.get('/users/:id/details', async (req, res) => {
        WHERE p.user_id = $1 ORDER BY p.created_at DESC`, [uid]
     ),
     pool.query(
-      `SELECT r.id, r.is_confirmed, r.created_at, u.tg_id, u.username, u.first_name, u.is_premium
-       FROM referrals r JOIN users u ON u.id = r.referee_id
-       WHERE r.referrer_id = $1 ORDER BY r.created_at DESC`, [uid]
+      `SELECT 
+        r.id, r.is_confirmed, r.created_at, 
+        u.tg_id, u.username, u.first_name, u.is_premium,
+        COALESCE(SUM(rr.power_amount), 0) as earned_power,
+        COALESCE(SUM(rr.ton_amount), 0) as earned_ton
+       FROM referrals r 
+       JOIN users u ON u.id = r.referee_id
+       LEFT JOIN referral_rewards rr ON rr.referee_id = r.referee_id AND rr.referrer_id = r.referrer_id
+       WHERE r.referrer_id = $1 
+       GROUP BY r.id, u.id
+       ORDER BY r.created_at DESC`, [uid]
     ),
     pool.query(
       `SELECT 

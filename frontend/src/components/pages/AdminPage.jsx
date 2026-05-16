@@ -888,6 +888,10 @@ function UsersPanel() {
                   <div style={{ fontSize: 12, fontWeight: 600 }}>
                     {r.first_name || r.username || `TG:${r.tg_id}`}
                     {r.is_premium && <span style={{ color: 'var(--gold)', marginLeft: 4 }}>★</span>}
+                    <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2, display: 'flex', gap: 6 }}>
+                      <span style={{ color: 'var(--gold-light)' }}>⚡ {fmtK(r.earned_power)}</span>
+                      <span style={{ color: 'var(--orange)' }}>💎 {fmt(r.earned_ton, 3)}</span>
+                    </div>
                   </div>
                   <div style={{ fontSize: 11, color: r.is_confirmed ? 'var(--green)' : 'var(--text-muted)', fontWeight: 600 }}>
                     {r.is_confirmed ? '✓ Актив' : '⏳ Ожид'}
