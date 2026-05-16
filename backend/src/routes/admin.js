@@ -235,7 +235,7 @@ router.get('/stats', async (req, res) => {
     const totalPower = parseFloat(totalPowerRes.rows[0].total);
     const tonPerDay = (activePower / 100000) * TON_PER_DAY_PER_100K;
 
-    stats.finance = {
+    resStats.finance = {
       banned_users: parseInt(blockedCount.rows[0].c),
       banned_purchases_count: parseInt(bannedPurchases.rows[0].count),
       banned_purchases_ton: parseFloat(bannedPurchases.rows[0].sum),
@@ -245,7 +245,7 @@ router.get('/stats', async (req, res) => {
       active_liability: parseFloat(activeBalances.rows[0].total),
       total_withdrawn: parseFloat(approvedWithdrawals.rows[0].total),
       pending_withdrawals_ton: parseFloat(pendingWithdrawals.rows[0].total),
-      net_position: parseFloat(completed.rows[0].sum) - parseFloat(approvedWithdrawals.rows[0].total) - parseFloat(pendingWithdrawals.rows[0].total),
+      net_position: parseFloat(purchases.rows[0].total || 0) - parseFloat(approvedWithdrawals.rows[0].total) - parseFloat(pendingWithdrawals.rows[0].total),
       // Power forecast
       active_power: activePower,
       total_power: totalPower,
@@ -257,15 +257,15 @@ router.get('/stats', async (req, res) => {
       liability_30d: parseFloat(activeBalances.rows[0].total) + (tonPerDay * 30),
       liability_90d: parseFloat(activeBalances.rows[0].total) + (tonPerDay * 90),
     };
-    stats.growth = growth.rows[0];
-    stats.active_today = parseInt(activeToday.rows[0].total);
-    stats.total_revenue = parseFloat(purchases.rows[0].total || 0);
+    resStats.growth = growth.rows[0];
+    resStats.active_today = parseInt(activeToday.rows[0].total);
+    resStats.total_revenue = parseFloat(purchases.rows[0].total || 0);
   } catch (e) {
     console.error('[Stats] Finance error:', e.message);
-    stats.finance = null;
+    resStats.finance = null;
   }
 
-  res.json(stats);
+  res.json({ stats: resStats });
 });
 
 // Charts route removed as requested to simplify dashboard
