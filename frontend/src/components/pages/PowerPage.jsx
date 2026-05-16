@@ -305,10 +305,11 @@ export default function PowerPage() {
         marginBottom: 24, position: 'relative', zIndex: 1,
         padding: '10px 0',
       }}>
-        {/* Glow with gentle pulse (box-shadow only, no transform) */}
-        <div className="anim-glow-safe" style={{
+        {/* Static glow */}
+        <div style={{
           position: 'absolute', width: 220, height: 220, borderRadius: '50%',
           background: 'rgba(212,175,55,0.04)',
+          boxShadow: '0 0 60px 20px rgba(212,175,55,0.06)',
           top: -10, left: '50%', marginLeft: -110,
         }} />
 
@@ -367,7 +368,7 @@ export default function PowerPage() {
                 background: 'rgba(52,211,153,0.08)',
                 border: '1px solid rgba(52,211,153,0.1)',
               }}>
-                <span className="anim-blink-safe" style={{
+                <span style={{
                   width: 5, height: 5, borderRadius: '50%',
                   background: 'var(--green)',
                 }} />
