@@ -28,7 +28,22 @@ export default function App() {
       tg.setHeaderColor('#08080C');
       tg.setBackgroundColor('#08080C');
     }
+
+    // Prevent Android WebView re-layout flicker on visibility change
+    const handleVisibility = () => {
+      if (!document.hidden && tg) {
+        // Prevent Telegram from re-expanding and causing layout shift
+        document.body.style.height = `${window.innerHeight}px`;
+        requestAnimationFrame(() => {
+          document.body.style.height = '';
+        });
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
     init();
+
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, []);
 
   if (loading) return <Loader />;

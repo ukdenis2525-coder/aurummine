@@ -11,9 +11,20 @@
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #08080C; }
+    body {
+      background: #08080C;
+      overscroll-behavior: none;
+      -webkit-overflow-scrolling: touch;
+      overflow-x: hidden;
+    }
+    #root {
+      contain: layout style;
+      transform: translateZ(0);
+      -webkit-transform: translateZ(0);
+    }
   </style>
 </head>
+<body>
   <div id="root"></div>
   <script type="module" src="/src/main.jsx"></script>
   <!-- Adsgram SDK -->
