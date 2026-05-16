@@ -99,173 +99,134 @@ router.get('/activity', async (req, res) => {
 });
 
 // ── Dashboard Stats ──
+// ── Dashboard Stats ──
 router.get('/stats', async (req, res) => {
-  const [users, power, purchases, ads, growth, activeToday] = await Promise.all([
-    pool.query(`SELECT COUNT(*) as total FROM users WHERE is_blocked = false`),
-    pool.query(`SELECT SUM(power) as total FROM users WHERE is_blocked = false`),
-    pool.query(`SELECT SUM(ton_paid) as total, COUNT(*) as count FROM purchases`),
-    pool.query(`SELECT COUNT(*) as total FROM ads_log`),
-    pool.query(`
-      SELECT 
-        COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '1 day') as new_1d,
-        COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') as new_7d,
-        COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '30 days') as new_30d
-      FROM users
-    `),
-    pool.query(`SELECT COUNT(*) as total FROM users WHERE created_at > CURRENT_DATE`),
-  ]);
-
-  // Online counts (safely handled)
-  let online5 = 0, online60 = 0;
   try {
-    const { rows } = await pool.query(`
-      SELECT 
-        COUNT(*) FILTER (WHERE last_seen_at > NOW() - INTERVAL '5 minutes') as c5,
-        COUNT(*) FILTER (WHERE last_seen_at > NOW() - INTERVAL '1 hour') as c60
-      FROM users WHERE is_blocked = false
-    `);
-    online5 = parseInt(rows[0].c5 || 0);
-    online60 = parseInt(rows[0].c60 || 0);
-  } catch (e) {
-    console.error('[Stats] Online error:', e.message);
-  }
-
-  // Referral & ads totals
-  let totalRefs = 0, totalAds = 0;
-  try {
-    const [refs, ads] = await Promise.all([
-      pool.query(`SELECT COUNT(*) as c FROM referrals`),
-      pool.query(`SELECT COALESCE(SUM(COALESCE(ads_watched, 0)), 0) as c FROM users WHERE is_blocked = false`),
-    ]);
-    totalRefs = parseInt(refs.rows[0].c);
-    totalAds = parseInt(ads.rows[0].c);
-  } catch (e) {}
-
-  // Buyers vs Non-buyers (active only)
-  let buyers = null;
-  try {
-    const [buyerStats, buyerSpent, nonBuyerStats] = await Promise.all([
-      // Buyer user stats (no JOIN — avoids duplication)
+    const [users, power, purchases, ads, growth, activeToday] = await Promise.all([
+      pool.query(`SELECT COUNT(*) as total FROM users WHERE is_blocked = false`),
+      pool.query(`SELECT SUM(power) as total FROM users WHERE is_blocked = false`),
+      pool.query(`SELECT SUM(ton_paid) as total, COUNT(*) as count FROM purchases`),
+      pool.query(`SELECT COUNT(*) as total FROM ads_log`),
       pool.query(`
-        SELECT COUNT(*) as count,
-               COALESCE(SUM(power), 0) as power,
-               COALESCE(SUM(ton_balance), 0) as balance
+        SELECT 
+          COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '1 day') as new_1d,
+          COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') as new_7d,
+          COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '30 days') as new_30d
         FROM users
-        WHERE is_blocked = false
-          AND id IN (SELECT DISTINCT user_id FROM purchases)
       `),
-      // Total spent (separate query)
-      pool.query(`
-        SELECT COALESCE(SUM(p.ton_paid), 0) as spent
-        FROM purchases p
-        JOIN users u ON p.user_id = u.id
-        WHERE u.is_blocked = false
-      `),
-      // Non-buyers
-      pool.query(`
-        SELECT COUNT(*) as count,
-               COALESCE(SUM(power), 0) as power,
-               COALESCE(SUM(ton_balance), 0) as balance
-        FROM users
-        WHERE is_blocked = false
-          AND id NOT IN (SELECT DISTINCT user_id FROM purchases)
-      `),
-    ]);
-    buyers = {
-      buyers_count: parseInt(buyerStats.rows[0].count),
-      buyers_power: parseFloat(buyerStats.rows[0].power),
-      buyers_balance: parseFloat(buyerStats.rows[0].balance),
-      buyers_spent: parseFloat(buyerSpent.rows[0].spent),
-      free_count: parseInt(nonBuyerStats.rows[0].count),
-      free_power: parseFloat(nonBuyerStats.rows[0].power),
-      free_balance: parseFloat(nonBuyerStats.rows[0].balance),
-    };
-  } catch (e) {}
-
-  const totalUsersActive = parseInt(users.rows[0].total);
-  const totalPowerVal = parseFloat(power.rows[0].total || 0);
-  const totalDailyForecast = (totalPowerVal / 100000) * 0.036;
-
-  if (buyers) {
-    buyers.buyers_daily_forecast = (buyers.buyers_power / 100000) * 0.036;
-    buyers.buyers_monthly_forecast = buyers.buyers_daily_forecast * 30;
-    buyers.free_daily_forecast = (buyers.free_power / 100000) * 0.036;
-    buyers.free_monthly_forecast = buyers.free_daily_forecast * 30;
-  }
-
-  const resStats = {
-    total_users: totalUsersActive,
-    total_power: totalPowerVal,
-    online_5min: online5,
-    online_1h: online60,
-    total_referrals: totalRefs,
-    total_ads_watched: totalAds,
-    buyers,
-  };
-
-  // Finance analytics — banned purchases + project liability
-  try {
-    const [
-      bannedPurchases,    // purchases made by currently blocked users
-      totalBalances,      // all ton_balance across ALL users (potential liability)
-      activeBalances,     // ton_balance of active (non-blocked) users only
-      approvedWithdrawals,// already paid out
-      pendingWithdrawals, // queued to be paid
-      blockedCount,       // total blocked users
-      bannedStats,        // power + balance of blocked users
-    ] = await Promise.all([
-      pool.query(`
-        SELECT COUNT(p.id) as count, COALESCE(SUM(p.ton_paid), 0) as sum
-        FROM purchases p JOIN users u ON p.user_id = u.id WHERE u.is_blocked = true
-      `),
-      pool.query(`SELECT COALESCE(SUM(ton_balance), 0) as total FROM users`),
-      pool.query(`SELECT COALESCE(SUM(ton_balance), 0) as total FROM users WHERE is_blocked = false`),
-      pool.query(`SELECT COALESCE(SUM(ton_amount), 0) as total FROM withdrawals WHERE status = 'approved'`),
-      pool.query(`SELECT COALESCE(SUM(ton_amount), 0) as total FROM withdrawals WHERE status = 'pending'`),
-      pool.query(`SELECT COUNT(*) as c FROM users WHERE is_blocked = true`),
-      pool.query(`SELECT COALESCE(SUM(power), 0) as p, COALESCE(SUM(ton_balance), 0) as b FROM users WHERE is_blocked = true`),
+      pool.query(`SELECT COUNT(*) as total FROM users WHERE created_at > CURRENT_DATE`),
     ]);
 
-    // Power forecast — how much TON will be mined
-    // Formula: 100K power = 2500 hashes/day = 0.036 TON/day
-    const TON_PER_DAY_PER_100K = 0.036;
-    const activePowerRes = await pool.query(`SELECT COALESCE(SUM(power), 0) as total FROM users WHERE is_blocked = false`);
-    const totalPowerRes = await pool.query(`SELECT COALESCE(SUM(power), 0) as total FROM users`);
-    const activePower = parseFloat(activePowerRes.rows[0].total);
-    const totalPower = parseFloat(totalPowerRes.rows[0].total);
-    const tonPerDay = (activePower / 100000) * TON_PER_DAY_PER_100K;
+    const totalUsersActive = parseInt(users.rows[0].total);
+    const totalPowerVal = parseFloat(power.rows[0].total || 0);
+    const totalDailyForecast = (totalPowerVal / 100000) * 0.036;
 
-    resStats.finance = {
-      banned_users: parseInt(blockedCount.rows[0].c),
-      banned_purchases_count: parseInt(bannedPurchases.rows[0].count),
-      banned_purchases_ton: parseFloat(bannedPurchases.rows[0].sum),
-      banned_power: parseFloat(bannedStats.rows[0].p),
-      banned_balance: parseFloat(bannedStats.rows[0].b),
-      total_liability: parseFloat(totalBalances.rows[0].total),
-      active_liability: parseFloat(activeBalances.rows[0].total),
-      total_withdrawn: parseFloat(approvedWithdrawals.rows[0].total),
-      pending_withdrawals_ton: parseFloat(pendingWithdrawals.rows[0].total),
-      net_position: parseFloat(purchases.rows[0].total || 0) - parseFloat(approvedWithdrawals.rows[0].total) - parseFloat(pendingWithdrawals.rows[0].total),
-      // Power forecast
-      active_power: activePower,
-      total_power: totalPower,
-      mining_ton_per_day: tonPerDay,
-      mining_ton_per_week: tonPerDay * 7,
-      mining_ton_per_month: tonPerDay * 30,
-      // Future liability = current balances + future mining
-      liability_7d: parseFloat(activeBalances.rows[0].total) + (tonPerDay * 7),
-      liability_30d: parseFloat(activeBalances.rows[0].total) + (tonPerDay * 30),
-      liability_90d: parseFloat(activeBalances.rows[0].total) + (tonPerDay * 90),
-    };
-    resStats.growth = growth.rows[0];
-    resStats.active_today = parseInt(activeToday.rows[0].total);
-    resStats.total_revenue = parseFloat(purchases.rows[0].total || 0);
+    // Online counts
+    let online5 = 0, online60 = 0;
+    try {
+      const { rows } = await pool.query(`
+        SELECT 
+          COUNT(*) FILTER (WHERE last_seen_at > NOW() - INTERVAL '5 minutes') as c5,
+          COUNT(*) FILTER (WHERE last_seen_at > NOW() - INTERVAL '1 hour') as c60
+        FROM users WHERE is_blocked = false
+      `);
+      online5 = parseInt(rows[0].c5 || 0);
+      online60 = parseInt(rows[0].c60 || 0);
+    } catch (e) {}
+
+    // Referral & ads totals
+    let totalRefs = 0, totalAds = 0;
+    try {
+      const [refs, adsRes] = await Promise.all([
+        pool.query(`SELECT COUNT(*) as c FROM referrals`),
+        pool.query(`SELECT COALESCE(SUM(COALESCE(ads_watched, 0)), 0) as c FROM users WHERE is_blocked = false`),
+      ]);
+      totalRefs = parseInt(refs.rows[0].c);
+      totalAds = parseInt(adsRes.rows[0].c);
+    } catch (e) {}
+
+    // Buyers vs Non-buyers
+    let buyers = null;
+    try {
+      const [buyerStats, buyerSpent, nonBuyerStats] = await Promise.all([
+        pool.query(`SELECT COUNT(*) as count, COALESCE(SUM(power), 0) as power, COALESCE(SUM(ton_balance), 0) as balance FROM users WHERE is_blocked = false AND id IN (SELECT DISTINCT user_id FROM purchases)`),
+        pool.query(`SELECT COALESCE(SUM(p.ton_paid), 0) as spent FROM purchases p JOIN users u ON p.user_id = u.id WHERE u.is_blocked = false`),
+        pool.query(`SELECT COUNT(*) as count, COALESCE(SUM(power), 0) as power, COALESCE(SUM(ton_balance), 0) as balance FROM users WHERE is_blocked = false AND id NOT IN (SELECT DISTINCT user_id FROM purchases)`),
+      ]);
+      buyers = {
+        buyers_count: parseInt(buyerStats.rows[0].count),
+        buyers_power: parseFloat(buyerStats.rows[0].power),
+        buyers_balance: parseFloat(buyerStats.rows[0].balance),
+        buyers_spent: parseFloat(buyerSpent.rows[0].spent),
+        free_count: parseInt(nonBuyerStats.rows[0].count),
+        free_power: parseFloat(nonBuyerStats.rows[0].power),
+        free_balance: parseFloat(nonBuyerStats.rows[0].balance),
+        buyers_daily_forecast: (parseFloat(buyerStats.rows[0].power) / 100000) * 0.036,
+        buyers_monthly_forecast: (parseFloat(buyerStats.rows[0].power) / 100000) * 0.036 * 30,
+        free_daily_forecast: (parseFloat(nonBuyerStats.rows[0].power) / 100000) * 0.036,
+        free_monthly_forecast: (parseFloat(nonBuyerStats.rows[0].power) / 100000) * 0.036 * 30,
+      };
+    } catch (e) {}
+
+    // Finance analytics
+    let finance = null;
+    try {
+      const [bannedPurchases, totalBalances, activeBalances, approvedWithdrawals, pendingWithdrawals, blockedCount, bannedStats] = await Promise.all([
+        pool.query(`SELECT COUNT(p.id) as count, COALESCE(SUM(p.ton_paid), 0) as sum FROM purchases p JOIN users u ON p.user_id = u.id WHERE u.is_blocked = true`),
+        pool.query(`SELECT COALESCE(SUM(ton_balance), 0) as total FROM users`),
+        pool.query(`SELECT COALESCE(SUM(ton_balance), 0) as total FROM users WHERE is_blocked = false`),
+        pool.query(`SELECT COALESCE(SUM(ton_amount), 0) as total FROM withdrawals WHERE status = 'approved'`),
+        pool.query(`SELECT COALESCE(SUM(ton_amount), 0) as total FROM withdrawals WHERE status = 'pending'`),
+        pool.query(`SELECT COUNT(*) as c FROM users WHERE is_blocked = true`),
+        pool.query(`SELECT COALESCE(SUM(power), 0) as p, COALESCE(SUM(ton_balance), 0) as b FROM users WHERE is_blocked = true`),
+      ]);
+
+      finance = {
+        banned_users: parseInt(blockedCount.rows[0].c),
+        banned_purchases_count: parseInt(bannedPurchases.rows[0].count),
+        banned_purchases_ton: parseFloat(bannedPurchases.rows[0].sum),
+        banned_power: parseFloat(bannedStats.rows[0].p),
+        banned_balance: parseFloat(bannedStats.rows[0].b),
+        total_liability: parseFloat(totalBalances.rows[0].total),
+        active_liability: parseFloat(activeBalances.rows[0].total),
+        total_withdrawn: parseFloat(approvedWithdrawals.rows[0].total),
+        pending_withdrawals_ton: parseFloat(pendingWithdrawals.rows[0].total),
+        net_position: parseFloat(purchases.rows[0].total || 0) - parseFloat(approvedWithdrawals.rows[0].total) - parseFloat(pendingWithdrawals.rows[0].total),
+        active_power: totalPowerVal,
+        total_power: totalPowerVal + parseFloat(bannedStats.rows[0].p || 0),
+        mining_ton_per_day: totalDailyForecast,
+        mining_ton_per_week: totalDailyForecast * 7,
+        mining_ton_per_month: totalDailyForecast * 30,
+        liability_7d: parseFloat(activeBalances.rows[0].total) + (totalDailyForecast * 7),
+        liability_30d: parseFloat(activeBalances.rows[0].total) + (totalDailyForecast * 30),
+        liability_90d: parseFloat(activeBalances.rows[0].total) + (totalDailyForecast * 90),
+      };
+    } catch (e) { console.error('[Stats] Finance error:', e.message); }
+
+    res.json({
+      total_users: totalUsersActive + (finance?.banned_users || 0),
+      active_users: totalUsersActive,
+      blocked_users: finance?.banned_users || 0,
+      total_power: totalPowerVal,
+      total_revenue: parseFloat(purchases.rows[0].total || 0),
+      total_purchases: parseInt(purchases.rows[0].count || 0),
+      total_ads_watched: totalAds,
+      total_referrals: totalRefs,
+      online_5min: online5,
+      online_1h: online60,
+      total_daily_forecast: totalDailyForecast,
+      total_monthly_forecast: totalDailyForecast * 30,
+      new_users_24h: growth.rows[0].new_1d,
+      pending_withdrawals: finance?.pending_withdrawals_ton || 0,
+      growth: growth.rows[0],
+      active_today: parseInt(activeToday.rows[0].total),
+      finance,
+      buyers,
+    });
   } catch (e) {
-    console.error('[Stats] Finance error:', e.message);
-    resStats.finance = null;
+    console.error('[Admin] Stats major error:', e.message);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
-
-  res.json(resStats);
 });
 
 // Charts route removed as requested to simplify dashboard
