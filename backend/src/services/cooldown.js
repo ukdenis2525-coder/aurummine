@@ -12,51 +12,68 @@ export const checkCooldown = async (userId, type, cooldownSeconds, dailyLimit) =
   const today = new Date().toISOString().slice(0, 10);
   
   try {
-    const { rows } = await pool.query(
-      `SELECT * FROM user_cooldowns WHERE user_id = $1 AND cooldown_type = $2`,
-      [userId, type]
-    );
+    // Atomic cooldown check + update in a single query to prevent race conditions.
+    // Uses INSERT...ON CONFLICT to guarantee only one concurrent request succeeds.
+    const { rows } = await pool.query(`
+      INSERT INTO user_cooldowns (user_id, cooldown_type, last_at, daily_count, last_date)
+      VALUES ($1, $2, NOW(), 1, $3)
+      ON CONFLICT (user_id, cooldown_type) DO UPDATE SET
+        last_at = CASE
+          WHEN EXTRACT(EPOCH FROM (NOW() - user_cooldowns.last_at)) >= $4
+               AND (user_cooldowns.last_date != $3 OR user_cooldowns.daily_count < $5 OR $5 = 0)
+          THEN NOW()
+          ELSE user_cooldowns.last_at
+        END,
+        daily_count = CASE
+          WHEN EXTRACT(EPOCH FROM (NOW() - user_cooldowns.last_at)) >= $4
+               AND (user_cooldowns.last_date != $3 OR user_cooldowns.daily_count < $5 OR $5 = 0)
+          THEN CASE WHEN user_cooldowns.last_date = $3 THEN user_cooldowns.daily_count + 1 ELSE 1 END
+          ELSE user_cooldowns.daily_count
+        END,
+        last_date = CASE
+          WHEN EXTRACT(EPOCH FROM (NOW() - user_cooldowns.last_at)) >= $4
+               AND (user_cooldowns.last_date != $3 OR user_cooldowns.daily_count < $5 OR $5 = 0)
+          THEN $3
+          ELSE user_cooldowns.last_date
+        END
+      RETURNING
+        last_at,
+        daily_count,
+        last_date,
+        (xmax = 0) as is_new,
+        EXTRACT(EPOCH FROM (NOW() - last_at)) as elapsed
+    `, [userId, type, today, cooldownSeconds, dailyLimit || 999999]);
 
-    let cooldown = rows[0];
-    const now = new Date();
-
-    if (cooldown) {
-      const lastAt = new Date(cooldown.last_at);
-      const diffSec = Math.floor((now - lastAt) / 1000);
-      const remaining = Math.max(0, cooldownSeconds - diffSec);
-
-      // Check daily limit
-      let dailyCount = cooldown.last_date === today ? cooldown.daily_count : 0;
-
-      if (remaining > 0) {
-        return { allowed: false, remaining, dailyCount };
-      }
-
-      if (dailyLimit && dailyCount >= dailyLimit) {
-        return { allowed: false, remaining: 0, dailyCount, limitReached: true };
-      }
-
-      // Update
-      const newDailyCount = dailyCount + 1;
-      await pool.query(
-        `UPDATE user_cooldowns SET last_at = $1, daily_count = $2, last_date = $3
-         WHERE user_id = $4 AND cooldown_type = $5`,
-        [now, newDailyCount, today, userId, type]
-      );
-      
-      return { allowed: true, remaining: 0, dailyCount: newDailyCount };
-    } else {
-      // Create new
-      await pool.query(
-        `INSERT INTO user_cooldowns (user_id, cooldown_type, last_at, daily_count, last_date)
-         VALUES ($1, $2, $3, 1, $4)`,
-        [userId, type, now, today]
-      );
+    const row = rows[0];
+    
+    // If the row is new (just inserted), it was allowed
+    if (row.is_new) {
       return { allowed: true, remaining: 0, dailyCount: 1 };
     }
+
+    // If elapsed is very small (< 1 sec), it means the UPDATE actually fired (allowed)
+    // If elapsed >= cooldownSeconds, same thing
+    // If elapsed < cooldownSeconds AND > 1, means the CASE didn't fire (denied)
+    const elapsed = parseFloat(row.elapsed);
+    
+    if (elapsed < 2) {
+      // Just updated = allowed
+      return { allowed: true, remaining: 0, dailyCount: parseInt(row.daily_count) };
+    }
+
+    // Check if daily limit reached
+    const dailyCount = row.last_date === today ? parseInt(row.daily_count) : 0;
+    if (dailyLimit && dailyCount >= dailyLimit) {
+      return { allowed: false, remaining: 0, dailyCount, limitReached: true };
+    }
+
+    // Cooldown still active
+    const remaining = Math.max(0, cooldownSeconds - elapsed);
+    return { allowed: false, remaining: Math.ceil(remaining), dailyCount };
   } catch (e) {
     console.error('[Cooldown] Error:', e.message);
-    return { allowed: true, remaining: 0, dailyCount: 0 }; // Fail safe (allow)
+    // FAIL CLOSED — deny on error to prevent exploitation
+    return { allowed: false, remaining: cooldownSeconds, dailyCount: 0 };
   }
 };
 
