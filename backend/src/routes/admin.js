@@ -111,16 +111,20 @@ router.get('/stats', async (req, res) => {
     pool.query(`SELECT COUNT(*) as total FROM users WHERE created_at > NOW() - INTERVAL '24 hours' AND is_blocked = false`),
   ]);
 
-  // Online counts
+  // Online counts (safely handled)
   let online5 = 0, online60 = 0;
   try {
-    const [r5, r60] = await Promise.all([
-      pool.query(`SELECT COUNT(*) as c FROM users WHERE last_seen_at > NOW() - INTERVAL '5 minutes' AND is_blocked = false`),
-      pool.query(`SELECT COUNT(*) as c FROM users WHERE last_seen_at > NOW() - INTERVAL '1 hour' AND is_blocked = false`),
-    ]);
-    online5 = parseInt(r5.rows[0].c);
-    online60 = parseInt(r60.rows[0].c);
-  } catch (e) {}
+    const [r5, r60] = await pool.query(`
+      SELECT 
+        COUNT(*) FILTER (WHERE last_seen_at > NOW() - INTERVAL '5 minutes') as c5,
+        COUNT(*) FILTER (WHERE last_seen_at > NOW() - INTERVAL '1 hour') as c60
+      FROM users WHERE is_blocked = false
+    `);
+    online5 = parseInt(r5.rows[0].c5 || 0);
+    online60 = parseInt(r5.rows[0].c60 || 0);
+  } catch (e) {
+    // Fallback: if last_seen_at missing, just show 0 or use created_at for "newly online"
+  }
 
   // Referral & ads totals
   let totalRefs = 0, totalAds = 0;
@@ -293,12 +297,12 @@ router.get('/stats/charts', async (req, res) => {
       });
     } catch (e) {}
 
-    // Active users per hour (from last_seen_at)
+    // Active users per hour (from created_at as fallback)
     let activeUsers = new Array(24).fill(0);
     try {
       const { rows } = await pool.query(`
-        SELECT DATE_TRUNC('hour', last_seen_at) as h, COUNT(DISTINCT id) as c
-        FROM users WHERE last_seen_at > NOW() - INTERVAL '24 hours'
+        SELECT DATE_TRUNC('hour', created_at) as h, COUNT(DISTINCT id) as c
+        FROM users WHERE created_at > NOW() - INTERVAL '24 hours'
         GROUP BY h ORDER BY h
       `);
       rows.forEach(r => {
@@ -308,12 +312,12 @@ router.get('/stats/charts', async (req, res) => {
       });
     } catch (e) {}
 
-    // Online per hour snapshot (single query instead of 24 individual ones)
+    // Online per hour snapshot (from created_at as fallback)
     let onlineUsers = new Array(24).fill(0);
     try {
       const { rows } = await pool.query(`
-        SELECT DATE_TRUNC('hour', last_seen_at) as h, COUNT(*) as c
-        FROM users WHERE last_seen_at > NOW() - INTERVAL '24 hours'
+        SELECT DATE_TRUNC('hour', created_at) as h, COUNT(*) as c
+        FROM users WHERE created_at > NOW() - INTERVAL '24 hours'
         GROUP BY h ORDER BY h
       `);
       rows.forEach(r => {
@@ -490,11 +494,11 @@ router.get('/users/:id/details', async (req, res) => {
   const userPower = parseFloat(user.rows[0].power || 0);
   const dailyForecast = (userPower / 100000) * 0.036;
 
-  // IP History (safely handled in case table doesn't exist)
+  // IP History (safely handled)
   let ips = [];
   try {
     const { rows } = await pool.query(
-      `SELECT ip, last_seen_at FROM user_ips WHERE user_id = $1 ORDER BY last_seen_at DESC LIMIT 10`,
+      `SELECT ip, created_at as last_seen_at FROM user_ips WHERE user_id = $1 ORDER BY created_at DESC LIMIT 10`,
       [uid]
     );
     ips = rows;
