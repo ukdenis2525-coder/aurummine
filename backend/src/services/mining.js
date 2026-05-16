@@ -14,10 +14,11 @@ export const accrueHashes = async () => {
   try {
     // Single batch UPDATE — accrue hashes for all users with power > 0
     // who haven't been updated in the last 55 seconds
+    // LEAST(5, ...) caps catchup to 5 minutes (prevents large payouts after server downtime)
     await client.query(`
       UPDATE users SET
         hashes = hashes + (power / 100000.0) * ($1::numeric / 1440.0) *
-          GREATEST(1, EXTRACT(EPOCH FROM (NOW() - last_accrue_at)) / 60.0),
+          LEAST(5, GREATEST(1, EXTRACT(EPOCH FROM (NOW() - last_accrue_at)) / 60.0)),
         last_accrue_at = NOW()
       WHERE power > 0
         AND last_accrue_at < NOW() - INTERVAL '55 seconds'
