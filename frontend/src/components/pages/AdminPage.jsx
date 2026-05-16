@@ -913,6 +913,8 @@ function UsersPanel() {
               ))}
             </div>
           </div>
+        )}
+
         {/* IP History */}
         {detailData.ips && detailData.ips.length > 0 && (
           <div style={{ marginBottom: 10 }}>
