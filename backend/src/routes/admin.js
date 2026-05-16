@@ -496,6 +496,15 @@ router.get('/users/:id/details', async (req, res) => {
     [uid]
   );
 
+  // Referrer info
+  let referrer = null;
+  if (user.rows[0].ref_id) {
+    const { rows: refRows } = await pool.query(
+      `SELECT id, tg_id, username, first_name FROM users WHERE id = $1`, [user.rows[0].ref_id]
+    );
+    if (refRows.length) referrer = refRows[0];
+  }
+
   res.json({
     user: user.rows[0],
     forecast: {
