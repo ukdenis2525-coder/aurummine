@@ -207,12 +207,18 @@ function Dashboard() {
   const [topUsers, setTopUsers] = useState([]);
   const [topLoading, setTopLoading] = useState(false);
 
+  const [loadError, setLoadError] = useState(null);
+
   const loadStats = async () => {
     try {
+      setLoadError(null);
+      console.log('[Admin] Fetching stats...');
       const { data } = await api.get('/admin/stats');
+      console.log('[Admin] Stats data received:', data);
       setStats(data);
     } catch (e) {
-      console.error('[Admin] Stats error:', e.message);
+      console.error('[Admin] Stats error:', e);
+      setLoadError(e.response?.data?.error || e.message);
     }
   };
 
@@ -223,6 +229,15 @@ function Dashboard() {
     await loadStats();
     setRefreshing(false);
   };
+
+  if (loadError) return (
+    <div style={{ padding: 20, textAlign: 'center', color: 'var(--red)' }}>
+      <div style={{ fontSize: 40, marginBottom: 10 }}>⚠️</div>
+      <div style={{ fontWeight: 800 }}>Ошибка загрузки</div>
+      <div style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>{loadError}</div>
+      <button onClick={loadStats} style={{ marginTop: 15, padding: '8px 16px', borderRadius: 8, background: 'var(--bg-card)', border: '1px solid var(--border)', color: '#fff' }}>Повторить</button>
+    </div>
+  );
 
   if (!stats) return <Loading />;
 
@@ -534,16 +549,16 @@ function Dashboard() {
             </div>
             <div style={{ padding: 12, borderRadius: 10, background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.15)' }}>
               <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>📤 Общий долг (балансы)</div>
-              <div style={{ fontSize: 18, fontWeight: 900, color: 'var(--red)' }}>{fmt(stats.finance.total_liability, 4)} TON</div>
+              <div style={{ fontSize: 18, fontWeight: 900, color: 'var(--red)' }}>{fmt(stats.finance?.total_liability, 4)} TON</div>
             </div>
           </div>
 
           {/* Detailed breakdown */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
             {[
-              { icon: '👤', label: 'Балансы активных юзеров', val: `${fmt(stats.finance.active_liability, 4)} TON`, color: 'var(--orange)', desc: 'Могут вывести' },
-              { icon: '✅', label: 'Уже выведено', val: `${fmt(stats.finance.total_withdrawn, 4)} TON`, color: 'var(--green)', desc: 'Approved' },
-              { icon: '⏳', label: 'Ожидают вывода', val: `${fmt(stats.finance.pending_withdrawals_ton, 4)} TON`, color: '#f59e0b', desc: 'Pending' },
+              { icon: '👤', label: 'Балансы активных юзеров', val: `${fmt(stats.finance?.active_liability, 4)} TON`, color: 'var(--orange)', desc: 'Могут вывести' },
+              { icon: '✅', label: 'Уже выведено', val: `${fmt(stats.finance?.total_withdrawn, 4)} TON`, color: 'var(--green)', desc: 'Approved' },
+              { icon: '⏳', label: 'Ожидают вывода', val: `${fmt(stats.finance?.pending_withdrawals_ton, 4)} TON`, color: '#f59e0b', desc: 'Pending' },
             ].map(r => (
               <div key={r.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 padding: '8px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)' }}>
@@ -560,27 +575,27 @@ function Dashboard() {
           </div>
 
           {/* Banned users section */}
-          {stats.finance.banned_users > 0 && (
+          {stats.finance?.banned_users > 0 && (
             <div style={{ padding: 12, borderRadius: 10, background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.15)', marginBottom: 12 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--red)', marginBottom: 8 }}>🚫 Забаненные юзеры</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                 <div>
-                  <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--red)' }}>{stats.finance.banned_users}</div>
+                  <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--red)' }}>{stats.finance?.banned_users}</div>
                   <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>юзеров в бане</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--red)' }}>{fmt(stats.finance.banned_purchases_ton, 4)} TON</div>
-                  <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{stats.finance.banned_purchases_count} покупок</div>
+                  <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--red)' }}>{fmt(stats.finance?.banned_purchases_ton, 4)} TON</div>
+                  <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{stats.finance?.banned_purchases_count} покупок</div>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 12, marginTop: 8, padding: '8px 0', borderTop: '1px solid rgba(248,113,113,0.12)' }}>
                 <div style={{ fontSize: 10 }}>
                   <span style={{ color: 'var(--text-muted)' }}>⚡ Power: </span>
-                  <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{fmtK(stats.finance.banned_power || 0)}</span>
+                  <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{fmtK(stats.finance?.banned_power || 0)}</span>
                 </div>
                 <div style={{ fontSize: 10 }}>
                   <span style={{ color: 'var(--text-muted)' }}>💰 Баланс: </span>
-                  <span style={{ color: 'var(--orange)', fontWeight: 700 }}>{fmt(stats.finance.banned_balance || 0, 4)} TON</span>
+                  <span style={{ color: 'var(--orange)', fontWeight: 700 }}>{fmt(stats.finance?.banned_balance || 0, 4)} TON</span>
                 </div>
               </div>
             </div>
@@ -590,14 +605,14 @@ function Dashboard() {
           <div style={{ padding: 12, borderRadius: 10, background: 'rgba(212,175,55,0.04)', border: '1px solid rgba(212,175,55,0.15)', marginBottom: 12 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gold)', marginBottom: 8 }}>⚡ Прогноз майнинга (по текущему Power)</div>
             <div style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 10 }}>
-              Активный Power: <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{fmtK(stats.finance.active_power)} GH/s</span>
+              Активный Power: <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{fmtK(stats.finance?.active_power)} GH/s</span>
               {' '}(100K = 0.036 TON/день)
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginBottom: 10 }}>
               {[
-                { label: 'День', val: stats.finance.mining_ton_per_day, icon: '📅' },
-                { label: 'Неделя', val: stats.finance.mining_ton_per_week, icon: '📆' },
-                { label: 'Месяц', val: stats.finance.mining_ton_per_month, icon: '🗓️' },
+                { label: 'День', val: stats.finance?.mining_ton_per_day, icon: '📅' },
+                { label: 'Неделя', val: stats.finance?.mining_ton_per_week, icon: '📆' },
+                { label: 'Месяц', val: stats.finance?.mining_ton_per_month, icon: '🗓️' },
               ].map(p => (
                 <div key={p.label} style={{ textAlign: 'center', padding: 8, borderRadius: 8, background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)' }}>
                   <div style={{ fontSize: 16, marginBottom: 2 }}>{p.icon}</div>
@@ -611,9 +626,9 @@ function Dashboard() {
             <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--red)', marginBottom: 6 }}>📈 Прогноз затрат (балансы + будущий майнинг)</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
               {[
-                { label: '7 дней', val: stats.finance.liability_7d },
-                { label: '30 дней', val: stats.finance.liability_30d },
-                { label: '90 дней', val: stats.finance.liability_90d },
+                { label: '7 дней', val: stats.finance?.liability_7d },
+                { label: '30 дней', val: stats.finance?.liability_30d },
+                { label: '90 дней', val: stats.finance?.liability_90d },
               ].map(p => (
                 <div key={p.label} style={{ textAlign: 'center', padding: 8, borderRadius: 8, background: 'rgba(248,113,113,0.04)', border: '1px solid rgba(248,113,113,0.12)' }}>
                   <div style={{ fontSize: 14, fontWeight: 900, color: 'var(--red)' }}>{fmt(p.val, 4)}</div>
@@ -626,10 +641,10 @@ function Dashboard() {
           {/* Net position */}
           <div style={{
             padding: 14, borderRadius: 12, textAlign: 'center',
-            background: stats.finance.net_position >= 0
+            background: stats.finance?.net_position >= 0
               ? 'linear-gradient(135deg, rgba(52,211,153,0.08), rgba(52,211,153,0.02))'
               : 'linear-gradient(135deg, rgba(248,113,113,0.08), rgba(248,113,113,0.02))',
-            border: stats.finance.net_position >= 0
+            border: stats.finance?.net_position >= 0
               ? '1px solid rgba(52,211,153,0.25)' : '1px solid rgba(248,113,113,0.25)',
           }}>
             <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>

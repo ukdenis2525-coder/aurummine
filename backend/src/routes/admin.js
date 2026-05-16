@@ -99,77 +99,82 @@ router.get('/activity', async (req, res) => {
 });
 
 // ── Dashboard Stats ──
-// ── Dashboard Stats ──
 router.get('/stats', async (req, res) => {
+  const result = {
+    total_users: 0, active_users: 0, blocked_users: 0, total_power: 0,
+    total_revenue: 0, total_purchases: 0, total_ads_watched: 0, total_referrals: 0,
+    online_5min: 0, online_1h: 0, total_daily_forecast: 0, total_monthly_forecast: 0,
+    new_users_24h: 0, pending_withdrawals: 0, active_today: 0,
+    growth: { new_1d: 0, new_7d: 0, new_30d: 0 },
+    finance: null, buyers: null
+  };
+
   try {
-    const [users, power, purchases, ads, growth, activeToday] = await Promise.all([
-      pool.query(`SELECT COUNT(*) as total FROM users WHERE is_blocked = false`),
-      pool.query(`SELECT SUM(power) as total FROM users WHERE is_blocked = false`),
-      pool.query(`SELECT SUM(ton_paid) as total, COUNT(*) as count FROM purchases`),
-      pool.query(`SELECT COUNT(*) as total FROM ads_log`),
-      pool.query(`
-        SELECT 
-          COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '1 day') as new_1d,
-          COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') as new_7d,
-          COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '30 days') as new_30d
-        FROM users
-      `),
-      pool.query(`SELECT COUNT(*) as total FROM users WHERE created_at > CURRENT_DATE`),
-    ]);
-
-    const totalUsersActive = parseInt(users.rows[0].total);
-    const totalPowerVal = parseFloat(power.rows[0].total || 0);
-    const totalDailyForecast = (totalPowerVal / 100000) * 0.036;
-
-    // Online counts
-    let online5 = 0, online60 = 0;
+    // 1. Basic User & Power Stats
     try {
-      const { rows } = await pool.query(`
-        SELECT 
-          COUNT(*) FILTER (WHERE last_seen_at > NOW() - INTERVAL '5 minutes') as c5,
-          COUNT(*) FILTER (WHERE last_seen_at > NOW() - INTERVAL '1 hour') as c60
-        FROM users WHERE is_blocked = false
-      `);
-      online5 = parseInt(rows[0].c5 || 0);
-      online60 = parseInt(rows[0].c60 || 0);
-    } catch (e) {}
-
-    // Referral & ads totals
-    let totalRefs = 0, totalAds = 0;
-    try {
-      const [refs, adsRes] = await Promise.all([
-        pool.query(`SELECT COUNT(*) as c FROM referrals`),
-        pool.query(`SELECT COALESCE(SUM(COALESCE(ads_watched, 0)), 0) as c FROM users WHERE is_blocked = false`),
+      const [u, p, pur, gro, act] = await Promise.all([
+        pool.query(`SELECT COUNT(*) as c FROM users WHERE is_blocked = false`),
+        pool.query(`SELECT SUM(power) as s FROM users WHERE is_blocked = false`),
+        pool.query(`SELECT SUM(ton_paid) as s, COUNT(*) as c FROM purchases`),
+        pool.query(`SELECT COUNT(*) as n1, 0 as n7, 0 as n30 FROM users WHERE created_at > NOW() - INTERVAL '1 day'`), // Simplified for stability
+        pool.query(`SELECT COUNT(*) as c FROM users WHERE created_at > CURRENT_DATE`),
       ]);
-      totalRefs = parseInt(refs.rows[0].c);
-      totalAds = parseInt(adsRes.rows[0].c);
-    } catch (e) {}
+      result.active_users = parseInt(u.rows[0].c || 0);
+      result.total_power = parseFloat(p.rows[0].s || 0);
+      result.total_revenue = parseFloat(pur.rows[0].s || 0);
+      result.total_purchases = parseInt(pur.rows[0].c || 0);
+      result.new_users_24h = parseInt(gro.rows[0].n1 || 0);
+      result.active_today = parseInt(act.rows[0].c || 0);
+      
+      // Extended growth
+      const g = await pool.query(`SELECT 
+        COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '1 day') as n1,
+        COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') as n7,
+        COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '30 days') as n30
+        FROM users`);
+      result.growth = g.rows[0];
+    } catch(e) { console.error('Stats[Base]:', e.message); }
 
-    // Buyers vs Non-buyers
-    let buyers = null;
+    // 2. Online & Activity
+    try {
+      const { rows } = await pool.query(`SELECT 
+        COUNT(*) FILTER (WHERE last_seen_at > NOW() - INTERVAL '5 minutes') as c5,
+        COUNT(*) FILTER (WHERE last_seen_at > NOW() - INTERVAL '1 hour') as c60
+        FROM users WHERE is_blocked = false`);
+      result.online_5min = parseInt(rows[0].c5 || 0);
+      result.online_1h = parseInt(rows[0].c60 || 0);
+    } catch(e) { /* ignore missing last_seen_at */ }
+
+    // 3. Referrals & Ads
+    try {
+      const r = await pool.query(`SELECT COUNT(*) as c FROM referrals`);
+      result.total_referrals = parseInt(r.rows[0].c || 0);
+      const a = await pool.query(`SELECT COALESCE(SUM(ads_watched), 0) as c FROM users`);
+      result.total_ads_watched = parseInt(a.rows[0].c || 0);
+    } catch(e) {}
+
+    // 4. Forecasts
+    result.total_daily_forecast = (result.total_power / 100000) * 0.036;
+    result.total_monthly_forecast = result.total_daily_forecast * 30;
+
+    // 5. Segments & Finance (Optional)
     try {
       const [buyerStats, buyerSpent, nonBuyerStats] = await Promise.all([
         pool.query(`SELECT COUNT(*) as count, COALESCE(SUM(power), 0) as power, COALESCE(SUM(ton_balance), 0) as balance FROM users WHERE is_blocked = false AND id IN (SELECT DISTINCT user_id FROM purchases)`),
-        pool.query(`SELECT COALESCE(SUM(p.ton_paid), 0) as spent FROM purchases p JOIN users u ON p.user_id = u.id WHERE u.is_blocked = false`),
+        pool.query(`SELECT COALESCE(SUM(ton_paid), 0) as spent FROM purchases p JOIN users u ON p.user_id = u.id WHERE u.is_blocked = false`),
         pool.query(`SELECT COUNT(*) as count, COALESCE(SUM(power), 0) as power, COALESCE(SUM(ton_balance), 0) as balance FROM users WHERE is_blocked = false AND id NOT IN (SELECT DISTINCT user_id FROM purchases)`),
       ]);
-      buyers = {
+      result.buyers = {
         buyers_count: parseInt(buyerStats.rows[0].count),
         buyers_power: parseFloat(buyerStats.rows[0].power),
-        buyers_balance: parseFloat(buyerStats.rows[0].balance),
         buyers_spent: parseFloat(buyerSpent.rows[0].spent),
         free_count: parseInt(nonBuyerStats.rows[0].count),
         free_power: parseFloat(nonBuyerStats.rows[0].power),
-        free_balance: parseFloat(nonBuyerStats.rows[0].balance),
         buyers_daily_forecast: (parseFloat(buyerStats.rows[0].power) / 100000) * 0.036,
-        buyers_monthly_forecast: (parseFloat(buyerStats.rows[0].power) / 100000) * 0.036 * 30,
         free_daily_forecast: (parseFloat(nonBuyerStats.rows[0].power) / 100000) * 0.036,
-        free_monthly_forecast: (parseFloat(nonBuyerStats.rows[0].power) / 100000) * 0.036 * 30,
       };
-    } catch (e) {}
+    } catch(e) {}
 
-    // Finance analytics
-    let finance = null;
     try {
       const [bannedPurchases, totalBalances, activeBalances, approvedWithdrawals, pendingWithdrawals, blockedCount, bannedStats] = await Promise.all([
         pool.query(`SELECT COUNT(p.id) as count, COALESCE(SUM(p.ton_paid), 0) as sum FROM purchases p JOIN users u ON p.user_id = u.id WHERE u.is_blocked = true`),
@@ -181,51 +186,31 @@ router.get('/stats', async (req, res) => {
         pool.query(`SELECT COALESCE(SUM(power), 0) as p, COALESCE(SUM(ton_balance), 0) as b FROM users WHERE is_blocked = true`),
       ]);
 
-      finance = {
-        banned_users: parseInt(blockedCount.rows[0].c),
-        banned_purchases_count: parseInt(bannedPurchases.rows[0].count),
-        banned_purchases_ton: parseFloat(bannedPurchases.rows[0].sum),
-        banned_power: parseFloat(bannedStats.rows[0].p),
-        banned_balance: parseFloat(bannedStats.rows[0].b),
-        total_liability: parseFloat(totalBalances.rows[0].total),
-        active_liability: parseFloat(activeBalances.rows[0].total),
-        total_withdrawn: parseFloat(approvedWithdrawals.rows[0].total),
-        pending_withdrawals_ton: parseFloat(pendingWithdrawals.rows[0].total),
-        net_position: parseFloat(purchases.rows[0].total || 0) - parseFloat(approvedWithdrawals.rows[0].total) - parseFloat(pendingWithdrawals.rows[0].total),
-        active_power: totalPowerVal,
-        total_power: totalPowerVal + parseFloat(bannedStats.rows[0].p || 0),
-        mining_ton_per_day: totalDailyForecast,
-        mining_ton_per_week: totalDailyForecast * 7,
-        mining_ton_per_month: totalDailyForecast * 30,
-        liability_7d: parseFloat(activeBalances.rows[0].total) + (totalDailyForecast * 7),
-        liability_30d: parseFloat(activeBalances.rows[0].total) + (totalDailyForecast * 30),
-        liability_90d: parseFloat(activeBalances.rows[0].total) + (totalDailyForecast * 90),
-      };
-    } catch (e) { console.error('[Stats] Finance error:', e.message); }
+      result.blocked_users = parseInt(blockedCount.rows[0].c || 0);
+      result.total_users = result.active_users + result.blocked_users;
+      result.pending_withdrawals = parseFloat(pendingWithdrawals.rows[0].total || 0);
 
-    res.json({
-      total_users: totalUsersActive + (finance?.banned_users || 0),
-      active_users: totalUsersActive,
-      blocked_users: finance?.banned_users || 0,
-      total_power: totalPowerVal,
-      total_revenue: parseFloat(purchases.rows[0].total || 0),
-      total_purchases: parseInt(purchases.rows[0].count || 0),
-      total_ads_watched: totalAds,
-      total_referrals: totalRefs,
-      online_5min: online5,
-      online_1h: online60,
-      total_daily_forecast: totalDailyForecast,
-      total_monthly_forecast: totalDailyForecast * 30,
-      new_users_24h: growth.rows[0].new_1d,
-      pending_withdrawals: finance?.pending_withdrawals_ton || 0,
-      growth: growth.rows[0],
-      active_today: parseInt(activeToday.rows[0].total),
-      finance,
-      buyers,
-    });
+      result.finance = {
+        banned_users: result.blocked_users,
+        banned_purchases_ton: parseFloat(bannedPurchases.rows[0].sum || 0),
+        total_liability: parseFloat(totalBalances.rows[0].total || 0),
+        active_liability: parseFloat(activeBalances.rows[0].total || 0),
+        total_withdrawn: parseFloat(approvedWithdrawals.rows[0].total || 0),
+        pending_withdrawals_ton: result.pending_withdrawals,
+        net_position: result.total_revenue - parseFloat(approvedWithdrawals.rows[0].total || 0) - result.pending_withdrawals,
+        active_power: result.total_power,
+        mining_ton_per_day: result.total_daily_forecast,
+        mining_ton_per_week: result.total_daily_forecast * 7,
+        mining_ton_per_month: result.total_monthly_forecast,
+        liability_7d: parseFloat(activeBalances.rows[0].total || 0) + (result.total_daily_forecast * 7),
+        liability_30d: parseFloat(activeBalances.rows[0].total || 0) + (result.total_daily_forecast * 30),
+      };
+    } catch(e) { console.error('Stats[Finance]:', e.message); }
+
+    res.json(result);
   } catch (e) {
-    console.error('[Admin] Stats major error:', e.message);
-    res.status(500).json({ error: 'Internal Server Error' });
+    console.error('[Admin] Stats Major Error:', e.message);
+    res.status(500).json({ error: 'Critical failure' });
   }
 });
 
