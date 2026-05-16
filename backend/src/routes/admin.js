@@ -42,7 +42,7 @@ const adminMiddleware = async (req, res, next) => {
   if (expectedPin && pin !== expectedPin) {
     // Only enforce PIN for WebApp users (initData present)
     if (req.headers['x-init-data']) {
-      console.log(`[AdminAuth] PIN mismatch: got "${pin}", expected "${expectedPin}"`);
+      console.log(`[AdminAuth] PIN mismatch from tg user`);
       return res.status(403).json({ error: 'invalid_pin', message: 'Введите верный ПИН-код' });
     }
   }
@@ -341,20 +341,23 @@ router.post('/users/:id/adjust', async (req, res) => {
   const fields = [];
   const vals = [];
   let idx = 1;
-  if (power !== undefined) { fields.push(`power = $${idx++}`); vals.push(power); }
-  if (ton_balance !== undefined) { fields.push(`ton_balance = $${idx++}`); vals.push(ton_balance); }
+
+  // Validate numeric inputs
+  if (power !== undefined) {
+    const p = parseFloat(power);
+    if (isNaN(p) || p < 0) return res.status(400).json({ error: 'Invalid power value' });
+    fields.push(`power = $${idx++}`); vals.push(p);
+  }
+  if (ton_balance !== undefined) {
+    const t = parseFloat(ton_balance);
+    if (isNaN(t) || t < 0) return res.status(400).json({ error: 'Invalid ton_balance value' });
+    fields.push(`ton_balance = $${idx++}`); vals.push(t);
+  }
   if (!fields.length) return res.status(400).json({ error: 'Nothing to update' });
   vals.push(req.params.id);
   await pool.query(`UPDATE users SET ${fields.join(', ')} WHERE id = $${idx}`, vals);
   
-  // Log the adjustment
-  try {
-    await pool.query(
-      `INSERT INTO admin_activity_log (admin_tg_id, action, details) VALUES ($1, $2, $3)`,
-      [req.admin_id, 'adjust_user', JSON.stringify({ user_id: req.params.id, power, ton_balance })]
-    );
-  } catch(e) { console.error('[Log] Adjustment log failed:', e.message); }
-
+  await logAdminAction(req, 'adjust_user', JSON.stringify({ user_id: req.params.id, power, ton_balance }));
   res.json({ success: true });
 });
 
@@ -532,10 +535,12 @@ router.get('/withdrawals', async (req, res) => {
 
 router.post('/withdrawals/:id/approve', async (req, res) => {
   const { tx_hash } = req.body;
-  await pool.query(
-    `UPDATE withdrawals SET status = 'completed', tx_hash = $1 WHERE id = $2`,
+  const { rowCount } = await pool.query(
+    `UPDATE withdrawals SET status = 'completed', tx_hash = $1 WHERE id = $2 AND status = 'pending'`,
     [tx_hash || 'manual', req.params.id]
   );
+  if (rowCount === 0) return res.status(400).json({ error: 'Not found or already processed' });
+  await logAdminAction(req, 'approve_withdrawal', `Withdrawal #${req.params.id}, tx: ${tx_hash || 'manual'}`);
   res.json({ success: true });
 });
 
@@ -1442,16 +1447,8 @@ router.post('/admins', async (req, res) => {
   const { tg_id, label, permissions } = req.body;
   if (!tg_id) return res.status(400).json({ error: 'tg_id required' });
 
-  // Get the requester's tg_id for added_by
-  let addedBy = null;
-  const initData = req.headers['x-init-data'];
-  if (initData) {
-    try {
-      const params = new URLSearchParams(initData);
-      const userParam = params.get('user');
-      if (userParam) addedBy = JSON.parse(userParam).id;
-    } catch (e) {}
-  }
+  // Get the requester's tg_id for added_by (from validated middleware)
+  const addedBy = req.adminTgId || null;
 
   const permsJson = JSON.stringify(Array.isArray(permissions) ? permissions : []);
 
@@ -1478,19 +1475,9 @@ router.delete('/admins/:tg_id', async (req, res) => {
     return res.status(400).json({ error: 'Cannot remove env-based super admin' });
   }
 
-  // Prevent removing yourself
-  const initData = req.headers['x-init-data'];
-  if (initData) {
-    try {
-      const params = new URLSearchParams(initData);
-      const userParam = params.get('user');
-      if (userParam) {
-        const reqUser = JSON.parse(userParam);
-        if (String(reqUser.id) === targetId) {
-          return res.status(400).json({ error: 'Cannot remove yourself' });
-        }
-      }
-    } catch (e) {}
+  // Prevent removing yourself (use validated adminTgId from middleware)
+  if (req.adminTgId === targetId) {
+    return res.status(400).json({ error: 'Cannot remove yourself' });
   }
 
   try {
@@ -1537,15 +1524,7 @@ router.get('/check-admin', async (req, res) => {
   const envIds = (process.env.ADMIN_TG_IDS || process.env.ADMIN_TG_ID || '')
     .split(',').map(s => s.trim()).filter(Boolean);
 
-  let tgId = null;
-  const initData = req.headers['x-init-data'];
-  if (initData) {
-    try {
-      const params = new URLSearchParams(initData);
-      const userParam = params.get('user');
-      if (userParam) tgId = String(JSON.parse(userParam).id);
-    } catch (e) {}
-  }
+  const tgId = req.adminTgId || null;
 
   // Super admins have all permissions
   if (tgId && envIds.includes(tgId)) {
