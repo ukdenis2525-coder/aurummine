@@ -26,23 +26,123 @@ const ALL_TABS = [
 
 export default function AdminPage() {
   const { setTab: setAppTab, adminPerms } = useStore();
+  const [pin, setPin] = useState('');
+  const [isVerified, setIsVerified] = useState(!!sessionStorage.getItem('admin_pin'));
+  const [error, setError] = useState(false);
 
   // Filter tabs by permissions
   const visibleTabs = adminPerms === '*'
     ? ALL_TABS
     : ALL_TABS.filter(t => {
-        // 'admins' tab only for super admins
         if (t.id === 'admins') return false;
-        // Dashboard always visible
         if (t.id === 'dashboard') return true;
         return Array.isArray(adminPerms) && adminPerms.includes(t.id);
       });
 
   const [tab, _setTab] = useState(visibleTabs[0]?.id || 'dashboard');
-  const setTab = (t) => { _setTab(t); try { api.post('/admin/log-action', { action: 'view_tab', details: t }); } catch(e){} };
+  const setTab = (t) => { 
+    _setTab(t); 
+    try { api.post('/admin/log-action', { action: 'view_tab', details: t }); } catch(e){} 
+  };
+
+  const handlePinInput = (num) => {
+    if (pin.length >= 4) return;
+    const newPin = pin + num;
+    setPin(newPin);
+    setError(false);
+    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+
+    if (newPin.length === 4) {
+      // Small delay for visual feedback before verification
+      setTimeout(async () => {
+        try {
+          // Verify PIN by calling a simple admin endpoint
+          sessionStorage.setItem('admin_pin', newPin);
+          await api.get('/admin/stats');
+          setIsVerified(true);
+          window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
+        } catch (e) {
+          setError(true);
+          setPin('');
+          sessionStorage.removeItem('admin_pin');
+          window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('error');
+        }
+      }, 300);
+    }
+  };
+
+  const handleBackspace = () => {
+    setPin(pin.slice(0, -1));
+    setError(false);
+    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+  };
+
+  if (!isVerified) {
+    return (
+      <div className="page" style={{ 
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', 
+        minHeight: '80vh', gap: 30 
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 40, marginBottom: 10 }}>🛡️</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: '#fff' }}>Admin Access</div>
+          <div style={{ fontSize: 13, color: error ? 'var(--red)' : 'var(--text-muted)', marginTop: 4 }}>
+            {error ? 'Неверный ПИН-код' : 'Введите 4-значный ПИН'}
+          </div>
+        </div>
+
+        {/* PIN Indicators */}
+        <div style={{ display: 'flex', gap: 16 }}>
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} style={{
+              width: 16, height: 16, borderRadius: '50%',
+              background: i <= pin.length ? 'var(--gold)' : 'var(--bg-card)',
+              border: `2px solid ${i <= pin.length ? 'var(--gold)' : 'var(--border)'}`,
+              transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+              transform: error && i === pin.length + 1 ? 'scale(1.2)' : 'scale(1)',
+              boxShadow: i <= pin.length ? '0 0 10px var(--gold)' : 'none'
+            }} />
+          ))}
+        </div>
+
+        {/* Keypad */}
+        <div style={{ 
+          display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 15,
+          width: '100%', maxWidth: 280
+        }}>
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => (
+            <button key={n} onClick={() => handlePinInput(n)} style={{
+              aspectRatio: '1', borderRadius: '50%', border: '1px solid var(--border)',
+              background: 'var(--bg-card)', color: '#fff', fontSize: 24, fontWeight: 700,
+              cursor: 'pointer', transition: 'all 0.1s'
+            }} onPointerDown={(e) => e.currentTarget.style.transform = 'scale(0.92)'}
+               onPointerUp={(e) => e.currentTarget.style.transform = 'scale(1)'}>
+              {n}
+            </button>
+          ))}
+          <div />
+          <button onClick={() => handlePinInput(0)} style={{
+            aspectRatio: '1', borderRadius: '50%', border: '1px solid var(--border)',
+            background: 'var(--bg-card)', color: '#fff', fontSize: 24, fontWeight: 700,
+            cursor: 'pointer'
+          }}>0</button>
+          <button onClick={handleBackspace} style={{
+            aspectRatio: '1', borderRadius: '50%', border: 'none',
+            background: 'transparent', color: 'var(--text-muted)', fontSize: 20,
+            cursor: 'pointer'
+          }}>⌫</button>
+        </div>
+
+        <button onClick={() => setAppTab('power')} style={{
+          marginTop: 20, background: 'none', border: 'none', color: 'var(--text-muted)',
+          fontSize: 14, textDecoration: 'underline', cursor: 'pointer'
+        }}>Вернуться назад</button>
+      </div>
+    );
+  }
 
   // Dynamic grid columns based on tab count
-  const cols = visibleTabs.length <= 4 ? visibleTabs.length : visibleTabs.length <= 6 ? 3 : 3;
+  const cols = visibleTabs.length <= 4 ? visibleTabs.length : 3;
 
   return (
     <div className="page" style={{ paddingBottom: 20 }}>

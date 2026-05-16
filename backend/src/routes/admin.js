@@ -27,7 +27,7 @@ const getAllAdminIds = async () => {
 
 // Admin auth: Telegram user with matching tg_id (env + DB) AND valid signature
 const adminMiddleware = async (req, res, next) => {
-  // Allow system/API access via x-admin-key (keep for non-UI bots/scripts if needed, but UI MUST be signed)
+  // 1. Static API key access (system/scripts)
   const key = req.headers['x-admin-key'];
   if (key && process.env.ADMIN_KEY && key === process.env.ADMIN_KEY) {
     req.adminTgId = 'API_KEY';
@@ -35,7 +35,17 @@ const adminMiddleware = async (req, res, next) => {
     return next();
   }
 
-  // UI-based admin auth (WebApp)
+  // 2. PIN-code check (if enabled in env)
+  const pin = req.headers['x-admin-pin'];
+  if (process.env.ADMIN_PIN && pin !== process.env.ADMIN_PIN) {
+    // Only enforce PIN for WebApp users (initData present)
+    // If they have valid initData but wrong/missing PIN, block them.
+    if (req.headers['x-init-data']) {
+      return res.status(403).json({ error: 'invalid_pin', message: 'Введите верный ПИН-код' });
+    }
+  }
+
+  // 3. UI-based admin auth (WebApp)
   const initData = req.headers['x-init-data'];
   if (initData) {
     const tgUser = validateTelegramInitData(initData, process.env.BOT_TOKEN);
