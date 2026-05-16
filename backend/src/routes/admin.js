@@ -1628,6 +1628,55 @@ router.get('/promo-codes/:id/uses', async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'Failed' }); }
 });
 
+// ═══════════════════ ADMIN TASKS CRUD ═══════════════════
+
+// List all tasks (admin view — includes inactive)
+router.get('/tasks', adminMiddleware, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM tasks ORDER BY id DESC');
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Create task
+router.post('/tasks', adminMiddleware, async (req, res) => {
+  try {
+    const { title, description, reward_power, type, link, visibility } = req.body;
+    if (!title || !reward_power) return res.status(400).json({ error: 'title and reward_power required' });
+    const { rows } = await pool.query(
+      `INSERT INTO tasks (title, description, reward_power, type, link, visibility, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, TRUE) RETURNING *`,
+      [title, description || '', parseFloat(reward_power), type || 'link', link || '', visibility || 'all']
+    );
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Toggle task active/inactive
+router.post('/tasks/:id/toggle', adminMiddleware, async (req, res) => {
+  try {
+    await pool.query('UPDATE tasks SET is_active = NOT is_active WHERE id = $1', [req.params.id]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Toggle task visibility
+router.post('/tasks/:id/visibility', adminMiddleware, async (req, res) => {
+  try {
+    const { visibility } = req.body;
+    await pool.query('UPDATE tasks SET visibility = $1 WHERE id = $2', [visibility, req.params.id]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Delete task
+router.delete('/tasks/:id', adminMiddleware, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM tasks WHERE id = $1', [req.params.id]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 export { getAllAdminIds };
 export default router;
 

@@ -1599,7 +1599,7 @@ function WithdrawalsPanel() {
 function TasksPanel() {
   const [tasks, setTasks] = useState([]);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ title: '', description: '', reward_power: '', type: 'other', link: '', visibility: 'admin' });
+  const [form, setForm] = useState({ title: '', description: '', reward_power: '', type: 'subscribe_channel', link: '', visibility: 'admin' });
 
   const load = async () => {
     try {
@@ -1614,7 +1614,7 @@ function TasksPanel() {
   const create = async () => {
     if (!form.title || !form.reward_power) return;
     await api.post('/admin/tasks', { ...form, reward_power: parseFloat(form.reward_power) });
-    setForm({ title: '', description: '', reward_power: '', type: 'other', link: '', visibility: 'admin' });
+    setForm({ title: '', description: '', reward_power: '', type: 'subscribe_channel', link: '', visibility: 'admin' });
     setShowForm(false);
     load();
   };
