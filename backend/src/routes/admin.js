@@ -118,16 +118,16 @@ router.get('/stats', async (req, res) => {
   // Online counts (safely handled)
   let online5 = 0, online60 = 0;
   try {
-    const [r5, r60] = await pool.query(`
+    const { rows } = await pool.query(`
       SELECT 
         COUNT(*) FILTER (WHERE last_seen_at > NOW() - INTERVAL '5 minutes') as c5,
         COUNT(*) FILTER (WHERE last_seen_at > NOW() - INTERVAL '1 hour') as c60
       FROM users WHERE is_blocked = false
     `);
-    online5 = parseInt(r5.rows[0].c5 || 0);
-    online60 = parseInt(r5.rows[0].c60 || 0);
+    online5 = parseInt(rows[0].c5 || 0);
+    online60 = parseInt(rows[0].c60 || 0);
   } catch (e) {
-    // Fallback: if last_seen_at missing, just show 0 or use created_at for "newly online"
+    console.error('[Stats] Online error:', e.message);
   }
 
   // Referral & ads totals
