@@ -1023,6 +1023,7 @@ function UsersPanel() {
           <option value="balance">💰 TON</option>
           <option value="referrals">👥 Рефы</option>
           <option value="purchases">🛒 Донат</option>
+          <option value="blocked">🚫 Бан</option>
         </select>
       </div>
 

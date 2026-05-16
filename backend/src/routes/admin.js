@@ -442,6 +442,8 @@ router.get('/users', async (req, res) => {
   } else if (sort === 'purchases') {
     joins = 'LEFT JOIN purchases p ON p.user_id = u.id';
     orderBy = 'COALESCE(SUM(p.ton_paid), 0) DESC';
+  } else if (sort === 'blocked') {
+    orderBy = 'u.is_blocked DESC, u.id DESC';
   }
 
   let where = '';
