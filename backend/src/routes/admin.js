@@ -486,17 +486,23 @@ router.get('/users/:id/details', async (req, res) => {
   ]);
   if (!user.rows.length) return res.status(404).json({ error: 'User not found' });
 
-  // Referrer info
-  let referrer = null;
-  if (user.rows[0].ref_id) {
-    const { rows } = await pool.query(
-      `SELECT id, tg_id, username, first_name FROM users WHERE id = $1`, [user.rows[0].ref_id]
-    );
-    if (rows.length) referrer = rows[0];
-  }
+  // Mining forecast for this specific user
+  const userPower = parseFloat(user.rows[0].power || 0);
+  const dailyForecast = (userPower / 100000) * 0.036;
+
+  // IP History
+  const { rows: ips } = await pool.query(
+    `SELECT ip, last_seen_at FROM user_ips WHERE user_id = $1 ORDER BY last_seen_at DESC LIMIT 10`,
+    [uid]
+  );
 
   res.json({
     user: user.rows[0],
+    forecast: {
+      daily: dailyForecast,
+      monthly: dailyForecast * 30
+    },
+    ips,
     referrer,
     purchases: purchases.rows,
     purchases_total: purchases.rows.reduce((s, p) => s + parseFloat(p.ton_paid || 0), 0),

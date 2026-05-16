@@ -818,6 +818,21 @@ function UsersPanel() {
           ))}
         </div>
 
+        {/* Mining Forecast */}
+        <div className="card" style={{ padding: '10px 14px', marginBottom: 10, border: '1px solid rgba(212,175,55,0.15)' }}>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 6 }}>⛏️ ПРОГНОЗ МАЙНИНГА (POWER: {fmtK(u.power)})</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 900, color: 'var(--gold)' }}>{fmt(detailData.forecast?.daily, 4)} TON</div>
+              <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>в сутки</div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 16, fontWeight: 900, color: 'var(--gold-light)' }}>{fmt(detailData.forecast?.monthly, 2)} TON</div>
+              <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>в месяц</div>
+            </div>
+          </div>
+        </div>
+
         {/* Referrer */}
         {detailData.referrer && (
           <div className="card" style={{ padding: '10px 14px', marginBottom: 10 }}>
@@ -830,7 +845,12 @@ function UsersPanel() {
 
         {/* Referral rewards */}
         <div className="card" style={{ padding: '10px 14px', marginBottom: 10 }}>
-          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>🎁 РЕФЕРАЛЬНЫЙ ДОХОД</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>🎁 РЕФЕРАЛЬНЫЙ ДОХОД</div>
+            <div style={{ fontSize: 9, color: 'var(--green)', fontWeight: 700 }}>
+              Конверсия: {detailData.referrals.length > 0 ? ((detailData.referrals.filter(r=>r.is_confirmed).length / detailData.referrals.length) * 100).toFixed(0) : 0}%
+            </div>
+          </div>
           <div style={{ display: 'flex', gap: 16 }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--gold)' }}>⚡ {fmtK(detailData.referral_rewards?.total_power || 0)} POWER</span>
             <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--gold-light)' }}>💎 {fmt(detailData.referral_rewards?.total_ton || 0, 4)} TON</span>
@@ -889,6 +909,19 @@ function UsersPanel() {
                   <div style={{ fontSize: 11, fontWeight: 600, color: w.status === 'completed' ? 'var(--green)' : w.status === 'rejected' ? 'var(--red)' : 'var(--orange)' }}>
                     {w.status === 'completed' ? '✅' : w.status === 'rejected' ? '❌' : '⏳'} {w.status}
                   </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        {/* IP History */}
+        {detailData.ips && detailData.ips.length > 0 && (
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: 1, marginBottom: 6, fontWeight: 600 }}>🌐 ИСТОРИЯ IP ({detailData.ips.length})</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {detailData.ips.map((ip, i) => (
+                <div key={i} className="card" style={{ padding: '6px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', opacity: i === 0 ? 1 : 0.6 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, fontFamily: 'monospace' }}>{ip.ip}</div>
+                  <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{new Date(ip.last_seen_at).toLocaleString()}</div>
                 </div>
               ))}
             </div>
