@@ -34,7 +34,7 @@ app.set('trust proxy', true);
 app.use(cors({
   origin: process.env.CORS_ORIGIN || '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'x-init-data', 'x-admin-key', 'x-ref-id']
+  allowedHeaders: ['Content-Type', 'x-init-data', 'x-admin-key', 'x-ref-id', 'x-admin-pin']
 }));
 app.use(express.json());
 
