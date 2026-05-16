@@ -24,7 +24,7 @@ export const useStore = create((set, get) => ({
       const tgId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
       const currentId = String(tgId || user.tg_id);
 
-      // Check env-based admin IDs first
+      // Collect all state before calling set() — prevents multiple re-renders (flickering)
       let isAdmin = ADMIN_IDS.length > 0 && ADMIN_IDS.includes(currentId);
       let adminPerms = isAdmin ? '*' : null;
 
@@ -46,18 +46,22 @@ export const useStore = create((set, get) => ({
         const vis = ambData?.visibility ?? 0;
         if (vis === 1) ambassadorVisible = true;
         else if (vis === 2) ambassadorVisible = isAdmin;
-        // vis === 0 → hidden for all
       } catch (e) {}
 
-      set({ user, isAdmin, adminPerms, ambassadorVisible, mining: data.mining || null, appSettings: data.settings || get().appSettings });
+      // Single atomic state update — no flickering
+      set({
+        user, isAdmin, adminPerms, ambassadorVisible,
+        mining: data.mining || null,
+        appSettings: data.settings || get().appSettings,
+        loading: false
+      });
     } catch (e) {
-      // 403 = blocked user (silent block)
       if (e.response?.status === 403) {
-        set({ blocked: true });
+        set({ blocked: true, loading: false });
+      } else {
+        console.error('Init error:', e);
+        set({ loading: false });
       }
-      console.error('Init error:', e);
-    } finally {
-      set({ loading: false });
     }
   },
 
