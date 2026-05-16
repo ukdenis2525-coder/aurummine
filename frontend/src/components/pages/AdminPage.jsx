@@ -90,7 +90,6 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* PIN Indicators */}
         <div style={{ display: 'flex', gap: 16 }}>
           {[1, 2, 3, 4].map(i => (
             <div key={i} style={{
@@ -98,13 +97,12 @@ export default function AdminPage() {
               background: i <= pin.length ? 'var(--gold)' : 'var(--bg-card)',
               border: `2px solid ${i <= pin.length ? 'var(--gold)' : 'var(--border)'}`,
               transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-              transform: error && i === pin.length + 1 ? 'scale(1.2)' : 'scale(1)',
+              transform: errorMsg && i === pin.length + 1 ? 'scale(1.2)' : 'scale(1)',
               boxShadow: i <= pin.length ? '0 0 10px var(--gold)' : 'none'
             }} />
           ))}
         </div>
 
-        {/* Keypad */}
         <div style={{ 
           display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 15,
           width: '100%', maxWidth: 280

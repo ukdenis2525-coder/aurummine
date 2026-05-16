@@ -67,4 +67,20 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Response interceptor to handle session expiration or invalid PIN
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 403 && error.response?.data?.error === 'invalid_pin') {
+      console.warn('[API] Invalid PIN detected, clearing session...');
+      sessionStorage.removeItem('admin_pin');
+      // Optional: trigger a page reload or state change to show PIN screen
+      if (window.location.hash.includes('admin')) {
+        window.location.reload();
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 export default api;
