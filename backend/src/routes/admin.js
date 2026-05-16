@@ -456,13 +456,22 @@ router.post('/users/:id/adjust', async (req, res) => {
   if (!fields.length) return res.status(400).json({ error: 'Nothing to update' });
   vals.push(req.params.id);
   await pool.query(`UPDATE users SET ${fields.join(', ')} WHERE id = $${idx}`, vals);
+  
+  // Log the adjustment
+  try {
+    await pool.query(
+      `INSERT INTO admin_activity_log (admin_tg_id, action, details) VALUES ($1, $2, $3)`,
+      [req.admin_id, 'adjust_user', JSON.stringify({ user_id: req.params.id, power, ton_balance })]
+    );
+  } catch(e) { console.error('[Log] Adjustment log failed:', e.message); }
+
   res.json({ success: true });
 });
 
 // ── User Details ──
 router.get('/users/:id/details', async (req, res) => {
   const uid = req.params.id;
-  const [user, purchases, referrals, rewards, withdrawals, pendingOrders] = await Promise.all([
+  const [user, purchases, referrals, rewards, withdrawals, pendingOrders, adminLogs] = await Promise.all([
     pool.query(`SELECT * FROM users WHERE id = $1`, [uid]),
     pool.query(
       `SELECT p.id, p.ton_paid, p.power_amount, p.created_at, pp.name as package_name
@@ -487,6 +496,12 @@ router.get('/users/:id/details', async (req, res) => {
     pool.query(
       `SELECT id, ton_amount, status, memo, created_at
        FROM pending_purchases WHERE user_id = $1 ORDER BY created_at DESC LIMIT 10`, [uid]
+    ),
+    pool.query(
+      `SELECT id, admin_tg_id, action, details, created_at
+       FROM admin_activity_log 
+       WHERE action = 'adjust_user' AND details::jsonb ->> 'user_id' = $1
+       ORDER BY created_at DESC LIMIT 50`, [uid]
     ),
   ]);
   if (!user.rows.length) return res.status(404).json({ error: 'User not found' });
@@ -536,6 +551,7 @@ router.get('/users/:id/details', async (req, res) => {
       .filter(w => w.status === 'completed')
       .reduce((s, w) => s + parseFloat(w.ton_amount || 0), 0),
     pending_orders: pendingOrders.rows,
+    admin_logs: adminLogs?.rows || [],
   });
 });
 

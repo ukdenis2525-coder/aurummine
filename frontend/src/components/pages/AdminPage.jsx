@@ -933,6 +933,30 @@ function UsersPanel() {
           </div>
         )}
 
+        {/* Admin Logs */}
+        {detailData.admin_logs && detailData.admin_logs.length > 0 && (
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: 1, marginBottom: 6, fontWeight: 600 }}>📜 ИСТОРИЯ ПРАВОК ({detailData.admin_logs.length})</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {detailData.admin_logs.map((l, i) => {
+                const d = typeof l.details === 'string' ? JSON.parse(l.details) : l.details;
+                return (
+                  <div key={l.id} className="card" style={{ padding: '8px 12px', fontSize: 11 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <span style={{ fontWeight: 700, color: 'var(--gold)' }}>🛠️ Admin {l.admin_tg_id}</span>
+                      <span style={{ color: 'var(--text-muted)', fontSize: 9 }}>{new Date(l.created_at).toLocaleString()}</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 10, opacity: 0.8 }}>
+                      {d.power !== undefined && <span>⚡ {fmtK(d.power)} PW</span>}
+                      {d.ton_balance !== undefined && <span>💎 {fmt(d.ton_balance, 4)} TON</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Actions */}
         <div className="card" style={{ marginBottom: 10 }}>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: 1, marginBottom: 10, fontWeight: 600 }}>⚙️ ДЕЙСТВИЯ</div>
