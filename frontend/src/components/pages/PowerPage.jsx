@@ -299,76 +299,36 @@ export default function PowerPage() {
       </button>
       )}
 
-      {/* ── Mining Orb ── */}
+      {/* ── Mining Orb (fully static — no animations) ── */}
       <div style={{
         display: 'flex', flexDirection: 'column', alignItems: 'center',
         marginBottom: 24, position: 'relative', zIndex: 1,
         padding: '10px 0',
-        isolation: 'isolate',
       }}>
-        {/* Background glow — no filter:blur, use box-shadow instead */}
-        <div className="anim-glow" style={{
+        {/* Static glow */}
+        <div style={{
           position: 'absolute', width: 220, height: 220, borderRadius: '50%',
-          background: 'rgba(212,175,55,0.06)',
-          boxShadow: '0 0 60px 30px rgba(212,175,55,0.08)',
-          top: -10, left: '50%', transform: 'translateX(-50%)',
+          background: 'rgba(212,175,55,0.04)',
+          boxShadow: '0 0 60px 20px rgba(212,175,55,0.06)',
+          top: -10, left: '50%', marginLeft: -110,
         }} />
 
-        {/* Rotating ring — outer */}
-        {power > 0 && (
-          <div className="anim-spin-slow" style={{
-            position: 'absolute', width: 210, height: 210, borderRadius: '50%',
-            border: '1px solid rgba(212,175,55,0.06)',
-            top: -5,
-          }}>
-            <div style={{
-              position: 'absolute', top: -3, left: '50%', transform: 'translateX(-50%)',
-              width: 6, height: 6, borderRadius: '50%',
-              background: 'var(--gold)', boxShadow: '0 0 12px var(--gold)',
-            }} />
-            <div style={{
-              position: 'absolute', bottom: -3, left: '50%', transform: 'translateX(-50%)',
-              width: 4, height: 4, borderRadius: '50%',
-              background: 'var(--gold)', opacity: 0.5, boxShadow: '0 0 8px var(--gold)',
-            }} />
-          </div>
-        )}
-
-        {/* Rotating ring — inner dashed */}
-        {power > 0 && (
-          <div className="anim-spin-reverse" style={{
-            position: 'absolute', width: 230, height: 230, borderRadius: '50%',
-            border: '1px dashed rgba(212,175,55,0.04)',
-            top: -15,
-          }} />
-        )}
-
-        {/* Outer SVG ring (replaces conic-gradient — Android WebView safe) */}
-        <div className={orbPulse ? 'anim-orb-collect' : (power > 0 ? 'anim-float' : '')} style={{
+        {/* SVG progress ring */}
+        <div style={{
           width: 185, height: 185, borderRadius: '50%',
           position: 'relative',
           boxShadow: power > 0
-            ? '0 0 40px rgba(212,175,55,0.15), 0 0 80px rgba(212,175,55,0.05)'
+            ? '0 0 30px rgba(212,175,55,0.12)'
             : 'none',
-          transition: 'box-shadow 0.5s ease',
-          willChange: 'transform',
-          transform: 'translateZ(0)',
         }}>
-          {/* SVG progress ring */}
           <svg width="185" height="185" style={{ position: 'absolute', top: 0, left: 0, transform: 'rotate(-90deg)' }}>
-            {/* Background track */}
             <circle cx="92.5" cy="92.5" r="88" fill="none"
-              stroke="rgba(255,255,255,0.03)" strokeWidth="5" />
-            {/* Progress arc */}
+              stroke="rgba(255,255,255,0.04)" strokeWidth="4" />
             <circle cx="92.5" cy="92.5" r="88" fill="none"
-              stroke="var(--gold)" strokeWidth="5"
+              stroke="var(--gold)" strokeWidth="4"
               strokeDasharray={`${(powerPct / 100) * 2 * Math.PI * 88} ${2 * Math.PI * 88}`}
-              strokeLinecap="round"
-              style={{ transition: 'stroke-dasharray 0.5s ease' }} />
+              strokeLinecap="round" />
           </svg>
-
-          {/* Particles */}
-          <Particles count={18} active={power > 0} />
 
           {/* Inner circle */}
           <div style={{
@@ -377,15 +337,9 @@ export default function PowerPage() {
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
             zIndex: 1,
           }}>
-            {/* Inner subtle ring */}
             <div style={{
               position: 'absolute', inset: 6, borderRadius: '50%',
               border: '1px solid rgba(212,175,55,0.06)',
-            }} />
-            {/* Second inner ring */}
-            <div style={{
-              position: 'absolute', inset: 10, borderRadius: '50%',
-              border: '1px solid rgba(212,175,55,0.03)',
             }} />
 
             <div style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: 3, marginBottom: 6, fontWeight: 600 }}>
@@ -394,7 +348,6 @@ export default function PowerPage() {
             <div style={{
               fontSize: 42, fontWeight: 900, lineHeight: 1,
               color: 'var(--gold)',
-              textShadow: '0 2px 10px rgba(212,175,55,0.35)',
             }}>
               {fmtK(Math.floor(power))}
             </div>
@@ -406,10 +359,9 @@ export default function PowerPage() {
                 background: 'rgba(52,211,153,0.08)',
                 border: '1px solid rgba(52,211,153,0.1)',
               }}>
-                <span className="anim-blink" style={{
+                <span style={{
                   width: 5, height: 5, borderRadius: '50%',
                   background: 'var(--green)',
-                  boxShadow: '0 0 6px var(--green)',
                 }} />
                 {t('power.mining_active')}
               </div>
