@@ -100,15 +100,19 @@ router.get('/activity', async (req, res) => {
 
 // ── Dashboard Stats ──
 router.get('/stats', async (req, res) => {
-  // Main metrics — ACTIVE users only (exclude banned)
-  const [users, activeUsers, power, ton, pending, completed, revenue] = await Promise.all([
-    pool.query(`SELECT COUNT(*) as total FROM users`),
+  const [users, power, purchases, ads, growth, activeToday] = await Promise.all([
     pool.query(`SELECT COUNT(*) as total FROM users WHERE is_blocked = false`),
-    pool.query(`SELECT COALESCE(SUM(power), 0) as total FROM users WHERE is_blocked = false`),
-    pool.query(`SELECT COALESCE(SUM(ton_balance), 0) as total FROM users WHERE is_blocked = false`),
-    pool.query(`SELECT COUNT(*) as total FROM withdrawals WHERE status = 'pending'`),
-    pool.query(`SELECT COUNT(*) as total, COALESCE(SUM(ton_paid), 0) as sum FROM purchases`),
-    pool.query(`SELECT COUNT(*) as total FROM users WHERE created_at > NOW() - INTERVAL '24 hours' AND is_blocked = false`),
+    pool.query(`SELECT SUM(power) as total FROM users WHERE is_blocked = false`),
+    pool.query(`SELECT SUM(ton_paid) as total, COUNT(*) as count FROM purchases`),
+    pool.query(`SELECT COUNT(*) as total FROM ads_log`),
+    pool.query(`
+      SELECT 
+        COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '1 day') as new_1d,
+        COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') as new_7d,
+        COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '30 days') as new_30d
+      FROM users
+    `),
+    pool.query(`SELECT COUNT(*) as total FROM users WHERE created_at > CURRENT_DATE`),
   ]);
 
   // Online counts (safely handled)
@@ -178,9 +182,8 @@ router.get('/stats', async (req, res) => {
     };
   } catch (e) {}
 
-  const blockedCount = parseInt(users.rows[0].total) - parseInt(activeUsers.rows[0].total);
-
-  const totalPowerVal = parseFloat(power.rows[0].total);
+  const totalUsersActive = parseInt(users.rows[0].total);
+  const totalPowerVal = parseFloat(power.rows[0].total || 0);
   const totalDailyForecast = (totalPowerVal / 100000) * 0.036;
 
   if (buyers) {
@@ -190,18 +193,9 @@ router.get('/stats', async (req, res) => {
     buyers.free_monthly_forecast = buyers.free_daily_forecast * 30;
   }
 
-  const stats = {
-    total_users: parseInt(users.rows[0].total),
-    active_users: parseInt(activeUsers.rows[0].total),
-    blocked_users: blockedCount,
+  const resStats = {
+    total_users: totalUsersActive,
     total_power: totalPowerVal,
-    total_daily_forecast: totalDailyForecast,
-    total_monthly_forecast: totalDailyForecast * 30,
-    total_ton_balance: parseFloat(ton.rows[0].total),
-    pending_withdrawals: parseInt(pending.rows[0].total),
-    total_purchases: parseInt(completed.rows[0].total),
-    total_revenue: parseFloat(completed.rows[0].sum),
-    new_users_24h: parseInt(revenue.rows[0].total),
     online_5min: online5,
     online_1h: online60,
     total_referrals: totalRefs,
@@ -263,6 +257,9 @@ router.get('/stats', async (req, res) => {
       liability_30d: parseFloat(activeBalances.rows[0].total) + (tonPerDay * 30),
       liability_90d: parseFloat(activeBalances.rows[0].total) + (tonPerDay * 90),
     };
+    stats.growth = growth.rows[0];
+    stats.active_today = parseInt(activeToday.rows[0].total);
+    stats.total_revenue = parseFloat(purchases.rows[0].total || 0);
   } catch (e) {
     console.error('[Stats] Finance error:', e.message);
     stats.finance = null;
@@ -271,83 +268,7 @@ router.get('/stats', async (req, res) => {
   res.json(stats);
 });
 
-// ── Charts: hourly data for 24h ──
-router.get('/stats/charts', async (req, res) => {
-  try {
-    // Generate 24-hour labels
-    const hours = [];
-    for (let i = 23; i >= 0; i--) {
-      const d = new Date(Date.now() - i * 3600000);
-      hours.push({ hour: d.getHours(), start: new Date(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours()), end: new Date(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours() + 1) });
-    }
-    const labels = hours.map(h => `${String(h.hour).padStart(2, '0')}:00`);
-
-    // New users per hour
-    let newUsers = new Array(24).fill(0);
-    try {
-      const { rows } = await pool.query(`
-        SELECT DATE_TRUNC('hour', created_at) as h, COUNT(*) as c
-        FROM users WHERE created_at > NOW() - INTERVAL '24 hours'
-        GROUP BY h ORDER BY h
-      `);
-      rows.forEach(r => {
-        const rh = new Date(r.h).getHours();
-        const idx = hours.findIndex(h => h.hour === rh);
-        if (idx >= 0) newUsers[idx] = parseInt(r.c);
-      });
-    } catch (e) {}
-
-    // Active users per hour (from created_at as fallback)
-    let activeUsers = new Array(24).fill(0);
-    try {
-      const { rows } = await pool.query(`
-        SELECT DATE_TRUNC('hour', created_at) as h, COUNT(DISTINCT id) as c
-        FROM users WHERE created_at > NOW() - INTERVAL '24 hours'
-        GROUP BY h ORDER BY h
-      `);
-      rows.forEach(r => {
-        const rh = new Date(r.h).getHours();
-        const idx = hours.findIndex(h => h.hour === rh);
-        if (idx >= 0) activeUsers[idx] = parseInt(r.c);
-      });
-    } catch (e) {}
-
-    // Online per hour snapshot (from created_at as fallback)
-    let onlineUsers = new Array(24).fill(0);
-    try {
-      const { rows } = await pool.query(`
-        SELECT DATE_TRUNC('hour', created_at) as h, COUNT(*) as c
-        FROM users WHERE created_at > NOW() - INTERVAL '24 hours'
-        GROUP BY h ORDER BY h
-      `);
-      rows.forEach(r => {
-        const rh = new Date(r.h).getHours();
-        const idx = hours.findIndex(h => h.hour === rh);
-        if (idx >= 0) onlineUsers[idx] = parseInt(r.c);
-      });
-    } catch (e) {}
-
-    // Purchases per hour
-    let purchases = new Array(24).fill(0);
-    try {
-      const { rows } = await pool.query(`
-        SELECT DATE_TRUNC('hour', created_at) as h, COUNT(*) as c
-        FROM purchases WHERE created_at > NOW() - INTERVAL '24 hours'
-        GROUP BY h ORDER BY h
-      `);
-      rows.forEach(r => {
-        const rh = new Date(r.h).getHours();
-        const idx = hours.findIndex(h => h.hour === rh);
-        if (idx >= 0) purchases[idx] = parseInt(r.c);
-      });
-    } catch (e) {}
-
-    res.json({ labels, newUsers, activeUsers, onlineUsers, purchases });
-  } catch (e) {
-    console.error('[Admin] Charts error:', e.message);
-    res.status(500).json({ error: 'Charts failed' });
-  }
-});
+// Charts route removed as requested to simplify dashboard
 
 // ── Top users by stat ──
 router.get('/stats/top', async (req, res) => {

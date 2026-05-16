@@ -286,6 +286,42 @@ function Dashboard() {
         {refreshing ? 'Обновляю...' : 'Обновить статистику'}
       </button>
 
+      {/* 📈 Growth & Activity */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8, marginBottom: 16 }}>
+        <div className="card" style={{ padding: 16, border: '1px solid rgba(52,211,153,0.2)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+            <span style={{ fontSize: 20 }}>📈</span>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800 }}>Рост аудитории</div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Новые пользователи за периоды</div>
+            </div>
+          </div>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+            <div style={{ textAlign: 'center', padding: 10, borderRadius: 10, background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 18, fontWeight: 900, color: 'var(--green)' }}>+{stats.growth?.new_1d || 0}</div>
+              <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>24 часа</div>
+            </div>
+            <div style={{ textAlign: 'center', padding: 10, borderRadius: 10, background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 18, fontWeight: 900, color: 'var(--gold)' }}>+{stats.growth?.new_7d || 0}</div>
+              <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>7 дней</div>
+            </div>
+            <div style={{ textAlign: 'center', padding: 10, borderRadius: 10, background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 18, fontWeight: 900, color: 'var(--orange)' }}>+{stats.growth?.new_30d || 0}</div>
+              <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>30 дней</div>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 10, padding: 12, borderRadius: 10, background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#60a5fa' }}>⚡ Активность сегодня (DAU)</div>
+              <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>Уникальных входов за 24ч</div>
+            </div>
+            <div style={{ fontSize: 20, fontWeight: 900, color: '#fff' }}>{stats.active_today || 0}</div>
+          </div>
+        </div>
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
         {cards.map((c, i) => (
           <div key={c.label} className="card" onClick={() => c.field && openTop(c.field)} style={{
