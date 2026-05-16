@@ -22,8 +22,7 @@ export default function BottomNav() {
     <nav style={{
       position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)',
       width: '100%', maxWidth: 480,
-      background: 'rgba(8,8,12,0.92)', backdropFilter: 'blur(20px)',
-      WebkitBackdropFilter: 'blur(20px)',
+      background: 'rgba(8,8,12,0.97)',
       borderTop: '1px solid var(--border)',
       display: 'flex', alignItems: 'flex-end', justifyContent: 'space-around',
       padding: '6px 0 10px', zIndex: 100

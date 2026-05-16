@@ -226,7 +226,7 @@ export default function PowerPage() {
             {showLang && (
               <div style={{
                 position: 'absolute', top: '100%', right: 0, marginTop: 6,
-                background: 'rgba(18,18,26,0.98)', backdropFilter: 'blur(20px)',
+                background: 'rgba(18,18,26,0.98)',
                 border: '1px solid var(--border-gold)', borderRadius: 12,
                 padding: 4, zIndex: 100, minWidth: 80,
                 animation: 'fadeIn 0.2s ease'
@@ -254,7 +254,6 @@ export default function PowerPage() {
         borderRadius: 16, padding: '14px 18px', marginBottom: 20,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         cursor: 'pointer', position: 'relative', zIndex: 1, overflow: 'hidden',
-        backdropFilter: 'blur(10px)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{
@@ -282,7 +281,6 @@ export default function PowerPage() {
         width: '100%', padding: '12px 18px', marginBottom: 20,
         borderRadius: 14, border: '1px solid rgba(59,130,246,0.2)',
         background: 'linear-gradient(135deg, rgba(59,130,246,0.08), rgba(139,92,246,0.06))',
-        backdropFilter: 'blur(10px)',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         cursor: 'pointer', position: 'relative', zIndex: 1, overflow: 'hidden',
       }}>
