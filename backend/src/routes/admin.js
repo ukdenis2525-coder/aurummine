@@ -37,10 +37,12 @@ const adminMiddleware = async (req, res, next) => {
 
   // 2. PIN-code check (if enabled in env)
   const pin = req.headers['x-admin-pin'];
-  if (process.env.ADMIN_PIN && pin !== process.env.ADMIN_PIN) {
+  const expectedPin = process.env.ADMIN_PIN ? String(process.env.ADMIN_PIN).trim() : null;
+
+  if (expectedPin && pin !== expectedPin) {
     // Only enforce PIN for WebApp users (initData present)
-    // If they have valid initData but wrong/missing PIN, block them.
     if (req.headers['x-init-data']) {
+      console.log(`[AdminAuth] PIN mismatch: got "${pin}", expected "${expectedPin}"`);
       return res.status(403).json({ error: 'invalid_pin', message: 'Введите верный ПИН-код' });
     }
   }
