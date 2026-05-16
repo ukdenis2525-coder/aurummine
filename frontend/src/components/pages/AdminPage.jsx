@@ -722,19 +722,13 @@ function UsersPanel() {
   // Clear module-level search after using it
   useEffect(() => { if (_searchFromMulti) { _searchFromMulti = ''; } }, []);
   const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
-  const [editing, setEditing] = useState(null);
-  const [detail, setDetail] = useState(null);
-  const [detailData, setDetailData] = useState(null);
-  const [loadingDetail, setLoadingDetail] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(null);
-  const [msg, setMsg] = useState(null);
+  const [sort, setSort] = useState('newest');
 
   const load = useCallback(async () => {
-    const { data } = await api.get(`/admin/users?page=${page}&search=${search}`);
+    const { data } = await api.get(`/admin/users?page=${page}&search=${search}&sort=${sort}`);
     setUsers(data.users);
     setTotal(data.total);
-  }, [page, search]);
+  }, [page, search, sort]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -1004,9 +998,33 @@ function UsersPanel() {
     <div>
       {msg && <div style={{ padding: '10px 14px', borderRadius: 10, marginBottom: 12, background: msg.startsWith('✅') || msg.startsWith('🗑') ? 'rgba(52,211,153,0.1)' : 'var(--red-bg)', color: msg.startsWith('✅') || msg.startsWith('🗑') ? 'var(--green)' : 'var(--red)', fontSize: 12, fontWeight: 600, textAlign: 'center' }}>{msg}</div>}
 
-      <input type="text" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
-        placeholder="🔍 Поиск по имени, username, tg_id..."
-        style={{ marginBottom: 14, fontSize: 13 }} />
+      <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+        <input type="text" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
+          placeholder="🔍 Поиск по имени, username, tg_id..."
+          style={{ flex: 2, fontSize: 13 }} />
+        
+        <select 
+          value={sort} 
+          onChange={(e) => { setSort(e.target.value); setPage(1); }}
+          style={{ 
+            flex: 1, 
+            padding: '10px', 
+            borderRadius: 12, 
+            background: 'var(--bg-card)', 
+            border: '1px solid var(--border)', 
+            color: '#fff', 
+            fontSize: 12, 
+            outline: 'none',
+            cursor: 'pointer'
+          }}
+        >
+          <option value="newest">🆕 Новые</option>
+          <option value="power">⚡ Power</option>
+          <option value="balance">💰 TON</option>
+          <option value="referrals">👥 Рефы</option>
+          <option value="purchases">🛒 Донат</option>
+        </select>
+      </div>
 
       <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
         Всего: {total} • Стр. {page}

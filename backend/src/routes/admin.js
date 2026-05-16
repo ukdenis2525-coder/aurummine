@@ -430,17 +430,38 @@ router.get('/users', async (req, res) => {
   const limit = 30;
   const offset = (page - 1) * limit;
 
+  const sort = req.query.sort || 'newest';
+  let orderBy = 'u.id DESC';
+  let joins = '';
+
+  if (sort === 'power') orderBy = 'u.power DESC';
+  else if (sort === 'balance') orderBy = 'u.ton_balance DESC';
+  else if (sort === 'referrals') {
+    joins = 'LEFT JOIN referrals r ON r.referrer_id = u.id';
+    orderBy = 'COUNT(r.id) DESC';
+  } else if (sort === 'purchases') {
+    joins = 'LEFT JOIN purchases p ON p.user_id = u.id';
+    orderBy = 'COALESCE(SUM(p.ton_paid), 0) DESC';
+  }
+
   let where = '';
   let params = [limit, offset];
   if (search) {
-    where = `WHERE username ILIKE $3 OR first_name ILIKE $3 OR CAST(tg_id AS TEXT) LIKE $3`;
+    where = `WHERE u.username ILIKE $3 OR u.first_name ILIKE $3 OR CAST(u.tg_id AS TEXT) LIKE $3`;
     params.push(`%${search}%`);
   }
 
-  const { rows } = await pool.query(
-    `SELECT id, tg_id, username, first_name, power, hashes, ton_balance, is_premium, is_blocked, created_at
-     FROM users ${where} ORDER BY id DESC LIMIT $1 OFFSET $2`, params
-  );
+  const query = `
+    SELECT u.id, u.tg_id, u.username, u.first_name, u.power, u.hashes, u.ton_balance, u.is_premium, u.is_blocked, u.created_at
+    FROM users u
+    ${joins}
+    ${where}
+    GROUP BY u.id
+    ORDER BY ${orderBy}
+    LIMIT $1 OFFSET $2
+  `;
+
+  const { rows } = await pool.query(query, params);
   const countWhere = search ? `WHERE username ILIKE $1 OR first_name ILIKE $1 OR CAST(tg_id AS TEXT) LIKE $1` : '';
   const { rows: count } = await pool.query(`SELECT COUNT(*) FROM users ${countWhere}`, search ? [`%${search}%`] : []);
   res.json({ users: rows, total: parseInt(count[0].count), page });
